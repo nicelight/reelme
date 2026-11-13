@@ -1,0 +1,1276 @@
+#!/usr/bin/env node
+/**
+ * mb-lint.mjs
+ *
+ * Deterministic lint for `.memory-bank/`.
+ * Intentionally mechanical: structure + frontmatter + broken links.
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+
+const ROOT = process.cwd();
+const MB = path.join(ROOT, '.memory-bank');
+
+if (!fs.existsSync(MB)) {
+  console.error('❌ .memory-bank/ not found. Run mb-init first.');
+  process.exit(1);
+}
+
+const REQUIRED = [
+  '.memory-bank/index.md',
+  '.memory-bank/constitution.md',
+  '.memory-bank/mbb/index.md',
+  '.memory-bank/changelog.md',
+  '.memory-bank/contracts/boundary-map.md',
+  '.memory-bank/workflows/mb-sync.md',
+  '.memory-bank/testing/index.md',
+  '.memory-bank/schemas/task.schema.json',
+  '.memory-bank/tasks/index.json',
+  '.memory-bank/skills/index.md',
+];
+
+const ALLOWED_STATUS = new Set(['draft', 'active', 'deprecated', 'archived']);
+const ALLOWED_LIFECYCLE = new Set(['planned', 'implemented', 'verified']);
+const ALLOWED_CLARIFICATION_STATUS = new Set(['pending', 'complete', 'blocked']);
+const ALLOWED_PRD_CLARIFICATION_STATUS = new Set(['pending', 'complete', 'blocked']);
+const ANALYSIS_DIR_REL = '.memory-bank/analysis';
+const ANALYSIS_BRIEF_REL = '.memory-bank/analysis/brief.md';
+const ANALYSIS_PRD_SOURCE_MARKER = '.memory-bank/analysis/brief.md';
+const ALLOWED_TASK_STATUS = new Set(['planned', 'ready', 'in_progress', 'blocked', 'done', 'done_for_prod', 'failed']);
+const ALLOWED_TASK_TIER = new Set(['T0', 'T1', 'T2', 'T3']);
+const TASK_ID_FORMAT = 'TASK-NNN-TN-FT-NNN-WN';
+const TASK_ID_RE = /^TASK-[0-9]{3}-(T[0-3])-(FT-[0-9]{3})-W([0-9]+)$/;
+const LEGACY_TASK_ID_RE = /^TASK-[0-9]{3}-FT-[0-9]{3}-W-[0-9]+$/;
+const TASK_FILE_RE = /^TASK-[0-9]{3}-T[0-3]-FT-[0-9]{3}-W[0-9]+\.task\.json$/;
+const FEATURE_ID_RE = /^FT-[0-9]{3,}$/;
+const ARCHITECTURE_SPINE_REL = '.memory-bank/architecture/system-architecture.md';
+const BOUNDARY_MAP_REL = '.memory-bank/contracts/boundary-map.md';
+const BOUNDARY_MODULE_HEADERS = [
+  'Module / Change Unit',
+  'Parent Architecture Unit',
+  'Code Root',
+  'Responsibility',
+];
+const BOUNDARY_EDGE_HEADERS = ['Consumer', 'Provider', 'Contract'];
+const ARCHITECTURE_DECISION_ANCHOR_RE = /^AD-[0-9]{3,}$/;
+const RETIRED_ARCHITECTURE_DECISION_RE = /\b(retired|replaced|superseded|deprecated)\b/i;
+const ARCHITECTURE_REF_PATH_RE =
+  /(?:\.\/)?\.memory-bank\/(?:architecture|contracts|adrs)\/[^\s"'`),\]}]+/gi;
+const INDEX_TOP_LEVEL_KEYS = new Set(['version', 'tasks']);
+const INDEX_TASK_ENTRY_KEYS = new Set(['id', 'file']);
+const GATE_KEYS = new Set(['name', 'command', 'required']);
+const RUNTIME_CONTEXT_KEYS = new Set([
+  'write_boundary',
+  'allowed_write_scope',
+  'forbidden_scope',
+  'stop_conditions',
+]);
+const RUNTIME_CONTEXT_ARRAY_FIELDS = [
+  'write_boundary',
+  'allowed_write_scope',
+  'forbidden_scope',
+  'stop_conditions',
+];
+const WRITE_BOUNDARY_PATH_FIELDS = [
+  'write_boundary',
+  'allowed_write_scope',
+];
+const LEGACY_TASK_RISK_KEYS = new Set(['risk', 'risk.level', 'risk_level', 'riskLevel']);
+const REQUIRED_TASK_FIELDS = [
+  'id',
+  'title',
+  'status',
+  'wave',
+  'feature',
+  'reqs',
+  'depends_on',
+  'touched_files',
+  'tier',
+  'gates',
+  'verify',
+  'docs',
+  'evidence_required',
+  'source_artifacts',
+  'normative_inputs',
+  'constraints',
+  'invariants',
+  'verification_targets',
+];
+const OPTIONAL_TASK_FIELDS = [
+  'purpose',
+  'success_outcome',
+  'anti_goals',
+  'runtime_context',
+];
+const TASK_TOP_LEVEL_KEYS = new Set([...REQUIRED_TASK_FIELDS, ...OPTIONAL_TASK_FIELDS]);
+
+const errors = [];
+const warnings = [];
+
+function readText(p) {
+  return fs.readFileSync(p, 'utf8');
+}
+
+function readJson(rel) {
+  const p = path.join(ROOT, rel);
+  try {
+    return JSON.parse(readText(p));
+  } catch (err) {
+    errors.push(`${rel}: invalid JSON (${err.message})`);
+    return undefined;
+  }
+}
+
+function listMarkdownFiles(dir) {
+  const out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...listMarkdownFiles(full));
+    } else if (entry.isFile() && entry.name.endsWith('.md')) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+function hasFrontmatter(text) {
+  const normalized = text.replace(/\r\n/g, '\n');
+  return normalized.startsWith('---\n') && normalized.includes('\n---\n');
+}
+
+function parseFrontmatter(text) {
+  // Minimal YAML-ish parser for frontmatter block:
+  // - key: value
+  // - key: (then indented block, e.g. lists)
+  const normalized = text.replace(/\r\n/g, '\n');
+  const end = normalized.indexOf('\n---\n', 4);
+  if (end === -1) return null;
+  const block = normalized.slice(4, end).trimEnd();
+  const lines = block.split('\n');
+  const kv = {};
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const m = line.match(/^([A-Za-z0-9_\-]+):\s*(.*)$/);
+    if (!m) {
+      i += 1;
+      continue;
+    }
+
+    const key = m[1];
+    const rest = (m[2] ?? '').trimEnd();
+
+    if (rest === '') {
+      const collected = [];
+      i += 1;
+      while (i < lines.length) {
+        const next = lines[i];
+        if (/^[A-Za-z0-9_\-]+:\s*/.test(next)) break;
+        collected.push(next);
+        i += 1;
+      }
+      kv[key] = collected.join('\n').trim();
+      continue;
+    }
+
+    kv[key] = rest.trim();
+    i += 1;
+  }
+
+  return kv;
+}
+
+function normalizeRel(p) {
+  return p.replace(/\\/g, '/');
+}
+
+function isIndexDoc(rel) {
+  const n = normalizeRel(rel);
+  return n.endsWith('/index.md') || n === '.memory-bank/index.md';
+}
+
+function isLifecycleScopedDoc(rel) {
+  const n = normalizeRel(rel);
+  if (isIndexDoc(n)) return false;
+  return (
+    n.startsWith('.memory-bank/epics/') ||
+    n.startsWith('.memory-bank/features/') ||
+    n.startsWith('.memory-bank/requirements/')
+  );
+}
+
+function isMetadataScopedDoc(rel) {
+  const n = normalizeRel(rel);
+  if (isIndexDoc(n)) return false;
+  return (
+    n === '.memory-bank/product.md' ||
+    n === '.memory-bank/requirements.md' ||
+    n === '.memory-bank/spec-index.md' ||
+    n === '.memory-bank/glossary.md' ||
+    n === '.memory-bank/invariants.md' ||
+    n.startsWith('.memory-bank/architecture/') ||
+    n.startsWith('.memory-bank/guides/') ||
+    n.startsWith('.memory-bank/adrs/') ||
+    // Legacy brownfield spec paths remain lintable during subject-based migration.
+    n.startsWith('.memory-bank/tech-specs/') ||
+    n.startsWith('.memory-bank/domains/') ||
+    n.startsWith('.memory-bank/contracts/') ||
+    n.startsWith('.memory-bank/states/') ||
+    n.startsWith('.memory-bank/runbooks/') ||
+    n.startsWith('.memory-bank/epics/') ||
+    n.startsWith('.memory-bank/features/') ||
+    n.startsWith('.memory-bank/requirements/') ||
+    n.startsWith('.memory-bank/bugs/')
+  );
+}
+
+function stripYamlQuotes(value) {
+  const v = String(value ?? '').trim();
+  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+    return v.slice(1, -1);
+  }
+  return v;
+}
+
+function hasSourceOfTruth(fm) {
+  if (!fm) return false;
+  if (!Object.prototype.hasOwnProperty.call(fm, 'source_of_truth')) return false;
+  const raw = String(fm.source_of_truth ?? '').trim();
+  if (!raw || raw === '[]') return false;
+  if (raw.includes('\n') || raw.startsWith('-')) {
+    return /^\s*-\s+\S+/m.test(raw);
+  }
+  return true;
+}
+
+function hasOwn(object, key) {
+  return Object.prototype.hasOwnProperty.call(object, key);
+}
+
+function isFeatureDoc(rel) {
+  const n = normalizeRel(rel);
+  return n.startsWith('.memory-bank/features/') && path.basename(n).startsWith('FT-') && n.endsWith('.md');
+}
+
+function isPrdDoc(rel) {
+  return normalizeRel(rel) === '.memory-bank/prd.md';
+}
+
+function featureIdFromFile(filePath) {
+  const base = path.basename(filePath, path.extname(filePath));
+  const match = base.match(/^(FT-[0-9]{3,})(?:[-_].*)?$/);
+  return match?.[1];
+}
+
+function hasClarificationCompletionMarker(text) {
+  const normalized = text.replace(/\r\n/g, '\n');
+  return (
+    /^## Clarifications\s*$/m.test(normalized) ||
+    /(?:^|\n)Clarification: no critical ambiguity found(?:\n|$)/.test(normalized)
+  );
+}
+
+function hasSectionHeading(text, title) {
+  const normalized = text.replace(/\r\n/g, '\n');
+  const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^#{2,6}\\s+${escapedTitle}\\s*$`, 'im').test(normalized);
+}
+
+
+function prdFiles() {
+  const candidates = [
+    '.memory-bank/prd.md',
+    '.memory-bank/PRD.md',
+    '.memory-bank/product-requirements.md',
+    '.memory-bank/product-requirements-document.md',
+  ];
+  return candidates.filter((rel) => hasFile(path.join(ROOT, rel)));
+}
+
+function checkAnalysisStructure() {
+  const analysisDir = path.join(ROOT, ANALYSIS_DIR_REL);
+  if (!fs.existsSync(analysisDir)) return;
+
+  if (!hasFile(path.join(analysisDir, 'index.md'))) {
+    errors.push(`${ANALYSIS_DIR_REL}: missing required index.md`);
+  }
+
+  const productBriefPath = path.join(ROOT, ANALYSIS_BRIEF_REL);
+  const productBriefExists = hasFile(productBriefPath);
+  if (productBriefExists) {
+    const text = readText(productBriefPath);
+    const fm = parseFrontmatter(text);
+    if (!fm || stripYamlQuotes(fm.type) !== 'product-brief') {
+      errors.push(`${ANALYSIS_BRIEF_REL}: frontmatter must include 'type: product-brief'`);
+    }
+    if (!fm || !hasOwn(fm, 'status') || !String(fm.status).trim()) {
+      errors.push(`${ANALYSIS_BRIEF_REL}: frontmatter must include non-empty 'status'`);
+    }
+    if (!hasSectionHeading(text, 'Decision')) {
+      errors.push(`${ANALYSIS_BRIEF_REL}: missing 'Decision' section`);
+    }
+  }
+
+
+  if (productBriefExists) {
+    for (const rel of prdFiles()) {
+      const text = readText(path.join(ROOT, rel));
+      if (!text.includes(ANALYSIS_PRD_SOURCE_MARKER)) {
+        warnings.push(`${rel}: PRD exists but does not mention ${ANALYSIS_PRD_SOURCE_MARKER}`);
+      }
+    }
+  }
+}
+
+function checkRequiredFiles() {
+  for (const rel of REQUIRED) {
+    const p = path.join(ROOT, rel);
+    if (!fs.existsSync(p)) errors.push(`Missing required file: ${rel}`);
+  }
+}
+
+function checkFrontmatter(filePath, text) {
+  const rel = normalizeRel(path.relative(ROOT, filePath));
+  if (!hasFrontmatter(text)) {
+    errors.push(`${rel}: missing YAML frontmatter`);
+    return;
+  }
+  const fm = parseFrontmatter(text);
+  if (!fm || !fm.description) {
+    errors.push(`${rel}: frontmatter must include 'description'`);
+  }
+  if (!fm || !fm.status) {
+    errors.push(`${rel}: frontmatter must include 'status'`);
+  } else {
+    const status = stripYamlQuotes(fm.status);
+    if (!ALLOWED_STATUS.has(status)) {
+      errors.push(`${rel}: invalid status '${status}' (allowed: draft|active|deprecated|archived)`);
+    }
+
+    if (isMetadataScopedDoc(rel) && status === 'active') {
+      if (!fm.last_updated || !String(fm.last_updated).trim()) {
+        warnings.push(`${rel}: missing 'last_updated' (recommended for active docs, YYYY-MM-DD)`);
+      } else if (!/^\d{4}-\d{2}-\d{2}$/.test(stripYamlQuotes(fm.last_updated))) {
+        warnings.push(`${rel}: invalid 'last_updated' format (expected YYYY-MM-DD)`);
+      }
+      if (!hasSourceOfTruth(fm)) warnings.push(`${rel}: missing 'source_of_truth' (recommended for active docs)`);
+    }
+  }
+
+  if (isLifecycleScopedDoc(rel)) {
+    if (!fm || !fm.lifecycle) {
+      warnings.push(`${rel}: missing 'lifecycle' (planned|implemented|verified)`);
+    } else {
+      const lifecycle = stripYamlQuotes(fm.lifecycle);
+      if (!ALLOWED_LIFECYCLE.has(lifecycle)) {
+        errors.push(
+          `${rel}: invalid lifecycle '${lifecycle}' (allowed: planned|implemented|verified)`
+        );
+      }
+    }
+  }
+
+  checkFeatureClarificationMetadata(rel, text, fm);
+  checkPrdMetadata(rel, text, fm);
+}
+
+function checkFeatureClarificationMetadata(rel, text, fm) {
+  if (!isFeatureDoc(rel)) return;
+  if (!fm) return;
+
+  let clarificationStatus;
+  if (!hasOwn(fm, 'clarification_status')) {
+    return;
+  } else {
+    clarificationStatus = stripYamlQuotes(fm.clarification_status);
+    if (!ALLOWED_CLARIFICATION_STATUS.has(clarificationStatus)) {
+      errors.push(`${rel}: invalid clarification_status '${clarificationStatus}' (allowed: pending|complete|blocked)`);
+    }
+  }
+
+  if (hasOwn(fm, 'last_clarified')) {
+    const lastClarified = stripYamlQuotes(fm.last_clarified);
+    if (lastClarified !== 'null' && !/^\d{4}-\d{2}-\d{2}$/.test(lastClarified)) {
+      errors.push(`${rel}: invalid last_clarified '${lastClarified}' (expected null or YYYY-MM-DD)`);
+    }
+  }
+
+  if (hasOwn(fm, 'clarification_questions')) {
+    const questionCount = stripYamlQuotes(fm.clarification_questions);
+    if (!/^(0|[1-9][0-9]*)$/.test(questionCount)) {
+      errors.push(`${rel}: invalid clarification_questions '${questionCount}' (expected integer >= 0)`);
+    }
+  }
+
+  if (clarificationStatus === 'complete' && !hasClarificationCompletionMarker(text)) {
+    errors.push(
+      `${rel}: clarification_status complete requires '## Clarifications' or 'Clarification: no critical ambiguity found'`
+    );
+  }
+}
+
+function checkPrdMetadata(rel, text, fm) {
+  if (!isPrdDoc(rel)) return;
+  if (!fm) return;
+
+  if (stripYamlQuotes(fm.type) !== 'prd') {
+    errors.push(`${rel}: frontmatter must include 'type: prd'`);
+  }
+
+  if (!hasOwn(fm, 'constitution_checked') || stripYamlQuotes(fm.constitution_checked) !== 'true') {
+    errors.push(`${rel}: frontmatter must include 'constitution_checked: true'`);
+  }
+
+  if (!hasOwn(fm, 'clarification_status')) {
+    errors.push(`${rel}: frontmatter must include 'clarification_status' (pending|complete|blocked)`);
+  } else {
+    const status = stripYamlQuotes(fm.clarification_status);
+    if (!ALLOWED_PRD_CLARIFICATION_STATUS.has(status)) {
+      errors.push(`${rel}: invalid clarification_status '${status}' (allowed: pending|complete|blocked)`);
+    }
+  }
+
+  if (stripYamlQuotes(fm.clarification_status) === 'complete' && !hasSectionHeading(text, 'Clarifications')) {
+    errors.push(`${rel}: clarification_status complete requires a 'Clarifications' section`);
+  }
+}
+
+function extractLinks(text) {
+  // markdown links: [text](path)
+  // Ignore anything inside code fences and inline code to avoid flagging examples/templates.
+  const stripped = text
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/`[^`]*`/g, '');
+  const links = [];
+  const re = /\[[^\]]+\]\(([^)]+)\)/g;
+  let m;
+  while ((m = re.exec(stripped)) !== null) {
+    links.push(m[1]);
+  }
+  return links;
+}
+
+function checkLinks(filePath, text) {
+  const rel = normalizeRel(path.relative(ROOT, filePath));
+  const dir = path.dirname(filePath);
+  for (const link of extractLinks(text)) {
+    if (/^(https?:|mailto:|#)/.test(link)) continue;
+    if (link.startsWith('/')) continue;
+    const pathPart = link.split('#', 1)[0];
+    const target = pathPart.startsWith('.memory-bank/')
+      ? path.join(ROOT, pathPart)
+      : path.normalize(path.join(dir, pathPart));
+    if (!target.startsWith(ROOT)) continue;
+    if (!fs.existsSync(target)) {
+      errors.push(`${rel}: broken link -> ${link}`);
+    }
+  }
+}
+
+function splitMarkdownTableRow(line) {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) return null;
+
+  const cells = [];
+  let current = '';
+  let escaped = false;
+  for (const char of trimmed.slice(1, -1)) {
+    if (escaped) {
+      current += char;
+      escaped = false;
+    } else if (char === '\\') {
+      current += char;
+      escaped = true;
+    } else if (char === '|') {
+      cells.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function markdownSection(text, title) {
+  const normalized = text.replace(/\r\n/g, '\n');
+  const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matches = [...normalized.matchAll(new RegExp(`^##\\s+${escapedTitle}\\s*$`, 'gm'))];
+  if (matches.length !== 1) {
+    errors.push(`${BOUNDARY_MAP_REL}: expected exactly one '## ${title}' section`);
+    return null;
+  }
+
+  const start = matches[0].index + matches[0][0].length;
+  const next = normalized.slice(start).search(/^#{1,2}\s+/m);
+  return {
+    body: normalized.slice(start, next === -1 ? normalized.length : start + next),
+    startLine: normalized.slice(0, start).split('\n').length,
+  };
+}
+
+function markdownTable(text, title, expectedHeaders) {
+  const section = markdownSection(text, title);
+  if (!section) return [];
+
+  const lines = section.body.split('\n');
+  const headerIndex = lines.findIndex((line) => line.trim().startsWith('|'));
+  if (headerIndex === -1) {
+    errors.push(`${BOUNDARY_MAP_REL}: '## ${title}' must contain a Markdown table`);
+    return [];
+  }
+
+  const headers = splitMarkdownTableRow(lines[headerIndex]);
+  const separator = splitMarkdownTableRow(lines[headerIndex + 1] ?? '');
+  if (!headers || JSON.stringify(headers) !== JSON.stringify(expectedHeaders)) {
+    errors.push(`${BOUNDARY_MAP_REL}: '## ${title}' table headers must be '${expectedHeaders.join(' | ')}'`);
+    return [];
+  }
+  if (
+    !separator
+    || separator.length !== expectedHeaders.length
+    || separator.some((cell) => !/^:?-{3,}:?$/.test(cell))
+  ) {
+    errors.push(`${BOUNDARY_MAP_REL}: '## ${title}' has a malformed table separator`);
+    return [];
+  }
+
+  const rows = [];
+  for (let index = headerIndex + 2; index < lines.length; index += 1) {
+    if (!lines[index].trim()) continue;
+    if (!lines[index].trim().startsWith('|')) break;
+    const cells = splitMarkdownTableRow(lines[index]);
+    const line = section.startLine + index;
+    if (!cells || cells.length !== expectedHeaders.length) {
+      errors.push(`${BOUNDARY_MAP_REL}:${line}: malformed '${title}' row; expected ${expectedHeaders.length} cells`);
+      continue;
+    }
+    rows.push({ cells, line });
+  }
+  return rows;
+}
+
+function placeholderCell(value) {
+  const normalized = String(value ?? '').trim();
+  return !normalized
+    || /^(?:TBD|TODO|N\/A|none|null|-|—)$/i.test(normalized)
+    || /^<[^>]+>$/.test(normalized);
+}
+
+function exactHeadingLink(value) {
+  const match = String(value ?? '').trim().match(/^\[[^\]]+\]\(([^)]+)\)$/);
+  if (!match) return null;
+
+  let target = match[1].trim();
+  if (target.startsWith('<') && target.endsWith('>')) target = target.slice(1, -1);
+  const hash = target.lastIndexOf('#');
+  if (hash === -1 || hash === target.length - 1) return null;
+  return { path: target.slice(0, hash), fragment: target.slice(hash + 1), target };
+}
+
+function markdownHeadingAnchors(text) {
+  const anchors = new Set();
+  const counts = new Map();
+  for (const match of text.replace(/\r\n/g, '\n').matchAll(/^#{1,6}\s+(.+?)\s*#*$/gm)) {
+    const base = match[1]
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/[`*_~]/g, '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^\p{L}\p{N}\s_-]/gu, '')
+      .replace(/\s+/g, '-');
+    if (!base) continue;
+    const count = counts.get(base) ?? 0;
+    counts.set(base, count + 1);
+    anchors.add(count === 0 ? base : `${base}-${count}`);
+  }
+  return anchors;
+}
+
+function resolveExactHeadingLink(fromPath, link, label, line) {
+  if (!link || /^(?:https?:|mailto:)/.test(link.path) || link.path.startsWith('/')) {
+    errors.push(`${BOUNDARY_MAP_REL}:${line}: ${label} must be an exact local Markdown heading link`);
+    return null;
+  }
+
+  const targetPath = link.path === ''
+    ? fromPath
+    : link.path.startsWith('.memory-bank/')
+      ? path.join(ROOT, link.path)
+      : path.resolve(path.dirname(fromPath), link.path);
+  if (!targetPath.startsWith(ROOT) || path.extname(targetPath).toLowerCase() !== '.md' || !hasFile(targetPath)) {
+    errors.push(`${BOUNDARY_MAP_REL}:${line}: ${label} path does not resolve to a Markdown file (${link.target})`);
+    return null;
+  }
+
+  let fragment;
+  try {
+    fragment = decodeURIComponent(link.fragment).toLowerCase();
+  } catch {
+    errors.push(`${BOUNDARY_MAP_REL}:${line}: ${label} has an invalid encoded heading (${link.target})`);
+    return null;
+  }
+  if (!markdownHeadingAnchors(readText(targetPath)).has(fragment)) {
+    errors.push(`${BOUNDARY_MAP_REL}:${line}: ${label} heading does not resolve (${link.target})`);
+    return null;
+  }
+
+  return `${normalizeRel(path.relative(ROOT, targetPath))}#${fragment}`;
+}
+
+function checkBoundaryDependencyGraph() {
+  const abs = path.join(ROOT, BOUNDARY_MAP_REL);
+  if (!hasFile(abs)) return;
+
+  const text = readText(abs);
+  const moduleRows = markdownTable(text, 'Modules', BOUNDARY_MODULE_HEADERS);
+  const edgeRows = markdownTable(text, 'Dependency Graph', BOUNDARY_EDGE_HEADERS);
+  markdownSection(text, 'Inline Contracts');
+
+  const modules = new Set();
+  for (const { cells, line } of moduleRows) {
+    const [name, parent, codeRoot, responsibility] = cells;
+    if ([name, parent, codeRoot, responsibility].some(placeholderCell)) {
+      errors.push(`${BOUNDARY_MAP_REL}:${line}: module row contains an empty or placeholder value`);
+      continue;
+    }
+    if (modules.has(name)) {
+      errors.push(`${BOUNDARY_MAP_REL}:${line}: duplicate module/change-unit name '${name}'`);
+    } else {
+      modules.add(name);
+    }
+    resolveExactHeadingLink(abs, exactHeadingLink(parent), 'Parent Architecture Unit', line);
+  }
+
+  const edges = new Set();
+  for (const { cells, line } of edgeRows) {
+    const [consumer, provider, contract] = cells;
+    if ([consumer, provider, contract].some(placeholderCell)) {
+      errors.push(`${BOUNDARY_MAP_REL}:${line}: dependency row contains an empty or placeholder value`);
+      continue;
+    }
+    if (!modules.has(consumer)) {
+      errors.push(`${BOUNDARY_MAP_REL}:${line}: Consumer '${consumer}' is not registered in Modules`);
+    }
+    if (!modules.has(provider)) {
+      errors.push(`${BOUNDARY_MAP_REL}:${line}: Provider '${provider}' is not registered in Modules`);
+    }
+
+    const contractLink = exactHeadingLink(contract);
+    const resolvedContract = resolveExactHeadingLink(abs, contractLink, 'Contract', line);
+    const edgeKey = `${consumer}\u0000${provider}\u0000${resolvedContract ?? contract}`;
+    if (edges.has(edgeKey)) {
+      errors.push(`${BOUNDARY_MAP_REL}:${line}: duplicate Consumer + Provider + Contract edge`);
+    } else {
+      edges.add(edgeKey);
+    }
+  }
+}
+
+function checkFileSize(filePath, text) {
+  const rel = normalizeRel(path.relative(ROOT, filePath));
+  const lines = text.split(/\r?\n/).length;
+  if (lines > 2000) {
+    warnings.push(`${rel}: very large file (${lines} lines). Review for mixed concerns; split only by boundary, change cadence, consumers, or reuse.`);
+  }
+}
+
+function checkArrayField(rel, task, field) {
+  if (!Array.isArray(task[field])) {
+    errors.push(`${rel}: '${field}' must be an array`);
+  }
+}
+
+function checkRequiredStringField(rel, task, field) {
+  if (!hasOwn(task, field)) return;
+  if (typeof task[field] !== 'string') {
+    errors.push(`${rel}: '${field}' must be a string`);
+  }
+}
+
+function checkOptionalStringField(rel, object, field) {
+  if (!hasOwn(object, field)) return;
+  if (typeof object[field] !== 'string') {
+    errors.push(`${rel}: '${field}' must be a string when present`);
+  }
+}
+
+function checkOptionalStringArrayField(rel, object, field, label = field) {
+  if (!hasOwn(object, field)) return;
+  if (!Array.isArray(object[field])) {
+    errors.push(`${rel}: '${label}' must be an array when present`);
+    return;
+  }
+
+  object[field].forEach((item, index) => {
+    if (typeof item !== 'string') {
+      errors.push(`${rel}: '${label}[${index}]' must be a string`);
+    }
+  });
+}
+
+function writeBoundaryPathIssue(value) {
+  if (value.length === 0) return 'entry is empty';
+  if (value !== value.trim()) return 'entry or a path segment has leading/trailing whitespace';
+  if (/[\u0000-\u001F\u007F]/u.test(value)) return 'ASCII control characters are forbidden';
+  if (value.startsWith('/') || /^[A-Za-z]:/.test(value)) return 'absolute or drive-qualified paths are forbidden';
+  if (value.includes('\\')) return 'use POSIX / separators, not backslash';
+  if (value.includes('//')) return 'empty path segments are forbidden';
+  if (/[*?]/u.test(value)) return 'entries are literal paths; * and ? wildcards are forbidden';
+
+  const normalized = value.endsWith('/') ? value.slice(0, -1) : value;
+  const segments = normalized.split('/');
+  if (segments.some((segment) => segment === '.' || segment === '..')) {
+    return "'.' and '..' path segments are forbidden";
+  }
+  if (segments.some((segment) => segment !== segment.trim())) {
+    return 'entry or a path segment has leading/trailing whitespace';
+  }
+  return null;
+}
+
+function checkOptionalWriteBoundaryPaths(rel, object, field) {
+  if (!hasOwn(object, field) || !Array.isArray(object[field])) return;
+
+  object[field].forEach((item, index) => {
+    if (typeof item !== 'string') return;
+    const issue = writeBoundaryPathIssue(item);
+    if (!issue) return;
+    errors.push(
+      `${rel}: 'runtime_context.${field}[${index}]' must be a literal project-root-relative POSIX path (${issue})`
+    );
+  });
+}
+
+function checkVerifyItems(rel, task) {
+  if (!Array.isArray(task.verify)) return;
+
+  task.verify.forEach((item, index) => {
+    const isStructuredObject = item && typeof item === 'object' && !Array.isArray(item);
+    if (typeof item !== 'string' && !isStructuredObject) {
+      errors.push(`${rel}: 'verify[${index}]' must be a string or object`);
+    }
+  });
+}
+
+function taskIdParts(taskId) {
+  const match = TASK_ID_RE.exec(taskId);
+  if (!match) return null;
+  return {
+    tier: match[1],
+    feature: match[2],
+    wave: `W${match[3]}`,
+  };
+}
+
+function taskIdFormatMessage(value) {
+  const suffix = LEGACY_TASK_ID_RE.test(String(value ?? ''))
+    ? '; legacy TASK-NNN-FT-NNN-W-N IDs are missing the required tier segment'
+    : '';
+  return `must match ${TASK_ID_FORMAT}${suffix}`;
+}
+
+function checkTaskIdMatchesRecord(rel, task) {
+  if (typeof task.id !== 'string' || !TASK_ID_RE.test(task.id)) return;
+
+  const parts = taskIdParts(task.id);
+  if (!parts) return;
+
+  if (task.feature !== parts.feature) {
+    errors.push(`${rel}: task id feature segment '${parts.feature}' must match feature '${task.feature}'`);
+  }
+  if (task.tier !== parts.tier) {
+    errors.push(`${rel}: task id tier segment '${parts.tier}' must match tier '${task.tier}'`);
+  }
+  if (task.wave !== parts.wave) {
+    errors.push(`${rel}: task id wave segment '${parts.wave}' must match wave '${task.wave}'`);
+  }
+}
+
+function checkOptionalTaskRuntimeContext(rel, task) {
+  checkOptionalStringField(rel, task, 'purpose');
+  checkOptionalStringField(rel, task, 'success_outcome');
+  checkOptionalStringArrayField(rel, task, 'anti_goals');
+
+  if (!hasOwn(task, 'runtime_context')) return;
+
+  const runtimeContext = task.runtime_context;
+  if (!runtimeContext || typeof runtimeContext !== 'object' || Array.isArray(runtimeContext)) {
+    errors.push(`${rel}: 'runtime_context' must be an object when present`);
+    return;
+  }
+
+  checkExactKeys(rel, runtimeContext, RUNTIME_CONTEXT_KEYS, 'runtime_context');
+
+  if (hasOwn(runtimeContext, 'write_boundary') && hasOwn(runtimeContext, 'allowed_write_scope')) {
+    errors.push(`${rel}: runtime_context must not contain both 'write_boundary' and deprecated 'allowed_write_scope'`);
+  } else if (hasOwn(runtimeContext, 'allowed_write_scope')) {
+    warnings.push(`${rel}: runtime_context.allowed_write_scope is deprecated; use write_boundary`);
+  }
+
+  for (const field of RUNTIME_CONTEXT_ARRAY_FIELDS) {
+    checkOptionalStringArrayField(rel, runtimeContext, field, `runtime_context.${field}`);
+  }
+  for (const field of WRITE_BOUNDARY_PATH_FIELDS) {
+    checkOptionalWriteBoundaryPaths(rel, runtimeContext, field);
+  }
+}
+
+function checkExactKeys(rel, object, allowedKeys, label) {
+  const keys = Object.keys(object);
+  const extraKeys = keys.filter((key) => !allowedKeys.has(key));
+  if (extraKeys.length) {
+    errors.push(`${rel}: ${label} must not contain extra keys: ${extraKeys.join(', ')}`);
+  }
+}
+
+function checkGateItems(rel, task) {
+  if (!Array.isArray(task.gates)) return;
+
+  task.gates.forEach((gate, index) => {
+    const label = `gates[${index}]`;
+    if (!gate || typeof gate !== 'object' || Array.isArray(gate)) {
+      errors.push(`${rel}: ${label} must be an object with name, command, and required`);
+      return;
+    }
+
+    checkExactKeys(rel, gate, GATE_KEYS, label);
+
+    if (typeof gate.name !== 'string' || !gate.name.trim()) {
+      errors.push(`${rel}: ${label}.name must be a non-empty string`);
+    }
+    if (typeof gate.command !== 'string' || !gate.command.trim()) {
+      errors.push(`${rel}: ${label}.command must be a non-empty string`);
+    }
+    if (typeof gate.required !== 'boolean') {
+      errors.push(`${rel}: ${label}.required must be a boolean`);
+    }
+  });
+}
+
+function checkLegacyTaskRiskKeys(rel, task) {
+  for (const key of LEGACY_TASK_RISK_KEYS) {
+    if (hasOwn(task, key)) {
+      errors.push(`${rel}: task record must not contain '${key}'; use 'tier' (T0|T1|T2|T3)`);
+    }
+  }
+}
+
+function featureDocsById() {
+  const featureDir = path.join(ROOT, '.memory-bank', 'features');
+  const byId = new Map();
+  if (!fs.existsSync(featureDir)) return byId;
+
+  for (const file of listMarkdownFiles(featureDir)) {
+    const featureId = featureIdFromFile(file);
+    if (!featureId) continue;
+
+    const rel = normalizeRel(path.relative(ROOT, file));
+    const fm = parseFrontmatter(readText(file));
+    const status = fm && hasOwn(fm, 'clarification_status') ? stripYamlQuotes(fm.clarification_status) : undefined;
+    const entry = { rel, status };
+    if (!byId.has(featureId)) byId.set(featureId, []);
+    byId.get(featureId).push(entry);
+  }
+
+  return byId;
+}
+
+function checkTaskFeatureClarification(rel, task, featuresById) {
+  if (typeof task.feature !== 'string') return;
+  const featureId = task.feature.trim();
+  if (!FEATURE_ID_RE.test(featureId)) return;
+
+  const featureDocs = featuresById.get(featureId);
+  if (!featureDocs?.length) return;
+
+  for (const feature of featureDocs) {
+    if (feature.status !== 'pending' && feature.status !== 'blocked') continue;
+    errors.push(
+      `${rel}: indexed task '${task.id}' must not be generated from ${feature.status} clarification feature ${featureId} (${feature.rel})`
+    );
+  }
+}
+
+function extractArchitectureReferences(value, out = []) {
+  if (typeof value === 'string') {
+    for (const match of value.matchAll(ARCHITECTURE_REF_PATH_RE)) {
+      const normalized = normalizeArchitectureReference(match[0]);
+      if (normalized) out.push(normalized);
+    }
+    return out;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) extractArchitectureReferences(item, out);
+    return out;
+  }
+
+  if (value && typeof value === 'object') {
+    for (const child of Object.values(value)) extractArchitectureReferences(child, out);
+  }
+
+  return out;
+}
+
+function normalizeArchitectureReference(value) {
+  const normalized = normalizeRel(String(value ?? '').trim())
+    .replace(/^\.\//, '')
+    .replace(/[.,:;]+$/g, '');
+  const [relPath, ...anchorParts] = normalized.split('#');
+
+  if (!relPath.startsWith('.memory-bank/')) return null;
+  return { path: relPath, anchor: anchorParts.join('#') };
+}
+
+function architectureDecisionIds() {
+  const abs = path.join(ROOT, ARCHITECTURE_SPINE_REL);
+  if (!fs.existsSync(abs)) return new Set();
+  const text = readText(abs).replace(/\r\n/g, '\n');
+  return new Set([...text.matchAll(/^####\s+(AD-[0-9]{3,})\b/gm)].map((match) => match[1]));
+}
+
+function checkTaskArchitectureReferences(rel, task) {
+  const fields = [
+    task.source_artifacts,
+    task.normative_inputs,
+    task.constraints,
+    task.invariants,
+    task.verification_targets,
+  ];
+  const refsByKey = new Map();
+  for (const ref of extractArchitectureReferences(fields)) {
+    refsByKey.set(`${ref.path}#${ref.anchor}`, ref);
+  }
+  const refs = [...refsByKey.values()];
+  const decisionIds = architectureDecisionIds();
+
+  for (const ref of refs) {
+    if (!fs.existsSync(path.join(ROOT, ref.path))) {
+      errors.push(`${rel}: references missing architecture/contract/ADR path '${ref.path}'`);
+      continue;
+    }
+
+    if (ref.path === ARCHITECTURE_SPINE_REL && ref.anchor.startsWith('AD-')) {
+      if (!ARCHITECTURE_DECISION_ANCHOR_RE.test(ref.anchor)) {
+        errors.push(`${rel}: references invalid Architecture Spine decision anchor '${ref.path}#${ref.anchor}'`);
+      } else if (!decisionIds.has(ref.anchor)) {
+        errors.push(`${rel}: references missing Architecture Spine decision anchor '${ref.path}#${ref.anchor}'`);
+      }
+    }
+  }
+}
+
+function isRetiredArchitectureDecision(headingTail, block) {
+  if (RETIRED_ARCHITECTURE_DECISION_RE.test(String(headingTail ?? ''))) return true;
+
+  const status = String(block ?? '').match(/^\s*-\s*Status\s*:\s*(.*)$/im);
+  return status ? RETIRED_ARCHITECTURE_DECISION_RE.test(status[1] ?? '') : false;
+}
+
+function hasNonEmptyDecisionLabel(block, label) {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = block.match(new RegExp(`^\\s*-\\s*${escaped}\\s*:\\s*(.*)$`, 'im'));
+  if (!match) return false;
+  const value = String(match[1] ?? '').trim();
+  return value.length > 0 && !/^(TBD|TODO|none|n\/a)$/i.test(value);
+}
+
+function checkArchitectureSpine() {
+  const abs = path.join(ROOT, ARCHITECTURE_SPINE_REL);
+  if (!fs.existsSync(abs)) return;
+
+  const text = readText(abs).replace(/\r\n/g, '\n');
+  const matches = [...text.matchAll(/^####\s+(AD-[0-9]{3,})\b(.*)$/gm)];
+  const activeIds = new Map();
+
+  for (let i = 0; i < matches.length; i += 1) {
+    const match = matches[i];
+    const id = match[1];
+    const headingTail = match[2] ?? '';
+    const start = match.index + match[0].length;
+    const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
+    const block = text.slice(start, end);
+    const line = text.slice(0, match.index).split('\n').length;
+
+    if (isRetiredArchitectureDecision(headingTail, block)) continue;
+
+    if (activeIds.has(id)) {
+      errors.push(`${ARCHITECTURE_SPINE_REL}:${line}: duplicate active Architecture Spine decision '${id}'`);
+    } else {
+      activeIds.set(id, line);
+    }
+
+    for (const label of ['Binds', 'Prevents', 'Rule']) {
+      if (!hasNonEmptyDecisionLabel(block, label)) {
+        errors.push(`${ARCHITECTURE_SPINE_REL}:${line}: active Architecture Spine decision '${id}' must include non-empty '${label}:'`);
+      }
+    }
+  }
+}
+
+function walkJson(value, visitor, pathParts = []) {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => {
+      const childPath = [...pathParts, String(index)];
+      visitor(String(index), item, childPath);
+      walkJson(item, visitor, childPath);
+    });
+    return;
+  }
+
+  if (!value || typeof value !== 'object') return;
+
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = [...pathParts, key];
+    visitor(key, child, childPath);
+    walkJson(child, visitor, childPath);
+  }
+}
+
+function checkTaskSchemaDoesNotContainRisk(schemaRel, schema) {
+  if (schema === undefined) return;
+
+  const findings = new Set();
+  walkJson(schema, (key, value, pathParts) => {
+    const jsonPath = pathParts.join('.');
+    if (key === 'risk' || key === 'risk.level') {
+      findings.add(jsonPath);
+    }
+    if (typeof value === 'string' && /\brisk(?:\.level)?\b/i.test(value)) {
+      findings.add(`${jsonPath}=${value}`);
+    }
+  });
+
+  if (findings.size) {
+    errors.push(`${schemaRel}: task schema must not contain risk or risk.level (${[...findings].join(', ')})`);
+  }
+}
+
+function hasFile(absPath) {
+  return fs.existsSync(absPath) && fs.statSync(absPath).isFile();
+}
+
+function checkTaskRecords() {
+  const schemaRel = '.memory-bank/schemas/task.schema.json';
+  const indexRel = '.memory-bank/tasks/index.json';
+
+  if (!fs.existsSync(path.join(ROOT, schemaRel))) {
+    errors.push(`Missing required file: ${schemaRel}`);
+  } else {
+    checkTaskSchemaDoesNotContainRisk(schemaRel, readJson(schemaRel));
+  }
+
+  if (!fs.existsSync(path.join(ROOT, indexRel))) {
+    errors.push(`Missing required file: ${indexRel}`);
+    return;
+  }
+
+  const index = readJson(indexRel);
+  if (index === undefined) return;
+
+  if (!index || typeof index !== 'object' || Array.isArray(index)) {
+    errors.push(`${indexRel}: index must be a JSON object`);
+    return;
+  }
+  checkExactKeys(indexRel, index, INDEX_TOP_LEVEL_KEYS, 'top-level object');
+  if (index.version !== 1) {
+    errors.push(`${indexRel}: 'version' must be 1`);
+  }
+  if (!Array.isArray(index.tasks)) {
+    errors.push(`${indexRel}: 'tasks' must be an array`);
+    return;
+  }
+
+  const records = new Map();
+  const dependencies = new Map();
+  const featuresById = featureDocsById();
+
+  for (const entry of index.tasks) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      errors.push(`${indexRel}: each task index entry must be an object`);
+      continue;
+    }
+    checkExactKeys(indexRel, entry, INDEX_TASK_ENTRY_KEYS, `task index entry '${entry.id ?? '<missing-id>'}'`);
+
+    const id = entry.id;
+    const file = entry.file;
+    if (typeof id !== 'string' || !id.trim()) {
+      errors.push(`${indexRel}: each task index entry needs a non-empty 'id'`);
+      continue;
+    }
+    if (!TASK_ID_RE.test(id)) {
+      errors.push(`${indexRel}: task id '${id}' ${taskIdFormatMessage(id)}`);
+      continue;
+    }
+    if (records.has(id)) {
+      errors.push(`${indexRel}: duplicate task id '${id}'`);
+      continue;
+    }
+    if (typeof file !== 'string' || !file.trim()) {
+      errors.push(`${indexRel}: task '${id}' needs a non-empty 'file'`);
+      continue;
+    }
+    if (path.isAbsolute(file) || file.includes('..') || !file.endsWith('.task.json')) {
+      errors.push(`${indexRel}: task '${id}' has invalid file '${file}'`);
+      continue;
+    }
+    if (!TASK_FILE_RE.test(file)) {
+      errors.push(`${indexRel}: task '${id}' file '${file}' must match ${TASK_ID_FORMAT}.task.json`);
+      continue;
+    }
+    if (file !== `${id}.task.json`) {
+      errors.push(`${indexRel}: task '${id}' file must be '${id}.task.json'`);
+      continue;
+    }
+
+    const rel = normalizeRel(path.join('.memory-bank/tasks', file));
+    const abs = path.join(ROOT, rel);
+    if (!fs.existsSync(abs)) {
+      errors.push(`${indexRel}: indexed task '${id}' file missing: ${rel}`);
+      continue;
+    }
+
+    const task = readJson(rel);
+    if (task === undefined) continue;
+    records.set(id, { rel, task });
+  }
+
+  for (const [id, { rel, task }] of records) {
+    if (!task || typeof task !== 'object' || Array.isArray(task)) {
+      errors.push(`${rel}: task record must be a JSON object`);
+      continue;
+    }
+
+    for (const field of REQUIRED_TASK_FIELDS) {
+      if (!Object.prototype.hasOwnProperty.call(task, field)) {
+        errors.push(`${rel}: missing required field '${field}'`);
+      }
+    }
+    checkExactKeys(rel, task, TASK_TOP_LEVEL_KEYS, 'top-level task record');
+
+    if (task.id !== id) {
+      errors.push(`${rel}: task id '${task.id}' does not match index id '${id}'`);
+    }
+    if (typeof task.id !== 'string' || !TASK_ID_RE.test(task.id)) {
+      errors.push(`${rel}: task id '${task.id}' ${taskIdFormatMessage(task.id)}`);
+    }
+    checkTaskIdMatchesRecord(rel, task);
+    if (!ALLOWED_TASK_STATUS.has(task.status)) {
+      errors.push(
+        `${rel}: invalid task status '${task.status}' (allowed: planned|ready|in_progress|blocked|done|done_for_prod|failed)`
+      );
+    }
+    if (!ALLOWED_TASK_TIER.has(task.tier)) {
+      errors.push(`${rel}: invalid tier '${task.tier}' (allowed: T0|T1|T2|T3)`);
+    }
+    for (const field of ['title', 'wave', 'feature']) {
+      checkRequiredStringField(rel, task, field);
+    }
+    checkLegacyTaskRiskKeys(rel, task);
+    checkOptionalTaskRuntimeContext(rel, task);
+
+    for (const field of [
+      'reqs',
+      'depends_on',
+      'touched_files',
+      'gates',
+      'verify',
+      'docs',
+      'evidence_required',
+      'source_artifacts',
+      'normative_inputs',
+      'constraints',
+      'invariants',
+      'verification_targets',
+    ]) {
+      checkArrayField(rel, task, field);
+    }
+    for (const field of [
+      'reqs',
+      'depends_on',
+      'touched_files',
+      'docs',
+      'evidence_required',
+      'source_artifacts',
+      'normative_inputs',
+      'constraints',
+      'invariants',
+      'verification_targets',
+    ]) {
+      checkOptionalStringArrayField(rel, task, field);
+    }
+    checkVerifyItems(rel, task);
+    checkTaskArchitectureReferences(rel, task);
+    checkGateItems(rel, task);
+
+    checkTaskFeatureClarification(rel, task, featuresById);
+
+    dependencies.set(id, Array.isArray(task.depends_on) ? task.depends_on : []);
+  }
+
+  for (const [id, deps] of dependencies) {
+    const rel = records.get(id)?.rel ?? indexRel;
+    for (const dep of deps) {
+      if (typeof dep !== 'string' || !TASK_ID_RE.test(dep)) {
+        errors.push(`${rel}: depends_on value '${dep}' ${taskIdFormatMessage(dep)}`);
+        continue;
+      }
+      if (!records.has(dep)) {
+        errors.push(`${rel}: depends_on references unknown task '${dep}'`);
+      }
+    }
+  }
+
+  const visiting = new Set();
+  const visited = new Set();
+
+  function visit(id, stack) {
+    if (visiting.has(id)) {
+      errors.push(`.memory-bank/tasks/index.json: dependency cycle detected: ${[...stack, id].join(' -> ')}`);
+      return;
+    }
+    if (visited.has(id)) return;
+
+    visiting.add(id);
+    for (const dep of dependencies.get(id) ?? []) {
+      if (records.has(dep)) visit(dep, [...stack, id]);
+    }
+    visiting.delete(id);
+    visited.add(id);
+  }
+
+  for (const id of records.keys()) visit(id, []);
+}
+
+checkRequiredFiles();
+
+const files = listMarkdownFiles(MB);
+for (const f of files) {
+  const text = readText(f);
+  checkFrontmatter(f, text);
+  checkLinks(f, text);
+  checkFileSize(f, text);
+}
+
+checkAnalysisStructure();
+checkArchitectureSpine();
+checkBoundaryDependencyGraph();
+checkTaskRecords();
+
+if (warnings.length) {
+  console.log('⚠️  WARNINGS');
+  for (const w of warnings) console.log(`- ${w}`);
+  console.log('');
+}
+
+if (errors.length) {
+  console.error('❌ ERRORS');
+  for (const e of errors) console.error(`- ${e}`);
+  process.exit(1);
+}
+
+console.log(`✅ mb-lint passed (${files.length} files).`);

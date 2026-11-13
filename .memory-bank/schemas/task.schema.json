@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Memory Bank Task Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title",
+    "status",
+    "wave",
+    "feature",
+    "reqs",
+    "depends_on",
+    "touched_files",
+    "tier",
+    "gates",
+    "verify",
+    "docs",
+    "evidence_required",
+    "source_artifacts",
+    "normative_inputs",
+    "constraints",
+    "invariants",
+    "verification_targets"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^TASK-[0-9]{3}-T[0-3]-FT-[0-9]{3}-W[0-9]+$"
+    },
+    "title": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "planned",
+        "ready",
+        "in_progress",
+        "blocked",
+        "done",
+        "done_for_prod",
+        "failed"
+      ]
+    },
+    "wave": {
+      "type": "string"
+    },
+    "feature": {
+      "type": "string"
+    },
+    "reqs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "depends_on": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "touched_files": {
+      "type": "array",
+      "description": "Advisory, expected, non-exhaustive change surface confirmed by executor preflight.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tier": {
+      "type": "string",
+      "enum": [
+        "T0",
+        "T1",
+        "T2",
+        "T3"
+      ]
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "command",
+          "required"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "verify": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "additionalProperties": true
+          }
+        ]
+      }
+    },
+    "docs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_required": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "purpose": {
+      "type": "string"
+    },
+    "success_outcome": {
+      "type": "string"
+    },
+    "anti_goals": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "runtime_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "write_boundary": {
+          "type": "array",
+          "description": "Optional hard boundary of literal project-root-relative POSIX paths; omit unless evidence justifies one.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?![A-Za-z]:)(?!.*//)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))(?!.*[\\\\*?\\u0000-\\u001F\\u007F])(?!\\s)(?!.*\\/\\s)(?!.*\\s(?:/|$))[^/]+(?:/[^/]+)*/?$"
+          }
+        },
+        "allowed_write_scope": {
+          "type": "array",
+          "description": "Deprecated alias for write_boundary; do not emit in new task cards.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?![A-Za-z]:)(?!.*//)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))(?!.*[\\\\*?\\u0000-\\u001F\\u007F])(?!\\s)(?!.*\\/\\s)(?!.*\\s(?:/|$))[^/]+(?:/[^/]+)*/?$"
+          }
+        },
+        "forbidden_scope": {
+          "type": "array",
+          "description": "Hard paths or areas that execution must not change.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "stop_conditions": {
+          "type": "array",
+          "description": "Hard conditions that require execution to stop and hand off.",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "not": {
+        "required": [
+          "write_boundary",
+          "allowed_write_scope"
+        ]
+      }
+    },
+    "source_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "normative_inputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "invariants": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "verification_targets": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
