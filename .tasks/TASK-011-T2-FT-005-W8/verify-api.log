@@ -1,0 +1,22 @@
+TAP version 13
+# Subtest: archive: totals, snapshots, own media, permissions and read-only state after public hide
+ok 1 - archive: totals, snapshots, own media, permissions and read-only state after public hide
+  ---
+  duration_ms: 1227.980917
+  type: 'test'
+  ...
+# Subtest: archive calendar uses saved start identity when photo arrives after Novosibirsk midnight
+ok 2 - archive calendar uses saved start identity when photo arrives after Novosibirsk midnight
+  ---
+  duration_ms: 383.442688
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2515.219959

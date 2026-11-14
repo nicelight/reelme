@@ -1,14 +1,16 @@
 <script lang="ts">
-  /** Module contract: account entry, operator display and admin-only scenario editor. Model
+  /** Module contract: account entry, shared archive, operator display and admin-only scenario editor. Model
    * changes remove incompatible fields; API remains the authority for access,
    * validation and persistence. No generation or capture behavior belongs here. */
   import { onMount } from 'svelte';
   import { models, recastId, blankSlot, slotSchema, titleFrom, videoProblem } from '../../shared/scenarios';
   import type { Media, Mode, Slot, SlotInput } from '../../shared/scenarios';
   import { api, ApiError, mediaUrl } from './api';
+  import Archive from './Archive.svelte';
   import Display from './Display.svelte';
   import MediaField from './MediaField.svelte';
 
+  let archive = $state(false);
   let ready = $state(false);
   let role = $state<'admin' | 'operator' | null>(null);
   let username = $state('');
@@ -59,7 +61,7 @@
     busy = true;
     try {
       await api('/auth/logout', { method: 'POST' });
-      role = null; slots = []; selectedId = null; draft = blankSlot(); baseline = JSON.stringify(draft); notice = ''; error = ''; videoMedia = undefined;
+      role = null; archive = false; slots = []; selectedId = null; draft = blankSlot(); baseline = JSON.stringify(draft); notice = ''; error = ''; videoMedia = undefined;
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
@@ -123,7 +125,7 @@
 </script>
 
 <svelte:window onbeforeunload={beforeUnload} />
-<svelte:head><title>ReelMe — {role === 'admin' ? 'Сюжеты' : role === 'operator' ? 'Ваши видео' : 'Вход'}</title></svelte:head>
+<svelte:head><title>ReelMe — {archive ? 'Архив' : role === 'admin' ? 'Сюжеты' : role === 'operator' ? 'Ваши видео' : 'Вход'}</title></svelte:head>
 
 <header class="app-header">
   <a class="brand" href="/" aria-label="ReelMe — главная">Reel<span>Me</span><span class="brand-caption">STUDIO</span></a>
@@ -132,6 +134,13 @@
     {#if role}<span class="role-label">{role === 'admin' ? 'Администратор' : 'Оператор'}</span><button class="quiet" onclick={logout} disabled={formDisabled}>Выйти</button>{/if}
   </div>
 </header>
+
+{#if ready && role}
+  <nav class="surface-nav" aria-label="Разделы">
+    <button class="quiet" aria-current={!archive ? 'page' : undefined} onclick={() => archive = false}>{role === 'admin' ? 'Сюжеты' : 'Сегодня'}</button>
+    <button class="quiet" aria-current={archive ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (role !== 'admin' || canLeave()) archive = true; }}>Архив</button>
+  </nav>
+{/if}
 
 {#if !ready}
   <main class="centered"><p role="status">Открываем ReelMe…</p></main>
@@ -147,6 +156,8 @@
       <p class="hint">Используйте аккаунт администратора или оператора, созданный при настройке.</p>
     </form>
   </main>
+{:else if archive}
+  <Archive onunauthorized={() => role = null} />
 {:else if role === 'operator'}
   <Display onunauthorized={() => role = null} />
 {:else}

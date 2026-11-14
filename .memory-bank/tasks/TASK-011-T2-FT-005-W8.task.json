@@ -1,7 +1,7 @@
 {
   "id": "TASK-011-T2-FT-005-W8",
   "title": "Открыть архив прошедших мероприятий и видео выбранной сессии",
-  "status": "planned",
+  "status": "done",
   "wave": "W8",
   "feature": "FT-005",
   "reqs": [
@@ -18,8 +18,81 @@
     "README.md"
   ],
   "tier": "T2",
-  "gates": [],
-  "verify": [],
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "api-regressions",
+      "command": "npm test",
+      "required": true
+    },
+    {
+      "name": "archive-browser",
+      "command": "REELME_BROWSER_ARTIFACTS=.tasks/TASK-011-T2-FT-005-W8 npm run test:ui -- tests/archive.spec.ts",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-14",
+      "stage": "implementation",
+      "result": "PASS",
+      "summary": "Архив прошедших дней Asia/Novosibirsk, точные отдельные суммы собственных изображений/видео, snapshot-галерея и плеер своей сессии для operator/admin. Сегодня и чужие credentials закрыты. Просмотр не меняет generation/delivery; скрытый публичный результат доступен после смены дня.",
+      "checks": [
+        "npm run check: PASS, 0 errors / 0 warnings",
+        "npm run build: PASS",
+        "npm test: PASS, 62/62",
+        "npx tsx --test tests/archive.test.ts: PASS, 2/2; итоговые fixtures с разными сюжетами повторно проверены",
+        "Chromium archive.spec.ts: PASS, оба аккаунта, byte-identical media, real playback, mobile/dark",
+        "Chromium display.spec.ts + editor.spec.ts: PASS, 2/2",
+        "git diff --check: PASS"
+      ],
+      "evidence": [
+        ".tasks/TASK-011-T2-FT-005-W8/evidence.md",
+        ".tasks/TASK-011-T2-FT-005-W8/archive-observations.json"
+      ],
+      "limitations": [
+        "Live fal/SMTP.BZ отменены оператором; камера не требуется и не проверялась.",
+        "Удаление/автоочистка — TASK-012, не реализованы здесь.",
+        "Браузерные checks через project-native Playwright и отдельный Node/tsx fixture; ui_qa отсутствует."
+      ],
+      "remaining": "Код готов к независимой проверке. Lifecycle оставлен in_progress; commit/push и закрытие выполняет root."
+    },
+    {
+      "date": "2026-11-14",
+      "stage": "independent-verification",
+      "result": "PASS",
+      "summary": "Существенных нарушений TASK-011/FT-005 AC-001/002 не найдено. Сверены контракт, реализация, fixtures, Chromium evidence и снимки; независимый API rerun подтверждает даты, суммы, снимки/свои медиа, права, read-only и сохранность после скрытия.",
+      "checks": [
+        "npx tsx --test tests/archive.test.ts: PASS, 2/2, exit 0 (независимый запуск)",
+        "git diff --check: PASS",
+        "Review archive.spec.ts/archive-observations.json и desktop/mobile screenshots: PASS; существующие Chromium playback и regression results переиспользованы"
+      ],
+      "evidence": [
+        ".tasks/TASK-011-T2-FT-005-W8/verify-report.md",
+        ".tasks/TASK-011-T2-FT-005-W8/verify-api.log"
+      ],
+      "limitations": [
+        "Полный suite, check/build и Chromium повторно не запускались; результаты исполнителя переиспользованы для замороженного кода.",
+        "Live fal/SMTP отменены оператором; камера и удаление TASK-012 вне проверки."
+      ],
+      "remaining": "Lifecycle и закрытие задачи оставлены владельцу; исправления по результату проверки не требуются."
+    },
+    {
+      "date": "2026-11-14",
+      "stage": "closure",
+      "result": "DONE",
+      "summary": "Архив принят: independent verify PASS, targetedAPI2/2; локально full62/62, check/build, Chromium archive1/1 и display/editor2/2 PASS. Удаление остаётся TASK-012."
+    }
+  ],
   "docs": [
     ".memory-bank/features/FT-005-event-archive.md"
   ],
