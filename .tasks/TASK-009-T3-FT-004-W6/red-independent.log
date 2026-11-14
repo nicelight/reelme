@@ -1,0 +1,4 @@
+PASS: independent workers + separate SQLite connections claim one pending once; sent_at only after SMTP 250.
+PASS: distinct sessions retain own MP4 bytes and fallback download token/file under two workers.
+{"probe":"explicit mailbox quota refusal at DATA","smtpReply":"552 5.2.2 Mailbox size limit exceeded","expectedAttempts":1,"actualAttempts":2,"state":"failed","firstHasAttachment":true,"lastHasAttachment":false}
+PASS: raw provider error containing secret/email is absent from worker logs and public API; EAUTH sends once.

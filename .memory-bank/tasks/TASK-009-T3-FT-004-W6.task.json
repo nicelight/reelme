@@ -1,7 +1,7 @@
 {
   "id": "TASK-009-T3-FT-004-W6",
   "title": "Отправить посетителю видео по email с повтором после ошибки",
-  "status": "planned",
+  "status": "done",
   "wave": "W6",
   "feature": "FT-004",
   "reqs": [
@@ -20,7 +20,104 @@
   ],
   "tier": "T3",
   "gates": [],
-  "verify": [],
+  "verify": [
+    {
+      "date": "2026-11-14",
+      "result": "implementation_ready_for_independent_review",
+      "summary": "Nodemailer SMTP worker подключён: atomic pending claim, attachment/link fallback только по явным файловым причинам, sent только после acceptance, no auto-retry для неопределённого исхода, recovery и ручной повтор. Существующие UI/API состояния проверены с настоящим worker.",
+      "checks": [
+        "npm run check: PASS (Svelte 0 errors/0 warnings, tsc)",
+        "npm run build: PASS",
+        "npm test: PASS 53/53, из них 13 SMTP/config/state",
+        "Playwright tests/email.spec.ts: PASS 1/1, настоящий Nodemailer → loopback SMTP, 2 письма в сценарии потери ответа и ручного повтора, 0 автоматических дублей",
+        "git diff --check: PASS"
+      ],
+      "evidence": [
+        ".tasks/TASK-009-T3-FT-004-W6/evidence.md",
+        ".tasks/TASK-009-T3-FT-004-W6/unit-tests.log",
+        ".tasks/TASK-009-T3-FT-004-W6/browser-observations.json"
+      ],
+      "limitations": [
+        "Реальная SMTP.BZ доставка, ограничения вложения и подпись тарифа не проверялись по решению оператора; внешних писем и live fal не было.",
+        "ui_qa launcher отсутствует: использован согласованный project-native Playwright fallback."
+      ],
+      "remaining": "Независимая проверка и решение оркестратора о закрытии; код заморожен, commit/push не выполнялись."
+    },
+    {
+      "date": "2026-11-14",
+      "result": "semantic-fail",
+      "summary": "Независимая red-verify выявила R1: DATA 552 5.2.2 Mailbox size limit exceeded ошибочно запускает link fallback (2 SMTP-попытки вместо 1), поскольку mail совпадает с mailbox. Подтверждённый эффект — лишняя автоматическая попытка; доставленный дубль не наблюдался.",
+      "checks": [
+        "SMTP tests independently rerun: PASS 13/13",
+        "Independent workers/separate SQLite connections: one atomic claim, sent only after 250",
+        "Two sessions: distinct MP4 bytes and own fallback token/download verified",
+        "Provider error canary-secret/full synthetic email absent from worker logs and API; AUTH no retry",
+        "Existing Chromium 1/1 evidence/code inspected; mobile uncertain and desktop sent screenshots viewed; browser not rerun"
+      ],
+      "evidence": [
+        ".tasks/TASK-009-T3-FT-004-W6/red-verification.md",
+        ".tasks/TASK-009-T3-FT-004-W6/red-smtp-tests.log",
+        ".tasks/TASK-009-T3-FT-004-W6/red-independent.log"
+      ],
+      "limitations": [
+        "SMTP.BZ/live delivery/tariff/live fal unverified by accepted operator decision; loopback only.",
+        "Full check/build/53-test suite not rerun by reviewer; executor evidence reused."
+      ],
+      "remaining": "Локальная коррекция R1 и targeted повтор проверки; lifecycle не изменён."
+    },
+    {
+      "date": "2026-11-14",
+      "attempt": 2,
+      "retry": 1,
+      "result": "R1_repaired_ready_for_independent_recheck",
+      "summary": "Исправлена ошибка fallback на mailbox quota: явный 4/5.2.2 исключён, текст про mailbox без message-size кода не считается отказом вложения, nouns в текстовом classifier ограничены границами слов. Точная регрессия R1 воспроизведена до исправления и проходит после; позитивные size/type случаи сохранены.",
+      "checks": [
+        "До исправления: exact 552 5.2.2 Mailbox size limit exceeded и вариант без enhanced status — RED, 2 SMTP attempts вместо 1",
+        "npx tsx --test tests/email.test.ts: PASS 18/18, настоящий Nodemailer и loopback SMTP",
+        "npm run check: PASS (Svelte 0 errors/0 warnings, tsc)",
+        "npm run build: PASS",
+        "git diff --check: PASS"
+      ],
+      "evidence": [
+        ".tasks/TASK-009-T3-FT-004-W6/repair-r1.md",
+        ".tasks/TASK-009-T3-FT-004-W6/repair-r1-red.log",
+        ".tasks/TASK-009-T3-FT-004-W6/repair-r1-smtp-tests.log",
+        ".tasks/TASK-009-T3-FT-004-W6/repair-r1-check.log",
+        ".tasks/TASK-009-T3-FT-004-W6/repair-r1-build.log"
+      ],
+      "limitations": [
+        "UI не менялся: прежнее доказательство 1/1 переиспользовано, новый browser run не выполнялся.",
+        "Полный npm test не повторялся; SMTP.BZ и live fal не вызывались."
+      ],
+      "remaining": "Повторная независимая проверка R1 и решение оркестратора о закрытии. Код заморожен, status=in_progress; commit/push не выполнялись."
+    },
+    {
+      "date": "2026-11-14",
+      "result": "semantic-pass",
+      "summary": "Targeted follow-up: R1 принят как исправленный. Точный DATA 552 5.2.2 Mailbox size limit exceeded независимо даёт 1 попытку/failed без auto-retry. Разрешённые size/type fallback сохранены; новых существенных проблем в изменённом classifier не выявлено. Исходный semantic-fail сохранён.",
+      "checks": [
+        "Independent targeted classifier suite: PASS 10/10",
+        "Independent real Nodemailer/loopback probe: exact R1 one attempt, failed, sent_at NULL, no retry",
+        "Independent positive probes: enhanced 5.2.3, textual size limit and attachment type refusal each yield exactly two attempts, own attachment/link, sent after 250, unchanged first confirmation"
+      ],
+      "evidence": [
+        ".tasks/TASK-009-T3-FT-004-W6/red-verification.md",
+        ".tasks/TASK-009-T3-FT-004-W6/red-r1-classifier-tests.log",
+        ".tasks/TASK-009-T3-FT-004-W6/red-r1-independent.log"
+      ],
+      "limitations": [
+        "Scope limited to R1 and affected classifier; previous audit/UI not repeated.",
+        "SMTP.BZ/live delivery/tariff remain unverified by accepted operator decision."
+      ],
+      "remaining": "Открытых findings нет; решение о закрытии — за оркестратором, lifecycle не изменён."
+    },
+    {
+      "date": "2026-11-14",
+      "stage": "closure",
+      "result": "DONE",
+      "summary": "SMTP worker принят после исправления R1 на попытке2/3. Независимый red-verify semantic-pass, classifier10/10; итоговый SMTP18/18, check/build PASS. Предыдущие незатронутые full53/53 и Chromium1/1 доказательства применимы. Реальная SMTP.BZ-доставка не проверялась по решению оператора."
+    }
+  ],
   "docs": [
     ".memory-bank/features/FT-004-public-delivery.md"
   ],

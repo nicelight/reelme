@@ -20,8 +20,9 @@ import { registerProviderMedia } from './sessions/provider-media.js';
 import { createFalTransport } from './sessions/fal.js';
 import { createGenerationWorker, type GenerationOptions } from './sessions/generation.js';
 import { registerReceive, publishReady } from './sessions/receive.js';
+import { createEmailWorker, createSmtpTransport, recoverEmail, type EmailOptions } from './sessions/email.js';
 
-export async function createApp(config: Config, options: { now?: () => number; logger?: boolean; generation?: GenerationOptions } = {}) {
+export async function createApp(config: Config, options: { now?: () => number; logger?: boolean; generation?: GenerationOptions; email?: EmailOptions } = {}) {
   const app = Fastify({ logger: options.logger ? { redact: ['req.url', 'req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'] } : false, bodyLimit: 64 * 1024 });
   const db = openDatabase(config.dataDir);
   app.addHook('onClose', async () => { db.close(); });
@@ -55,6 +56,13 @@ export async function createApp(config: Config, options: { now?: () => number; l
   const generation = options.generation ?? (config.falKey ? { client: createFalTransport(config.falKey), secret: config.falKey } : undefined);
   if (generation) {
     const worker = createGenerationWorker(db, config.dataDir, config.origin, app.log, { ...generation, publishReady: publish });
+    app.addHook('onReady', async () => { worker.start(); });
+    app.addHook('onClose', async () => { await worker.stop(); });
+  }
+  const email = options.email ?? (config.smtp ? { transport: createSmtpTransport(config.smtp), from: config.smtp.from } : undefined);
+  app.addHook('onReady', async () => { recoverEmail(db); });
+  if (email) {
+    const worker = createEmailWorker(db, config.dataDir, config.origin, app.log, email, options.now ?? Date.now);
     app.addHook('onReady', async () => { worker.start(); });
     app.addHook('onClose', async () => { await worker.stop(); });
   }

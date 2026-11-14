@@ -1,0 +1,5 @@
+{"reply":"552 5.2.2 Mailbox size limit exceeded","expectedAttempts":1,"actualAttempts":1,"state":"failed","repeatRunAddedAttempts":0,"firstConfirmationUnchanged":true,"ownLinkChecked":false}
+{"reply":"552 5.2.3 Message length exceeds administrative limit","expectedAttempts":2,"actualAttempts":2,"state":"sent","repeatRunAddedAttempts":0,"firstConfirmationUnchanged":true,"ownLinkChecked":true}
+{"reply":"552 Message size exceeds limit","expectedAttempts":2,"actualAttempts":2,"state":"sent","repeatRunAddedAttempts":0,"firstConfirmationUnchanged":true,"ownLinkChecked":true}
+{"reply":"554 5.7.1 Attachment type not allowed","expectedAttempts":2,"actualAttempts":2,"state":"sent","repeatRunAddedAttempts":0,"firstConfirmationUnchanged":true,"ownLinkChecked":true}
+PASS: exact R1 reproduction fixed; enhanced-size/text-size/type fallback preserved.

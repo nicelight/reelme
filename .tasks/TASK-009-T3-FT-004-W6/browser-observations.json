@@ -1,0 +1,21 @@
+{
+  "browser": "Chromium",
+  "transport": "real Nodemailer → loopback SMTP only",
+  "states": [
+    "pending",
+    "sending",
+    "failed (lost acknowledgement)",
+    "pending (manual correction)",
+    "sending",
+    "sent"
+  ],
+  "smtpMessages": 2,
+  "automaticRetries": 0,
+  "firstConfirmationUnchanged": true,
+  "attachmentMatchesDownload": true,
+  "repeatAfterSent": 409,
+  "pageErrors": [],
+  "externalMail": false,
+  "liveFal": false,
+  "uiQaLauncher": "unavailable; authorized project-native Playwright fallback"
+}

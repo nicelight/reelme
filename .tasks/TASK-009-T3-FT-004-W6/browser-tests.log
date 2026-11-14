@@ -1,0 +1,13 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/email.spec.ts
+
+
+Running 1 test using 1 worker
+
+(node:321095) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+  ✓  1 tests/email.spec.ts:10:1 › real worker form: pending, sending, uncertain failure and explicit corrected retry to sent (11.6s)
+
+  1 passed (13.1s)
