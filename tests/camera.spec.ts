@@ -4,7 +4,7 @@ import { test, expect } from './browser-fixture';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { request as apiRequest } from '@playwright/test';
 import sharp from 'sharp';
-const artifacts = process.env.REELME_BROWSER_ARTIFACTS || '.tasks/TASK-003-T2-FT-002-W2';
+const artifacts = process.env.REELME_BROWSER_ARTIFACTS || '.tasks/TASK-004-T2-FT-002-W3';
 const local = 'http://localhost:5513/reelme.html';
 type Observations = { beeps: number; countdowns: string[]; poses: string[]; frames: { bytes: number[]; transform: string; step: string }[] };
 
@@ -101,15 +101,17 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
   await expect(page.locator('.countdown strong')).toHaveText('1');
   await expect(page.getByText('Кадр снят ✓')).toBeVisible();
   await page.screenshot({ path: `${artifacts}/camera-original.png`, fullPage: true });
-  await expect(page.getByRole('heading', { name: 'Съёмка завершена' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Ищи свое видео под номером \d{3} на промо экране$/ })).toBeVisible();
   const first = await page.evaluate(() => (window as typeof window & { cameraObservations: Observations }).cameraObservations);
   expect(first.beeps).toBe(3); expect(first.countdowns).toEqual(['3', '2', '1']);
   expect(first.frames).toHaveLength(1); expect(Buffer.from(first.frames[0].bytes)).toEqual(frames[1]);
   expect(first.frames[0].transform).toBe('none'); expect(first.frames[0].step).toBe('ФОТО 1 ИЗ 1');
   expect(commands).toEqual(['LiveView_Capture']);
-  // Explicit fixture reset: the product's next-visitor/finalize action belongs to TASK-004.
+  // Release through the product, then reload to start a fresh observation log.
   fallback = true;
-  await page.evaluate(() => sessionStorage.removeItem('reelme.captureStart'));
+  await page.getByRole('button', { name: 'Следующий посетитель' }).click();
+  await expect(page.getByRole('heading', { name: 'Какую историю снимем?' })).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem('reelme.captureStart'))).toBeNull();
   await page.goto(local + '#slot=' + slots[1]); await page.reload();
   await page.getByRole('button', { name: 'Мне нравится' }).click();
   await expect(page.getByText('Съёмка без превью', { exact: true })).toBeVisible();
@@ -127,7 +129,7 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
   await page.getByRole('button', { name: 'Повторить', exact: true }).click();
   await expect(page.locator('.capture-progress')).toHaveText('Снято: 2 из 4', { timeout: 10_000 });
   expect(commands).toHaveLength(3);
-  await expect(page.getByRole('heading', { name: 'Съёмка завершена' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('heading', { name: /^Ищи свое видео под номером \d{3} на промо экране$/ })).toBeVisible({ timeout: 30_000 });
   const second = await page.evaluate(() => (window as typeof window & { cameraObservations: Observations }).cameraObservations);
   expect(second.poses).toEqual(secondReceipt.posePlan.map((pose: { instruction: string }) => pose.instruction));
   expect(second.frames).toHaveLength(4); expect(second.beeps).toBe(15);
@@ -136,7 +138,7 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
   expect(downloads).toEqual(['/image/visitor-1.jpg', '/image/visitor-2.jpg', '/image/visitor-3.jpg', '/image/visitor-3.jpg', '/image/visitor-4.jpg', '/image/visitor-5.jpg']);
   expect(commands).toEqual(['LiveView_Capture', 'Capture', 'Capture', 'Capture', 'Capture']);
   expect(localAuthorization).toEqual([]); expect(pageErrors).toEqual([]); expect(app.sessionCount()).toBe(2);
-  expect(await page.locator('main').innerText()).not.toMatch(/Ищи свое видео|Ваш номер|Фото отправлены/);
+  await expect(page.getByRole('heading', { name: 'Ищи свое видео под номером 002 на промо экране', exact: true })).toBeVisible();
   const summarize = (observation: Observations) => ({ ...observation, frames: observation.frames.map(frame => ({ size: frame.bytes.length, step: frame.step, transform: frame.transform })) });
-  await writeFile(`${artifacts}/camera-observations.json`, JSON.stringify({ firstSessionId: firstReceipt.sessionId, secondSessionId: secondReceipt.sessionId, first: summarize(first), second: summarize(second), commands, downloads, byteEquality: true, previewFallback: ['preview 503 after successful LiveView_Show', 'initial LiveView_Show 503'], delayedFileList: 'two polls after each command', credentialLeak: false, pageErrors, nextVisitor: 'test fixture reset; production release is TASK-004', audio: 'real WebAudio oscillator start events; physical sound not audited', hardware: 'controlled HTTP, no Canon/Windows' }, null, 2));
+  await writeFile(`${artifacts}/camera-observations.json`, JSON.stringify({ firstSessionId: firstReceipt.sessionId, secondSessionId: secondReceipt.sessionId, first: summarize(first), second: summarize(second), commands, downloads, byteEquality: true, previewFallback: ['preview 503 after successful LiveView_Show', 'initial LiveView_Show 503'], delayedFileList: 'two polls after each command', credentialLeak: false, pageErrors, nextVisitor: 'product button; cleared sessionStorage; fresh page observation log', audio: 'real WebAudio oscillator start events; physical sound not audited', hardware: 'controlled HTTP, no Canon/Windows' }, null, 2));
 });

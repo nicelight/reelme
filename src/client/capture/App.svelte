@@ -3,12 +3,11 @@
   import type { CatalogItem, CatalogPage, StartReceipt } from '../../shared/capture';
   import { ApiError, installationKeyStorage, request, startStorage } from './api';
   import ProtectedMedia from './ProtectedMedia.svelte';
-  import Capture from './Capture.svelte';
-  import type { CapturedPhoto } from './photos';
+  import PhotoSession from './PhotoSession.svelte';
   import './style.css';
-  /** Module contract: visitor catalog → durable start → local camera session.
-   * Keeps original photos in memory for the upload owner (TASK-004); sessionStorage
-   * recovers the start receipt only. No number or successful transfer is shown. */
+  /** Module contract: visitor catalog → durable start → PhotoSession owns capture
+   * and transfer. sessionStorage recovers the server receipt; only confirmed
+   * completion permits releasing it and returning to the next visitor's catalog. */
   type StartState = { startRequestId: string; slotId: string; receipt?: StartReceipt };
   let key = $state('');
   let setup = $state(false);
@@ -18,7 +17,6 @@
   let catalog = $state<CatalogPage>();
   let selected = $state<CatalogItem>();
   let start = $state<StartState>();
-  let capturedPhotos = $state<CapturedPhoto[]>([]);
   let busy = $state(false);
   let loading = $state(false);
   let error = $state('');
@@ -109,6 +107,13 @@
       }
     } finally { busy = false; }
   }
+  function nextVisitor() {
+    try { sessionStorage.removeItem(startStorage); }
+    catch { error = 'Не удалось завершить сессию в браузере. Обратитесь к сотруднику.'; return; }
+    start = undefined; selected = undefined; catalog = undefined; page = 1;
+    history.replaceState(null, '', '#catalog');
+    void loadCatalog(1);
+  }
 </script>
 <svelte:head><title>ReelMe — {setup ? 'Настройка установки' : 'Выберите сюжет'}</title></svelte:head>
 <header><div class="brand">Reel<span>Me</span></div><span class="header-note">{setup ? 'Настройка установки' : 'Ваша история в кадре'}</span></header>
@@ -123,7 +128,7 @@
     <section class="narrow"><p class="eyebrow">СКОРО НАЧНЁМ</p><h1>Нужна настройка установки</h1><p class="intro">Пожалуйста, позовите сотрудника — он подготовит всё для съёмки.</p></section>
   {:else if start}
     {#if start.receipt}
-      {#key start.receipt.sessionId}<Capture receipt={start.receipt} oncomplete={photos => { capturedPhotos = photos; }} />{/key}
+      {#key start.receipt.sessionId}<PhotoSession receipt={start.receipt} installationKey={key} onnext={nextVisitor} />{/key}
     {:else}
       <section class="narrow handoff" aria-live="polite"><p class="eyebrow">ВАШ СЮЖЕТ ВЫБРАН</p><h1>Готовимся к съёмке</h1><p class="intro">{busy ? 'Создаём сессию…' : 'Нужно подтвердить начало вашей сессии.'}</p><button class="primary" onclick={begin} disabled={busy}>{busy ? 'Подождите…' : 'Повторить старт'}</button></section>
     {/if}

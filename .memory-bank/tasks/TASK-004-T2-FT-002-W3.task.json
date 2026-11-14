@@ -1,7 +1,7 @@
 {
   "id": "TASK-004-T2-FT-002-W3",
   "title": "Сохранить фотографии на сервере, выдать номер и освободить установку",
-  "status": "ready",
+  "status": "in_progress",
   "wave": "W3",
   "feature": "FT-002",
   "reqs": [
@@ -21,7 +21,28 @@
     "README.md"
   ],
   "tier": "T2",
-  "gates": [],
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "api-camera-transfer",
+      "command": "npm test",
+      "required": true
+    },
+    {
+      "name": "browser",
+      "command": "REELME_BROWSER_ARTIFACTS=.tasks/TASK-004-T2-FT-002-W3 npm run test:ui",
+      "required": true
+    }
+  ],
   "verify": [
     {
       "date": "2026-11-14",
@@ -49,6 +70,54 @@
       ],
       "remaining": [
         "Выполнить загрузку/повтор, finalize, выдачу номера и освобождение установки по этой карточке."
+      ]
+    },
+    {
+      "date": "2026-11-14",
+      "result": "PASS",
+      "summary": "Реализованы приватные JPEG по sessionId/poseIndex, GET состояния, повтор PUT и атомарный finalize в submit_pending. Клиент сохраняет Blob для повтора, показывает серверный номер лишь после подтверждения finalize и освобождает установку кнопкой следующего посетителя.",
+      "checks": [
+        "npm run check: PASS, 0 errors/warnings; npm test: 27/27 PASS; npm run build: PASS; git diff --check: PASS.",
+        "API/SQLite: 1/4 фото, JPEG decode/индексы/лимит, incomplete finalize409, повтор позиции, один переход при concurrent finalize, запрет изменений после finalize, сохранность записей/байт/даты/номера после restart.",
+        "HTTP streaming race: начатая до finalize замена отклонена409 после завершения записи; принятый файл неизменен, SQL-транзакция не держится на потоке.",
+        "Доступ: без/с неверным ключом401; admin/operator cookie403; localhost CORS preflight204 + PUT/Authorization/Content-Type, стороннему origin заголовок доступа не выдан.",
+        "Делегированный Chromium QA: 4/4 PASS. Реальные два посетителя/кнопка next, 1/4 фото, повтор того же Blob без затвора, lost-finalize ACK/GET recovery, отсутствие раннего номера, restart с неизменными файлами; screenshots просмотрены."
+      ],
+      "evidence": [
+        ".tasks/TASK-004-T2-FT-002-W3/verification.md",
+        ".tasks/TASK-004-T2-FT-002-W3/browser-qa.md",
+        ".tasks/TASK-004-T2-FT-002-W3/transfer-observations.json"
+      ],
+      "limitations": [
+        "Обе сессии оставлены в submit_pending без потребителя генерации; fal/SMTP не вызывались.",
+        "Windows/Canon/digiCamControl, домен и сквозная аппаратная приёмка — TASK-005."
+      ],
+      "remaining": [
+        "По дополнительному поручению оператора выполнить независимый verify отдельным сабагентом; после него оформить lifecycle задачи.",
+        "TASK-005: аппаратная/продукционная приёмка на целевой установке."
+      ]
+    },
+    {
+      "date": "2026-11-14",
+      "result": "PASS",
+      "summary": "Независимый verify отдельным сабагентом: требования, contracts и фактическое поведение TASK-004 согласованы; material findings нет. Lifecycle не изменён.",
+      "checks": [
+        "Независимые npm test: 27/27 PASS, npm run check: 0 errors/warnings, npm run build: PASS, git diff --check: PASS.",
+        "Свежий Chromium transfer.spec.ts: 1/1 PASS — два посетителя и пять разных JPEG, same-Blob retry без затвора, lost finalize ACK/GET recovery, номер только после подтверждения, real next visitor, restart с сохранением файлов/записей.",
+        "API tests: один finalize transition, streaming late PUT409/immutability, malformed input, auth401/403/CORS, дата/номер/байты после restart. Source/tests/config SHA-256 и HEAD неизменны в течение проверки."
+      ],
+      "evidence": [
+        ".tasks/TASK-004-T2-FT-002-W3/verify-report.md",
+        ".tasks/TASK-004-T2-FT-002-W3/verify-independent-tests.log",
+        ".tasks/TASK-004-T2-FT-002-W3/verify-independent-browser/transfer-observations.json",
+        ".tasks/TASK-004-T2-FT-002-W3/verify-independent-integrity.log"
+      ],
+      "limitations": [
+        "Windows/Canon/digiCamControl, физический звук и production-домен — TASK-005; синтетические JPEG и управляемый camera HTTP.",
+        "Нет потребителя генерации; submit_pending проверен без fal/SMTP. Независимо повторён transfer browser test; предыдущий полный 4/4 browser regression инспектирован по коду и evidence."
+      ],
+      "remaining": [
+        "Вызывающему агенту оформить lifecycle TASK-004; оснований для исправления до done_for_prod не найдено. Аппаратная/production-приёмка остаётся в TASK-005."
       ]
     }
   ],

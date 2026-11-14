@@ -1,0 +1,96 @@
+{
+  "firstSessionId": "b454084d-8299-4bde-a2aa-8565aa5bba04",
+  "secondSessionId": "58cd5fce-b066-494e-8c3e-c682fa242078",
+  "first": {
+    "beeps": 3,
+    "countdowns": [
+      "3",
+      "2",
+      "1"
+    ],
+    "poses": [
+      "Смотрите прямо в объектив"
+    ],
+    "frames": [
+      {
+        "size": 5782,
+        "step": "ФОТО 1 ИЗ 1",
+        "transform": "none"
+      }
+    ]
+  },
+  "second": {
+    "beeps": 15,
+    "countdowns": [
+      "3",
+      "2",
+      "1",
+      "3",
+      "2",
+      "1",
+      "3",
+      "2",
+      "1",
+      "3",
+      "2",
+      "1",
+      "3",
+      "2",
+      "1"
+    ],
+    "poses": [
+      "Смотрите прямо в объектив",
+      "Поднимите голову немного вверх и влево",
+      "Наклоните голову немного вниз и вправо",
+      "Поверните голову влево, в профиль"
+    ],
+    "frames": [
+      {
+        "size": 5998,
+        "step": "ФОТО 1 ИЗ 4",
+        "transform": "none"
+      },
+      {
+        "size": 6123,
+        "step": "ФОТО 2 ИЗ 4",
+        "transform": "none"
+      },
+      {
+        "size": 6000,
+        "step": "ФОТО 3 ИЗ 4",
+        "transform": "none"
+      },
+      {
+        "size": 5967,
+        "step": "ФОТО 4 ИЗ 4",
+        "transform": "none"
+      }
+    ]
+  },
+  "commands": [
+    "LiveView_Capture",
+    "Capture",
+    "Capture",
+    "Capture",
+    "Capture"
+  ],
+  "downloads": [
+    "/image/visitor-1.jpg",
+    "/image/visitor-2.jpg",
+    "/image/visitor-3.jpg",
+    "/image/visitor-3.jpg",
+    "/image/visitor-4.jpg",
+    "/image/visitor-5.jpg"
+  ],
+  "byteEquality": true,
+  "previewFallback": [
+    "preview 503 after successful LiveView_Show",
+    "initial LiveView_Show 503"
+  ],
+  "delayedFileList": "two polls after each command",
+  "credentialLeak": false,
+  "pageErrors": [],
+  "nextVisitor": "product button; cleared sessionStorage; fresh page observation log",
+  "audio": "real WebAudio oscillator start events; physical sound not audited",
+  "hardware": "controlled HTTP, no Canon/Windows"
+}

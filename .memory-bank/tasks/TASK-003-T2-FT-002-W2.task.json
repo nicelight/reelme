@@ -66,6 +66,27 @@
       "remaining": [
         "TASK-005: сквозная приёмка на Windows 11 Pro / Canon EOS 1100D, реальный Live View, звук и переключение с DSLR Remote Pro после завершения разработки приложения."
       ]
+    },
+    {
+      "date": "2026-11-14",
+      "result": "PASS",
+      "summary": "Независимый verifier повторно проверил текущее dirty working tree: согласованный development outcome TASK-003 (AC-001 и камерная часть AC-002) подтверждён. Существенных нарушений не найдено; status не изменён.",
+      "checks": [
+        "npm run check: PASS, 0 errors/warnings; npm run build: PASS; npm test: 24/24 PASS.",
+        "Полный Chromium suite: 3/3 PASS, 54.9 s. Две сессии, планы 1/4, порядок поз, 3–2–1/WebAudio, byte-identical оригиналы, зеркальное превью/fallback, ошибка второго кадра и same-file retry без потери предыдущего, без ключа в камерных запросах.",
+        "Проверены код, модульные контракты и свежие browser screenshots; git diff --check: PASS."
+      ],
+      "evidence": [
+        ".tasks/TASK-003-T2-FT-002-W2/verify-report.md",
+        ".tasks/TASK-003-T2-FT-002-W2/verify-independent-browser/camera-observations.json"
+      ],
+      "limitations": [
+        "Управляемый HTTP не подтверждает Windows/Canon/digiCamControl и физический звук: аппаратная приёмка TASK-005.",
+        "Между browser-сессиями выполнен fixture reset; upload/finalize/номер/освобождение установки относятся к TASK-004. Blob после reload не восстанавливаются согласно scope."
+      ],
+      "remaining": [
+        "Продолжать TASK-004; после разработки выполнить аппаратную приёмку TASK-005."
+      ]
     }
   ],
   "docs": [

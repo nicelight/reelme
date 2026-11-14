@@ -1,6 +1,7 @@
 <script lang="ts">
   /** Module contract: owns sequential camera work and in-memory JPEGs for one
-   * server-issued session/pose plan. oncomplete hands original Blobs to the owner;
+   * server-issued session/pose plan, skipping positions already stored on server.
+   * oncomplete hands newly captured original Blobs to the owner;
    * no upload, finalize, numbering or generation success is implied here.
    * Unmount aborts local waits and releases preview/audio resources. */
   import { onMount } from 'svelte';
@@ -8,7 +9,7 @@
   import { DigiCamControl, pause } from './camera';
   import PoseGuide from './PoseGuide.svelte';
   import type { CapturedPhoto } from './photos';
-  let { receipt, oncomplete }: { receipt: StartReceipt; oncomplete: (photos: CapturedPhoto[]) => void } = $props();
+  let { receipt, acceptedPoseIndices = [], oncomplete }: { receipt: StartReceipt; acceptedPoseIndices?: number[]; oncomplete: (photos: CapturedPhoto[]) => void } = $props();
   let photos = $state<CapturedPhoto[]>([]);
   let position = $state(0);
   let phase = $state<'idle' | 'countdown' | 'camera' | 'confirmation' | 'error' | 'complete'>('idle');
@@ -22,7 +23,8 @@
   const camera = new DigiCamControl();
   const lifecycle = new AbortController();
   const previewLife = new AbortController();
-  const pose = $derived(receipt.posePlan[position]);
+  const remainingPlan = $derived(receipt.posePlan.filter(pose => !acceptedPoseIndices.includes(pose.index)));
+  const pose = $derived(remainingPlan[position]);
   function stopPreview() {
     previewEnabled = false; previewLife.abort();
     if (preview) URL.revokeObjectURL(preview);
@@ -64,7 +66,7 @@
     try {
       // User gesture unlocks audio; unavailable audio never prevents the visual cue.
       try { audio ??= new AudioContext(); await audio.resume(); } catch {}
-      while (position < receipt.posePlan.length) {
+      while (position < remainingPlan.length) {
         phase = 'countdown';
         for (countdown = 3; countdown > 0; countdown--) { beep(); await pause(1000, lifecycle.signal); }
         phase = 'camera';
@@ -74,7 +76,7 @@
         confirmed = URL.createObjectURL(blob); phase = 'confirmation';
         await pause(1500, lifecycle.signal);
         URL.revokeObjectURL(confirmed); confirmed = '';
-        if (position + 1 === receipt.posePlan.length) {
+        if (position + 1 === remainingPlan.length) {
           phase = 'complete'; stopPreview(); oncomplete(photos); return;
         }
         position++;
@@ -101,13 +103,13 @@
       {:else if phase === 'confirmation'}<div class="capture-status" role="status">Кадр снят ✓</div>{/if}
     </div>
     <aside class="pose-panel">
-      <p class="eyebrow">ФОТО {position + 1} ИЗ {receipt.posePlan.length}</p>
+      <p class="eyebrow">ФОТО {pose.index + 1} ИЗ {receipt.posePlan.length}</p>
       <h1>{pose.instruction}</h1><PoseGuide {pose} />
       <p class="muted">Повторите позу. Направления — ваши лево и право.</p>
       {#if phase === 'idle' && photos.length === 0}<button class="primary" onclick={run}>Начать съёмку</button>{/if}
       {#if phase === 'error'}<div class="error" role="alert"><p>{error}</p><button class="primary" onclick={run}>Повторить</button></div>{/if}
       {#if previewEnabled}<button class="preview-toggle" onclick={stopPreview}>Продолжить без превью</button>{/if}
-      <p class="capture-progress" aria-live="polite">Снято: {photos.length} из {receipt.posePlan.length}</p>
+      <p class="capture-progress" aria-live="polite">Снято: {acceptedPoseIndices.length + photos.length} из {receipt.posePlan.length}</p>
     </aside>
   </section>
 {/if}

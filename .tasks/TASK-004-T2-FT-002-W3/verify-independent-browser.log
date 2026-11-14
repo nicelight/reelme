@@ -1,0 +1,12 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/transfer.spec.ts
+
+
+Running 1 test using 1 worker
+
+(node:254618) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/transfer.spec.ts:14:1 › accepted JPEGs, same-Blob upload retry, lost finalize acknowledgement and two visitors before generation (34.3s)
+
+  1 passed (35.8s)

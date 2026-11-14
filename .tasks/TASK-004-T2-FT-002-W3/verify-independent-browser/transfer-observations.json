@@ -1,0 +1,238 @@
+{
+  "first": {
+    "sessionId": "0a1dd41f-e58e-4284-8d4f-defec47e0690",
+    "date": "2026-11-14",
+    "number": 1,
+    "state": "submit_pending",
+    "posePlan": [
+      {
+        "index": 0,
+        "key": "front",
+        "instruction": "Смотрите прямо в объектив"
+      }
+    ],
+    "acceptedPoseIndices": [
+      0
+    ],
+    "complete": true,
+    "finalized": true
+  },
+  "second": {
+    "sessionId": "0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a",
+    "date": "2026-11-14",
+    "number": 2,
+    "state": "submit_pending",
+    "posePlan": [
+      {
+        "index": 0,
+        "key": "front",
+        "instruction": "Смотрите прямо в объектив"
+      },
+      {
+        "index": 1,
+        "key": "up-left",
+        "instruction": "Поднимите голову немного вверх и влево"
+      },
+      {
+        "index": 2,
+        "key": "down-right",
+        "instruction": "Наклоните голову немного вниз и вправо"
+      },
+      {
+        "index": 3,
+        "key": "profile-left",
+        "instruction": "Поверните голову влево, в профиль"
+      }
+    ],
+    "acceptedPoseIndices": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "complete": true,
+    "finalized": true
+  },
+  "firstPhotos": [
+    {
+      "session_id": "0a1dd41f-e58e-4284-8d4f-defec47e0690",
+      "pose_index": 0,
+      "path": "sessions/0a1dd41f-e58e-4284-8d4f-defec47e0690/ff74ac1e-c884-4569-8c63-0a13bae6f946.jpg",
+      "size": 5471,
+      "width": 640,
+      "height": 480,
+      "sha256": "934b0cc894ee4f391625dc5696c39b90adfef4afae4e1ddf137ed3d598fedd21"
+    }
+  ],
+  "secondPhotos": [
+    {
+      "session_id": "0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a",
+      "pose_index": 0,
+      "path": "sessions/0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a/4f65d9f1-28b7-489c-bbf9-5cc177ed6094.jpg",
+      "size": 5550,
+      "width": 640,
+      "height": 480,
+      "sha256": "be9ac2c5a4bd270ba5ee137e24a7c6dff800a15f39109bce70e5fbd114f1d342"
+    },
+    {
+      "session_id": "0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a",
+      "pose_index": 1,
+      "path": "sessions/0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a/f67bea95-a2e6-4c94-bccc-ac02a1d84b1f.jpg",
+      "size": 5990,
+      "width": 640,
+      "height": 480,
+      "sha256": "a171d57bd4034332bffd510b754a92e66fd728b0e2f15ab41213eb7f22a6afb1"
+    },
+    {
+      "session_id": "0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a",
+      "pose_index": 2,
+      "path": "sessions/0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a/ac7f7780-b313-4fa2-8afa-3ecc9a953bd2.jpg",
+      "size": 5638,
+      "width": 640,
+      "height": 480,
+      "sha256": "7e4400c24fdf611621871b129c0fd770a1366fcf36a025f9060499d154431318"
+    },
+    {
+      "session_id": "0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a",
+      "pose_index": 3,
+      "path": "sessions/0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a/3f587a57-7572-4ad9-a566-53ef2ec1f49a.jpg",
+      "size": 5513,
+      "width": 640,
+      "height": 480,
+      "sha256": "96214c3c4faae8bc260a73cfaff8da27b7ea2469552106dc63a0317d469dd413"
+    }
+  ],
+  "commands": [
+    "Capture",
+    "Capture",
+    "Capture",
+    "Capture",
+    "Capture"
+  ],
+  "downloads": [
+    "/image/frame-1.jpg",
+    "/image/frame-2.jpg",
+    "/image/frame-3.jpg",
+    "/image/frame-4.jpg",
+    "/image/frame-5.jpg"
+  ],
+  "retrySameBlob": true,
+  "retrySameBytes": true,
+  "earlierPositionUnchanged": true,
+  "noNumberBeforeFinalizeAcknowledgement": true,
+  "lostFinalizeRecovery": "GET status, no second browser POST or shutter",
+  "repeatFinalize": 200,
+  "nextVisitor": "real button, no fixture reset or page reload",
+  "generation": "no consumer; both sessions remain submit_pending",
+  "persistedAfterRestart": true,
+  "localOriginCORS": "http://localhost:5513",
+  "visitorCookies": 0,
+  "credentials": "omit",
+  "transport": [
+    {
+      "method": "POST",
+      "path": "/api/capture/sessions",
+      "origin": "http://localhost:5513",
+      "authorization": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/capture/sessions/0a1dd41f-e58e-4284-8d4f-defec47e0690",
+      "origin": "http://localhost:5513",
+      "authorization": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/capture/sessions/0a1dd41f-e58e-4284-8d4f-defec47e0690",
+      "origin": "http://localhost:5513",
+      "authorization": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/capture/sessions/0a1dd41f-e58e-4284-8d4f-defec47e0690/photos/0",
+      "origin": "http://localhost:5513",
+      "authorization": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/capture/sessions/0a1dd41f-e58e-4284-8d4f-defec47e0690/finalize",
+      "origin": "http://localhost:5513",
+      "authorization": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/capture/sessions/0a1dd41f-e58e-4284-8d4f-defec47e0690",
+      "origin": "http://localhost:5513",
+      "authorization": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/capture/sessions",
+      "origin": "http://localhost:5513",
+      "authorization": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/capture/sessions/0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a",
+      "origin": "http://localhost:5513",
+      "authorization": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/capture/sessions/0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a",
+      "origin": "http://localhost:5513",
+      "authorization": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/capture/sessions/0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a/photos/0",
+      "origin": "http://localhost:5513",
+      "authorization": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/capture/sessions/0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a/photos/1",
+      "origin": "http://localhost:5513",
+      "authorization": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/capture/sessions/0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a",
+      "origin": "http://localhost:5513",
+      "authorization": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/capture/sessions/0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a/photos/1",
+      "origin": "http://localhost:5513",
+      "authorization": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/capture/sessions/0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a/photos/2",
+      "origin": "http://localhost:5513",
+      "authorization": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/capture/sessions/0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a/photos/3",
+      "origin": "http://localhost:5513",
+      "authorization": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/capture/sessions/0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a/finalize",
+      "origin": "http://localhost:5513",
+      "authorization": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/capture/sessions/0e3aa9f7-cd84-4cb9-a118-50b484f2fc4a",
+      "origin": "http://localhost:5513",
+      "authorization": true
+    }
+  ],
+  "pageErrors": [],
+  "externalOrigins": [],
+  "hardware": "synthetic JPEG and controlled DCC HTTP only"
+}

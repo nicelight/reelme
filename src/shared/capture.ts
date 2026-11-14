@@ -1,7 +1,8 @@
-/** Module contract: installation-facing catalog/start DTOs and the fixed photo
+/** Module contract: installation-facing catalog/capture DTOs and the fixed photo
  * plan. Catalog exposes visitor content, never editor prompts/provider settings.
- * Start receipt is stable across retries; its number must not be displayed until
- * all photos are accepted (FT-002). This module performs no camera operations. */
+ * Start identity/date/number/plan survive retries; state reflects current progress.
+ * The number is displayed only after finalized confirmation (FT-002).
+ * This module performs no camera operations. */
 import type { Mode, SlotInput } from './scenarios.js';
 export interface CatalogItem {
   id: string;
@@ -32,8 +33,16 @@ export interface StartReceipt {
   sessionId: string;
   date: string;
   number: number;
-  state: 'capturing';
+  state: SessionState;
   posePlan: Pose[];
+}
+export type SessionState = 'capturing' | 'submit_pending' | 'observing' | 'preparing' | 'ready' | 'failed';
+/** complete means every position is stored; finalized additionally confirms
+ * handoff for processing. Only finalized permits displaying the visitor number. */
+export interface CaptureStatus extends StartReceipt {
+  acceptedPoseIndices: number[];
+  complete: boolean;
+  finalized: boolean;
 }
 /** The saved description/thumbnail/demo are display material. Only generation
  * contains future model inputs; a P2V demo is never a generation input. */

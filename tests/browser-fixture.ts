@@ -8,7 +8,8 @@ import { createServer } from 'node:http';
 import sharp from 'sharp';
 import Database from 'better-sqlite3';
 
-type App = { origin: string; password: string; image: string; video: string; installationKey: string; sessionCount: () => number; restart: () => Promise<void> };
+type StoredPhoto = { session_id: string; pose_index: number; path: string; size: number; width: number; height: number; bytes: Buffer };
+type App = { photos: (sessionId: string) => Promise<StoredPhoto[]>; origin: string; password: string; image: string; video: string; installationKey: string; sessionCount: () => number; restart: () => Promise<void> };
 export const test = base.extend<{ app: App }>({
   app: [async ({}, use) => {
     const dir = await mkdtemp(join(tmpdir(), 'reelme-browser-'));
@@ -46,7 +47,13 @@ export const test = base.extend<{ app: App }>({
       await new Promise<void>((resolve, reject) => { capture.once('error', reject); capture.listen(5513, resolve); });
       const installationKey = (await readFile(join(dir, 'installation-key.txt'), 'utf8')).trim();
       const sessionCount = () => { const db = new Database(join(dir, 'reelme.sqlite'), { readonly: true }); try { return (db.prepare('SELECT COUNT(*) AS total FROM capture_sessions').get() as { total: number }).total; } finally { db.close(); } };
-      await use({ origin, password, image, video, installationKey, sessionCount, restart: async () => { await stop(); await start(); } });
+      const photos = async (sessionId: string): Promise<StoredPhoto[]> => {
+        const db = new Database(join(dir, 'reelme.sqlite'), { readonly: true });
+        let rows: Omit<StoredPhoto, 'bytes'>[];
+        try { rows = db.prepare('SELECT * FROM capture_photos WHERE session_id=? ORDER BY pose_index').all(sessionId) as Omit<StoredPhoto, 'bytes'>[]; } finally { db.close(); }
+        return Promise.all(rows.map(async row => ({ ...row, bytes: await readFile(join(dir, 'media', row.path)) })));
+      };
+      await use({ origin, password, image, video, installationKey, sessionCount, photos, restart: async () => { await stop(); await start(); } });
     } finally {
       await stop();
       if (capture.listening) await new Promise<void>(resolve => capture.close(() => resolve()));

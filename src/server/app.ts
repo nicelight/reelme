@@ -38,7 +38,7 @@ export async function createApp(config: Config, options: { now?: () => number; l
   await app.register(rateLimit, { global: false });
   const access = await createAccess(app, db, config, options.now ?? Date.now);
   registerScenarios(app, db, config.dataDir, access);
-  registerSessions(app, db, access, options.now ?? Date.now);
+  registerSessions(app, db, config.dataDir, access, options.now ?? Date.now);
   await app.register(fastifyStatic, { root: join(config.clientDir, 'assets'), prefix: '/assets/', decorateReply: false, immutable: true, maxAge: '1y', index: false });
   app.get('/', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
   app.get('/admin', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));

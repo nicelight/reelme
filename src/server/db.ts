@@ -1,7 +1,8 @@
-/** Module contract: idempotent SQLite schema for Access, Scenarios and session
- * start. Metadata stays in SQLite; media bytes stay outside the build. Repeated
+/** Module contract: idempotent SQLite schema for Access, Scenarios and capture
+ * sessions/photos. Metadata stays in SQLite; media bytes stay outside the build. Repeated
  * setup/start preserves rows. Session number and start-request uniqueness are DB
- * invariants; camera/generation/issuance storage is added only by its owning task. */
+ * invariants. One ready photo row belongs to one session/pose; generation and
+ * issuance storage are added only by their owning tasks. */
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -36,7 +37,14 @@ export function openDatabase(dataDir: string) {
       state TEXT NOT NULL DEFAULT 'capturing', created_at INTEGER NOT NULL,
       UNIQUE(event_date, number)
     );
-    PRAGMA user_version = 2;
+    CREATE TABLE IF NOT EXISTS capture_photos (
+      session_id TEXT NOT NULL REFERENCES capture_sessions(id) ON DELETE CASCADE,
+      pose_index INTEGER NOT NULL CHECK(pose_index BETWEEN 0 AND 3),
+      path TEXT UNIQUE NOT NULL, size INTEGER NOT NULL,
+      width INTEGER NOT NULL, height INTEGER NOT NULL,
+      PRIMARY KEY(session_id, pose_index)
+    );
+    PRAGMA user_version = 3;
   `);
   return db;
 }
