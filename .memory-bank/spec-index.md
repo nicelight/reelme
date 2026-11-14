@@ -32,11 +32,12 @@ source_of_truth:
 | testing | [.memory-bank/testing/strategy.md](testing/strategy.md) | active | Framework baseline testing policy. | explicit project-level user decision |
 
 ## Planned Specs
+
+Обязательных новых спецификаций для текущей очереди нет. Ниже — возможные темы
+при появлении конкретной потребности; действующие источники перечислены выше.
 | Area | Expected path | Needed by | Notes |
 |---|---|---|---|
 | user_scenarios | .memory-bank/user-scenarios.md | /prd-to-features, /spec-design | Create only when scenario evidence exists or gaps must be explicit. |
-| module_dependency_graph | .memory-bank/contracts/boundary-map.md | /spec-design, /feature-to-tasks | Establish accepted architecture units first, then register concrete modules, allowed dependency edges, and exact contract blocks before task handoff. |
-| system_architecture | .memory-bank/architecture/system-architecture.md | /spec-design | Candidate architecture hub; fill only when selected or needed by /spec-design. |
 | interface_contract_specs | .memory-bank/contracts/*, .memory-bank/testing/*, and .memory-bank/runbooks/* | /spec-design, /foundation-to-tasks, /feature-to-tasks | Generate/update Interface Specification and only applicable Component/API/Event/Data contracts, protocol/agent/tool I/O, boundary compatibility, evidence/redaction, safety/security, testing, runbook, or verification contracts. Data Contract defines payloads crossing a boundary. |
 | data_specs | .memory-bank/domains/* and .memory-bank/states/* | /spec-design, /feature-to-tasks | Generate/update Data Specification for internal models, DB schemas, storage/persistence/migrations, internal data formats, validation/serialization rules, lifecycle, retention, seed, or runtime data paths. |
 | foundation_substrate_specs | .memory-bank/architecture/*, .memory-bank/contracts/*, .memory-bank/domains/*, .memory-bank/states/*, .memory-bank/testing/*, .memory-bank/runbooks/* | /foundation-to-tasks | Apply Architecture, Interfaces/Contracts, and Data lenses to the walking-skeleton proof path. Generate only applicable subject-based substrate contracts/specs. Product-level detail reuses or extends those paths later. |

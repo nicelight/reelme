@@ -11,7 +11,8 @@ status: active
 - [PRD](prd.md) — канонические требования и сценарии.
 - [Требования и RTM](requirements.md) — стабильные REQ и их покрытие.
 - [Мероприятие ReelMe](epics/EP-001-reelme-event.md) — функции от выбора сюжета до архива.
-- [Контекст проектирования](spec-backbone.md) — готовность и следующая архитектурная работа.
+- [Контекст проектирования](spec-backbone.md) — принятые границы и переход к реализации.
+- [Задачи](tasks/index.json) — порядок выполнения, состояния и доказательства результатов.
 
 Размещение: `reelme.natureonzoom.win`, планируемая VPS AlmaLinux / 4 ГБ RAM, Caddy на входе;
 съёмка через локальный `reelme.html`, digiCamControl и Canon EOS 1100D на Windows 11 Pro.

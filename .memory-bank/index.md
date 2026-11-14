@@ -23,6 +23,7 @@ status: active
 - [.memory-bank/features/](features/): Фичи (C4 L3).
 - [.memory-bank/behavior-specs/](behavior-specs/): Optional JSON behavior examples linked from feature docs and task `source_artifacts`.
 - [.memory-bank/tasks/index.json](tasks/index.json): Authoritative JSON task record index.
+- [Ревью планов](../.tasks/TASK-MB-REVIEW-TASKS-PLAN/): Отчёты с вердиктами и границами проверенного плана; не доказательства реализации.
 - [.memory-bank/schemas/task.schema.json](schemas/task.schema.json): JSON schema for task records.
 - [.memory-bank/workflows/index.md](workflows/index.md): Workflow router and shared SDD/execution policies.
 
