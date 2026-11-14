@@ -200,7 +200,7 @@ test('background fal submission does not hold capture HTTP and startup consumes 
   const started = new Promise<void>(resolve => { entered = resolve; });
   const gate = new Promise<void>(resolve => { release = resolve; });
   client.submit = async () => { entered(); await gate; return receipt('slow'); };
-  const app = await createApp(f.config, { generation: { client, intervalMs: 100_000 } });
+  const app = await createApp(f.config, { now: () => Date.UTC(2026, 0, 1), generation: { client, intervalMs: 100_000 } });
   t.after(async () => { release(); await app.close(); });
   await app.listen({ host: '127.0.0.1', port: 0 }); await started;
   const status = await app.inject({ url: `/api/capture/sessions/${first}`, headers: installation });

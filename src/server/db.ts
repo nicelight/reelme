@@ -3,7 +3,8 @@
  * setup/start preserves rows. Session number and start-request uniqueness are DB
  * invariants. One accepted photo belongs to one session/pose. Generation records
  * preserve confirmed fal identity and verified files. Session issuance owns scoped
- * capabilities, first-open/confirmation times and the independent email state. */
+ * capabilities, first-open/confirmation times and the independent email state.
+ * Events retain a deletion marker until restartable local cleanup finishes. */
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -69,8 +70,11 @@ export function openDatabase(dataDir: string) {
         CHECK(email_state IN ('not_requested','pending','sending','sent','failed')),
       email_error TEXT, sent_at INTEGER
     );
-    PRAGMA user_version = 5;
+    PRAGMA user_version = 6;
   `);
+  if (!(db.prepare('PRAGMA table_info(events)').all() as { name: string }[]).some(column => column.name === 'deleting')) {
+    db.exec('ALTER TABLE events ADD COLUMN deleting INTEGER NOT NULL DEFAULT 0 CHECK(deleting IN (0,1))');
+  }
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

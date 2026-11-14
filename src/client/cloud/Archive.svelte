@@ -1,15 +1,17 @@
 <script lang="ts">
-  /** Account archive browsing only. The server defines eligible dates and scoped
-   * media; this component never invokes receive/opened or other state mutations. */
+  /** Account archive browsing; only admins see deletion, with explicit confirmation.
+   * The server owns dates/authorization; viewing never opens visitor forms. */
   import { onMount } from 'svelte';
   import type { ArchiveEvent, ArchiveSession, EventGallery } from '../../shared/events';
   import { api, ApiError } from './api';
-  let { onunauthorized }: { onunauthorized: () => void } = $props();
+  let { role, onunauthorized }: { role: 'admin' | 'operator'; onunauthorized: () => void } = $props();
   let events = $state<ArchiveEvent[]>([]);
   let gallery = $state<EventGallery | null>(null);
   let selected = $state<ArchiveSession | null>(null);
   let busy = $state(true);
   let error = $state('');
+  let deleting = $state<string | null>(null);
+  let removing = $state(false);
   const dateLabel = (date: string) => new Date(`${date}T12:00:00+07:00`).toLocaleDateString('ru-RU', { timeZone: 'Asia/Novosibirsk', day: 'numeric', month: 'long', year: 'numeric' });
   const bytesLabel = (bytes: number) => `${bytes.toLocaleString('ru-RU')} Б`;
   function fail(value: unknown) {
@@ -23,6 +25,13 @@
   async function open(date: string) {
     busy = true; error = ''; selected = null;
     try { gallery = await api<EventGallery>(`/events/${date}`); } catch (value) { fail(value); } finally { busy = false; }
+  }
+  function showConfirmation(dialog: HTMLDialogElement) { dialog.showModal(); }
+  async function remove() {
+    if (!deleting || removing) return;
+    removing = true; error = '';
+    try { await api(`/events/${deleting}`, { method: 'DELETE' }); deleting = null; await load(); }
+    catch (value) { fail(value); } finally { removing = false; }
   }
   onMount(() => { void load(); });
 </script>
@@ -57,12 +66,23 @@
   {:else}
     <div class="archive-days">
       {#each events as event (event.date)}
+        <article class="archive-event">
         <button class="archive-day" onclick={() => open(event.date)} data-date={event.date}>
           <h2>{dateLabel(event.date)}</h2><span>Фотографии <strong>{bytesLabel(event.photoBytes)}</strong></span><span>Видео <strong>{bytesLabel(event.videoBytes)}</strong></span><span class="archive-link">Открыть мероприятие →</span>
         </button>
+        {#if role === 'admin'}<button class="archive-delete" aria-label={`Удалить мероприятие ${dateLabel(event.date)}`} onclick={() => deleting = event.date}>Удалить мероприятие</button>{/if}
+        </article>
       {/each}
     </div>
     {#if events.length === 0 && !error}<p class="archive-empty">Пока нет прошедших мероприятий.</p>{/if}
+  {/if}
+  {#if deleting}
+    <dialog class="confirmation" use:showConfirmation aria-labelledby="delete-title" oncancel={(event) => { if (removing) event.preventDefault(); else deleting = null; }}>
+        <h2 id="delete-title">Удалить мероприятие?</h2>
+        <p>{dateLabel(deleting)} Фотографии, видео и ссылки посетителей будут удалены. Отменить удаление нельзя.</p>
+        {#if error}<p class="error" role="alert">{error}</p>{/if}
+        <div class="confirmation-actions"><button disabled={removing} onclick={() => deleting = null}>Отмена</button><button class="danger" disabled={removing} onclick={remove}>{removing ? 'Удаляем…' : 'Удалить'}</button></div>
+    </dialog>
   {/if}
 </main>
 
@@ -70,6 +90,13 @@
   .archive { max-width:1280px; margin:auto; padding:32px 20px 64px; }
   .archive-heading { display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap; }
   .archive-days,.archive-gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr)); gap:20px; margin-top:32px; }
+  .archive-event { display:grid; align-content:start; gap:8px; }
+  .archive-delete { font-size:14px; color:var(--muted); }
+  .confirmation::backdrop { background:#0009; }
+  .confirmation { margin:auto; width:calc(100% - 40px); max-width:480px; padding:28px; background:var(--surface); color:var(--text); border:1px solid var(--line); border-radius:6px; }
+  .confirmation p { margin:20px 0; }
+  .confirmation-actions { display:flex; justify-content:flex-end; gap:12px; }
+  .danger { color:#c54c3d; }
   .archive-day { text-align:left; padding:26px; display:grid; gap:14px; font-weight:400; }
   .archive-day h2 { font-size:24px; margin-bottom:8px; }
   .archive-day>span:not(.archive-link) { display:flex; justify-content:space-between; gap:12px; font-size:14px; color:var(--muted); }

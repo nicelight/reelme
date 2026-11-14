@@ -1,7 +1,7 @@
 {
   "id": "TASK-012-T3-FT-005-W9",
   "title": "Удалить прошедшее мероприятие вручную или по сроку хранения",
-  "status": "planned",
+  "status": "done",
   "wave": "W9",
   "feature": "FT-005",
   "reqs": [
@@ -18,8 +18,83 @@
     "README.md"
   ],
   "tier": "T3",
-  "gates": [],
-  "verify": [],
+  "gates": [
+    {
+      "name": "tests",
+      "command": "npm test",
+      "required": true
+    },
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "browser cleanup/archive",
+      "command": "npm run test:ui -- tests/cleanup.spec.ts tests/archive.spec.ts",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-14",
+      "stage": "implementation",
+      "result": "PASS",
+      "summary": "Admin delete с подтверждением, единый restartable cleanup для ручного удаления и retention >14 календарных дней Новосибирска. Durable deleting закрывает операции/capabilities и late generation/email publication; собственные файлы удаляются, используемые материалы слотов/других snapshots сохраняются. Known-output fal delete best-effort с честным логом ошибок.",
+      "checks": [
+        "npm run check: PASS, 0 errors / 0 warnings",
+        "npm run build: PASS",
+        "npm test: PASS, 66/66",
+        "cleanup + email final targeted: PASS, 22/22; cleanup усиленные assertions: PASS, 4/4",
+        "Chromium cleanup + archive: PASS, 2/2; cancel/confirm, no gallery navigation, before/after files, neighbor preservation",
+        "git diff --check: PASS"
+      ],
+      "evidence": [
+        ".tasks/TASK-012-T3-FT-005-W9/evidence.md",
+        ".tasks/TASK-012-T3-FT-005-W9/cleanup-functional.log",
+        ".tasks/TASK-012-T3-FT-005-W9/cleanup-browser-observations.json"
+      ],
+      "limitations": [
+        "Все destructive проверки на mkdtemp-owned SQLite/media; fal/SMTP transports локальные.",
+        "Реальные fal delete/SMTP/генерация не выполнялись; assets:write доступ не предоставлен, удаление существующей CDN-копии не подтверждено.",
+        "Камера и production acceptance исключены. Native Playwright + отдельный Node/tsx fixture — разрешённый fallback при отсутствии ui_qa."
+      ],
+      "remaining": "Код готов к independent red-verify. Статус in_progress; lifecycle/commit/push выполняет root."
+    },
+    {
+      "date": "2026-11-14",
+      "stage": "red-verification",
+      "result": "semantic-pass",
+      "summary": "Независимая bounded проверка AC-003: существенных нарушений не обнаружено. Admin/date/retention, durable deleting/restart, закрытие capabilities/late publication, сохранность shared media и best-effort fal cleanup согласуются с принятым поведением.",
+      "checks": [
+        "Независимый повтор cleanup.test.ts: PASS 4/4",
+        "Независимые local probes: PASS 2/2 — late result после полного удаления; shared snapshot media до последнего пользователя",
+        "UI cancel/confirm: source review + evidence исполнителя Chromium 2/2; повторный браузерный запуск не выполнялся",
+        "git diff --check: PASS"
+      ],
+      "evidence": [
+        ".tasks/TASK-012-T3-FT-005-W9/red-verification.md",
+        ".tasks/TASK-012-T3-FT-005-W9/red-cleanup.log",
+        ".tasks/TASK-012-T3-FT-005-W9/red-independent.log"
+      ],
+      "limitations": [
+        "Destructive проверки только на собственных временных SQLite/media; внешних удалений не было.",
+        "Реальные fal delete/SMTP, CDN-копия, камера и production acceptance не проверялись; разрешённые ограничения сохранены."
+      ],
+      "remaining": "Дополнительных исправлений по review нет; lifecycle/commit/push принадлежат root."
+    },
+    {
+      "date": "2026-11-14",
+      "stage": "closure",
+      "result": "DONE",
+      "summary": "Удаление/retention приняты: independent red-verify semantic-pass, cleanup4/4 и дополнительные probes2/2. Локально full66/66, final targeted22/22+4/4, check/build, Chromium cleanup/archive2/2 PASS. Live fal delete/SMTP/production не проверялись. Все development outcomes очереди завершены."
+    }
+  ],
   "docs": [
     ".memory-bank/features/FT-005-event-archive.md"
   ],

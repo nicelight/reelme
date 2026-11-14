@@ -2,7 +2,9 @@
  * Claims pending before I/O; only SMTP acceptance marks sent. A file/size refusal
  * permits one link fallback; connection/auth/unknown outcomes never auto-retry.
  * Restarted sending requires manual retry. No raw addresses/provider errors in logs.
+ * Deletion blocks new sends/fallbacks and publication of in-flight outcomes.
  * Generation, capabilities, files and first confirmation times remain unchanged. */
+import { sessionAvailable } from './availability.js';
 import nodemailer, { type SendMailOptions } from 'nodemailer';
 import { join } from 'node:path';
 import type { FastifyBaseLogger } from 'fastify';
@@ -54,11 +56,12 @@ export function createEmailWorker(db: DB, dataDir: string, origin: string, log: 
   const claim = db.transaction(() => {
     const job = db.prepare(`SELECT d.session_id,d.email,d.download_token,s.number,g.video_path FROM session_delivery d
       JOIN capture_sessions s ON s.id=d.session_id JOIN generation_jobs g ON g.session_id=s.id
-      WHERE d.email_state='pending' AND s.state='ready' ORDER BY d.email_confirmed_at,s.id LIMIT 1`).get() as Job | undefined;
+      WHERE d.email_state='pending' AND s.state='ready' AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.deleting=0) ORDER BY d.email_confirmed_at,s.id LIMIT 1`).get() as Job | undefined;
     if (job) db.prepare("UPDATE session_delivery SET email_state='sending',email_error=NULL WHERE session_id=? AND email_state='pending'").run(job.session_id);
     return job;
   });
   async function send(job: Job, attachment: boolean) {
+    if (!sessionAvailable(db, job.session_id)) return;
     const info = await options.transport.sendMail({
       from: { name: 'ReelMe', address: options.from }, to: { address: job.email, name: '' },
       subject: `Ваша видеоистория № ${job.number} — ReelMe`,
@@ -76,8 +79,10 @@ export function createEmailWorker(db: DB, dataDir: string, origin: string, log: 
       try {
         try { await send(job, true); }
         catch (error) { if (!attachmentRefused(error)) throw error; await send(job, false); }
+        if (!sessionAvailable(db, job.session_id)) continue;
         db.prepare("UPDATE session_delivery SET email_state='sent',sent_at=?,email_error=NULL WHERE session_id=? AND email_state='sending'").run(now(), job.session_id);
       } catch (error) {
+        if (!sessionAvailable(db, job.session_id)) continue;
         const code = failureCode(error);
         db.prepare("UPDATE session_delivery SET email_state='failed',email_error=?,sent_at=NULL WHERE session_id=? AND email_state='sending'").run(code, job.session_id);
         log.warn({ sessionId: job.session_id, code }, 'Не удалось подтвердить отправку письма');

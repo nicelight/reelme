@@ -1,0 +1,5 @@
+Owned temporary fixture: /tmp/reelme-test-jjFLie
+PASS late known result after complete deletion: fake delete receives late URL, no publication/job/directory recreated
+PASS shared material: survives first event deletion through other-day snapshot, removed/revoked only after last snapshot; current-slot bytes and today retained; FK clean
+Independent probes 2/2 PASS; no external network transports used
+Owned temporary fixture removed

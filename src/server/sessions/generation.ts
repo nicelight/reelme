@@ -3,7 +3,12 @@
  * before observation and never resubmitted; network/files never run in SQL
  * transactions. A verified local result stays preparing until the issuance callback
  * owns ready; standalone generation has no authority to publish capabilities.
+ * Deletion blocks new work and publication; late local output is discarded.
  * Errors retain the session/photos; public errors are fixed safe messages. */
+import { rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { sessionAvailable } from './availability.js';
+import { deleteKnownOutput, type CleanupOptions } from './cleanup.js';
 import type { FastifyBaseLogger } from 'fastify';
 import type { DB } from '../db.js';
 import { readSession } from './index.js';
@@ -13,7 +18,7 @@ import type { FalTransport } from './fal.js';
 import { InvalidVideo, prepareVideo } from './video.js';
 
 interface Job { request_id: string | null; result_url: string | null; video_path: string | null; frame_path: string | null }
-export interface GenerationOptions { client: FalTransport; download?: typeof fetch; intervalMs?: number; secret?: string; publishReady?: (id: string) => Promise<void> }
+export interface GenerationOptions { deleteOutput?: CleanupOptions['deleteOutput']; client: FalTransport; download?: typeof fetch; intervalMs?: number; secret?: string; publishReady?: (id: string) => Promise<void> }
 class GenerationFailure extends Error {
   constructor(readonly code: string, message: string, options?: ErrorOptions) { super(message, options); }
 }
@@ -46,6 +51,7 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
   let stopped = false; let active: Promise<void> | undefined; let timer: ReturnType<typeof setTimeout> | undefined;
   const clearError = (id: string) => db.prepare('UPDATE generation_jobs SET error_code=NULL,error_message=NULL WHERE session_id=?').run(id);
   function failure(id: string, error: unknown, terminal: boolean, code: string) {
+    if (!sessionAvailable(db, id)) return;
     db.transaction(() => {
       db.prepare('UPDATE generation_jobs SET error_code=?,error_message=? WHERE session_id=?').run(code, messages[code], id);
       if (terminal) db.prepare("UPDATE capture_sessions SET state='failed' WHERE id=?").run(id);
@@ -53,6 +59,7 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
     log.error({ sessionId: id, code, detail: safeDetail(error, options.secret) }, 'Ошибка обработки видео');
   }
   async function advance(id: string) {
+    if (!sessionAvailable(db, id)) return;
     const session = readSession(db, id);
     db.prepare('INSERT INTO generation_jobs(session_id) VALUES (?) ON CONFLICT DO NOTHING').run(id);
     const job = db.prepare('SELECT * FROM generation_jobs WHERE session_id=?').get(id) as Job;
@@ -79,6 +86,7 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
           if (httpStatus(error)) throw new GenerationFailure('FAL_REJECTED', 'fal refused submit', { cause: error });
           throw error;
         }
+        if (!sessionAvailable(db, id)) return;
         if (!accepted.request_id) throw new Error('Missing submit acknowledgement');
         db.transaction(() => {
           db.prepare('UPDATE generation_jobs SET request_id=?,status_url=?,response_url=?,cancel_url=?,error_code=NULL,error_message=NULL WHERE session_id=?').run(accepted.request_id, accepted.status_url ?? null, accepted.response_url ?? null, accepted.cancel_url ?? null, id);
@@ -89,6 +97,7 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
       if (session.state === 'observing') {
         if (!job.request_id) throw new GenerationFailure('FAL_FAILED', 'Missing confirmed fal ID');
         const status = await options.client.status(session.snapshot.generation.model, job.request_id);
+        if (!sessionAvailable(db, id)) return;
         if (status.error || status.status === 'FAILED') throw new GenerationFailure('FAL_FAILED', 'fal terminal status', { cause: status });
         if (status.status !== 'COMPLETED') { clearError(id); return; }
         let result: unknown;
@@ -103,6 +112,7 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
         let url: URL;
         try { url = new URL(data.video.url); } catch { throw new GenerationFailure('INVALID_RESULT', 'Invalid result URL'); }
         if (url.protocol !== 'https:' || url.username || url.password) throw new GenerationFailure('INVALID_RESULT', 'Invalid result URL');
+        if (!sessionAvailable(db, id)) { await deleteKnownOutput(url.href, log, options.deleteOutput); return; }
         db.transaction(() => {
           db.prepare('UPDATE generation_jobs SET result_url=?,error_code=NULL,error_message=NULL WHERE session_id=?').run(url.href, id);
           db.prepare("UPDATE capture_sessions SET state='preparing' WHERE id=?").run(id);
@@ -112,6 +122,10 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
       if (session.state === 'preparing' && !job.video_path) {
         if (!job.result_url) throw new GenerationFailure('INVALID_RESULT', 'Missing result URL');
         const prepared = await prepareVideo(dataDir, id, job.result_url, options.download);
+        if (!sessionAvailable(db, id)) {
+          await rm(join(dataDir, 'media', 'sessions', id), { recursive: true, force: true });
+          return;
+        }
         db.prepare(`UPDATE generation_jobs SET video_path=@video_path,frame_path=@frame_path,video_size=@video_size,frame_size=@frame_size,width=@width,height=@height,duration=@duration,error_code=NULL,error_message=NULL WHERE session_id=@id`).run({ ...prepared, id });
       }
       if (session.state === 'preparing') await options.publishReady?.(id);
@@ -123,7 +137,7 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
   }
   async function pass() {
     const rows = db.prepare(`SELECT s.id FROM capture_sessions s LEFT JOIN generation_jobs g ON g.session_id=s.id
-      WHERE s.state IN ('submit_pending','observing') OR (s.state='preparing' AND (g.video_path IS NULL OR ?)) ORDER BY s.created_at,s.id`).all(options.publishReady ? 1 : 0) as { id: string }[];
+      WHERE EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.deleting=0) AND (s.state IN ('submit_pending','observing') OR (s.state='preparing' AND (g.video_path IS NULL OR ?))) ORDER BY s.created_at,s.id`).all(options.publishReady ? 1 : 0) as { id: string }[];
     for (const row of rows) { if (stopped) break; await advance(row.id); }
   }
   function runOnce(): Promise<void> {

@@ -17,14 +17,15 @@ import { createAccess } from './access/index.js';
 import { registerScenarios } from './scenarios/index.js';
 import { registerSessions } from './sessions/index.js';
 import { registerProviderMedia } from './sessions/provider-media.js';
-import { createFalTransport } from './sessions/fal.js';
+import { createEventCleanup, type CleanupOptions } from './sessions/cleanup.js';
+import { createFalDelete, createFalTransport } from './sessions/fal.js';
 import { createGenerationWorker, type GenerationOptions } from './sessions/generation.js';
 import { registerReceive, publishReady } from './sessions/receive.js';
 import { registerEvents } from './sessions/events.js';
 import { registerDisplay } from './sessions/display.js';
 import { createEmailWorker, createSmtpTransport, recoverEmail, type EmailOptions } from './sessions/email.js';
 
-export async function createApp(config: Config, options: { now?: () => number; logger?: boolean; generation?: GenerationOptions; email?: EmailOptions } = {}) {
+export async function createApp(config: Config, options: { now?: () => number; logger?: boolean; generation?: GenerationOptions; email?: EmailOptions; cleanup?: CleanupOptions } = {}) {
   const app = Fastify({ logger: options.logger ? { redact: ['req.url', 'req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'] } : false, bodyLimit: 64 * 1024 });
   const db = openDatabase(config.dataDir);
   app.addHook('onClose', async () => { db.close(); });
@@ -40,7 +41,7 @@ export async function createApp(config: Config, options: { now?: () => number; l
     return reply.code(status).send({ code: status >= 500 ? 'INTERNAL' : error.code ?? 'BAD_REQUEST', message: status >= 500 ? 'Ошибка сервера' : error.message });
   });
   await app.register(cookie);
-  await app.register(cors, { origin: [config.origin, 'http://localhost:5513'], credentials: false, methods: ['GET', 'POST', 'PUT', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'], strictPreflight: true });
+  await app.register(cors, { origin: [config.origin, 'http://localhost:5513'], credentials: false, methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'], strictPreflight: true });
   await app.register(multipart);
   await app.register(rateLimit, { global: false });
   const access = await createAccess(app, db, config, options.now ?? Date.now);
@@ -48,18 +49,22 @@ export async function createApp(config: Config, options: { now?: () => number; l
   registerSessions(app, db, config.dataDir, access, options.now ?? Date.now);
   registerProviderMedia(app, db, config.dataDir);
   registerDisplay(app, db, config.dataDir, config.origin, access, options.now ?? Date.now);
-  registerEvents(app, db, config.dataDir, access, options.now ?? Date.now);
+  const deleteOutput = options.cleanup?.deleteOutput ?? (config.falKey ? createFalDelete(config.falKey) : undefined);
+  const cleanup = createEventCleanup(db, config.dataDir, app.log, options.now ?? Date.now, { ...options.cleanup, deleteOutput });
+  registerEvents(app, db, config.dataDir, access, options.now ?? Date.now, cleanup.remove);
+  app.addHook('onReady', async () => { await cleanup.runOnce(); cleanup.start(); });
+  app.addHook('onClose', async () => { await cleanup.stop(); });
   registerReceive(app, db, config.dataDir, config.clientDir, options.now ?? Date.now);
   const publish = (id: string) => publishReady(db, config.dataDir, id);
   app.addHook('onReady', async () => {
     // A serving client entrypoint is part of ready, also when fal is disabled.
     await readFile(join(config.clientDir, 'index.html'));
-    const rows = db.prepare("SELECT s.id FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id WHERE s.state='preparing' AND g.video_path IS NOT NULL").all() as { id: string }[];
+    const rows = db.prepare("SELECT s.id FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id WHERE s.state='preparing' AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.deleting=0) AND g.video_path IS NOT NULL").all() as { id: string }[];
     for (const row of rows) await publish(row.id);
   });
   const generation = options.generation ?? (config.falKey ? { client: createFalTransport(config.falKey), secret: config.falKey } : undefined);
   if (generation) {
-    const worker = createGenerationWorker(db, config.dataDir, config.origin, app.log, { ...generation, publishReady: publish });
+    const worker = createGenerationWorker(db, config.dataDir, config.origin, app.log, { ...generation, publishReady: publish, deleteOutput });
     app.addHook('onReady', async () => { worker.start(); });
     app.addHook('onClose', async () => { await worker.stop(); });
   }

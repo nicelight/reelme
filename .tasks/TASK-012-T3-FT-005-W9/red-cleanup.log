@@ -1,0 +1,38 @@
+TAP version 13
+# Subtest: cleanup manual: permissions, owned files/capabilities gone, other-day snapshot and current-slot materials survive
+ok 1 - cleanup manual: permissions, owned files/capabilities gone, other-day snapshot and current-slot materials survive
+  ---
+  duration_ms: 1099.037242
+  type: 'test'
+  ...
+# isolated DB/media fixture: /tmp/reelme-test-DCixmu
+# Subtest: retention: exactly 14 calendar days survive until Novosibirsk midnight; startup resumes saved deletion
+ok 2 - retention: exactly 14 calendar days survive until Novosibirsk midnight; startup resumes saved deletion
+  ---
+  duration_ms: 934.645638
+  type: 'test'
+  ...
+# isolated DB/media fixture: /tmp/reelme-test-9nilsl
+# Subtest: deleting marker immediately closes every new operation, late generation publication and email fallback
+ok 3 - deleting marker immediately closes every new operation, late generation publication and email fallback
+  ---
+  duration_ms: 1045.52523
+  type: 'test'
+  ...
+# isolated DB/media fixture: /tmp/reelme-test-OzQke9
+# Subtest: fal delete contract: known URL only, bounded POST, remote failure logged and local cleanup completes
+ok 4 - fal delete contract: known URL only, bounded POST, remote failure logged and local cleanup completes
+  ---
+  duration_ms: 854.282125
+  type: 'test'
+  ...
+# isolated DB/media fixture: /tmp/reelme-test-dF1fhi
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4845.759175

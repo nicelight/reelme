@@ -1,7 +1,7 @@
-/** Module contract: account-only read projection of past Novosibirsk events.
+/** Module contract: account-only archive projection and admin deletion of past Novosibirsk events.
  * Counts stored session-owned files once, excluding shared scenario materials.
  * Saved snapshots select thumbnails; only this session's ready video is served.
- * Never changes generation/delivery state, opens visitor forms or deletes files. */
+ * Deletion delegates to the shared restartable Sessions cleanup after role/date checks. */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
@@ -18,16 +18,21 @@ interface Row {
 const selection = `SELECT s.id,s.number,s.snapshot,s.state,g.video_path,g.video_size,g.width,g.height
   FROM capture_sessions s LEFT JOIN generation_jobs g ON g.session_id=s.id WHERE s.event_date=?`;
 const hasVideo = (row: Row) => row.state === 'ready' && !!row.video_path && (row.video_size ?? 0) > 0;
-export function registerEvents(app: FastifyInstance, db: DB, dataDir: string, access: Access, now: () => number) {
+export function registerEvents(app: FastifyInstance, db: DB, dataDir: string, access: Access, now: () => number, remove: (date: string) => Promise<void>) {
   async function account(request: FastifyRequest, reply: FastifyReply) {
     const role = access.context(request, reply);
     if (role !== 'operator' && role !== 'admin') throw new HttpError(403, 'FORBIDDEN', 'Нужен аккаунт оператора или администратора');
   }
   function requirePast(date: string) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date >= eventDate(now()) || !db.prepare('SELECT 1 FROM events WHERE date=?').get(date)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date >= eventDate(now()) || !db.prepare('SELECT 1 FROM events WHERE date=? AND deleting=0').get(date)) {
       throw new HttpError(404, 'NOT_FOUND', 'Мероприятие отсутствует в архиве');
     }
   }
+  app.delete<{ Params: { date: string } }>('/api/events/:date', { preHandler: [access.requireAdmin, access.requireOrigin] }, async (request, reply) => {
+    requirePast(request.params.date);
+    await remove(request.params.date);
+    return reply.code(204).send();
+  });
   app.get('/api/events', { preHandler: account }, (): ArchiveEvent[] => {
     // UNION groups by path before summing, so neither joins nor shared inputs multiply files.
     return db.prepare(`WITH files AS (
@@ -36,7 +41,7 @@ export function registerEvents(app: FastifyInstance, db: DB, dataDir: string, ac
       UNION SELECT s.event_date,g.video_path,g.video_size,'video' FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id WHERE g.video_path IS NOT NULL AND g.video_size IS NOT NULL
     ) SELECT e.date,COALESCE(SUM(CASE WHEN f.kind='image' THEN f.size ELSE 0 END),0) AS photoBytes,
       COALESCE(SUM(CASE WHEN f.kind='video' THEN f.size ELSE 0 END),0) AS videoBytes
-      FROM events e LEFT JOIN files f ON f.event_date=e.date WHERE e.date<? GROUP BY e.date ORDER BY e.date DESC`).all(eventDate(now())) as ArchiveEvent[];
+      FROM events e LEFT JOIN files f ON f.event_date=e.date WHERE e.date<? AND e.deleting=0 GROUP BY e.date ORDER BY e.date DESC`).all(eventDate(now())) as ArchiveEvent[];
   });
   app.get<{ Params: { date: string } }>('/api/events/:date', { preHandler: account }, (request): EventGallery => {
     const { date } = request.params; requirePast(date);

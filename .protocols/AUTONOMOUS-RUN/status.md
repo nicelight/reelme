@@ -1,11 +1,11 @@
 # Autopilot
 
 STATE: RUNNING
-Stage: wave-boundary
-Current task: TASK-011-T2-FT-005-W8
+Stage: closure
+Current task: TASK-012-T3-FT-005-W9
 
-Последний результат: [TASK-011](../../.memory-bank/tasks/TASK-011-T2-FT-005-W8.task.json) done; independent verify PASS,62/62 tests, check/build, Chromium archive + display/editor PASS. W8 завершена. REQ-001/014 актуализированы. TASK-010 push: f925fc0; TASK-009: 8f586c8; TASK-008: ac3eed1; TASK-007: 4c43c94; TASK-006: a46733a; TASK-004: 8d1495d.
-Следующий шаг: commit/push TASK-011, затем TASK-012 (W9), последняя development задача. TASK-005 исключена как Production acceptance до отдельного поручения.
+Последний результат: [TASK-012](../../.memory-bank/tasks/TASK-012-T3-FT-005-W9.task.json) done; independent red-verify semantic-pass, cleanup4/4 + probes2/2. Локально full66/66, targeted22/22+4/4, check/build, Chromium cleanup/archive2/2 PASS. Все 11 development задач закрыты (done или done_for_prod); REQ lifecycle согласованы. TASK-011 push: c28b5cb; TASK-010: f925fc0; TASK-009: 8f586c8; TASK-008: ac3eed1; TASK-007: 4c43c94; TASK-006: a46733a; TASK-004: 8d1495d.
+Следующий шаг: commit/push TASK-012, финальная проверка очереди/Git и запись SUCCESS. TASK-005 остаётся planned как Production acceptance, исключена до отдельного поручения.
 
 Счётчики: TASK-009 завершена на попытке2/3 (retry1/2); всего неуспешных завершённых попыток 1; последовательных неудач 0; открытых блокеров 0. Лимиты: 2 повтора после первой неудачи, 3 последовательных неудачи, 3 блокера.
 Условия оператора: задачи последовательно; после каждой закрытой задачи commit/push; непредвиденные существенные ситуации/правки спецификаций требуют консультации. Проверки можно делегировать. После двух повторных сообщений агента о завершении удваивать интервал опроса; по умолчанию ждать уведомления, завершённых агентов не опрашивать.

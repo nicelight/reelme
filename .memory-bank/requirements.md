@@ -52,10 +52,10 @@ status: active
 | REQ-012 | EP-001 | FT-004 | [FT-004-AC-003](features/FT-004-public-delivery.md#ft-004-ac-003) | [done](tasks/TASK-010-T2-FT-004-W7.task.json) |
 | REQ-013 | EP-001 | FT-004 | [FT-004-AC-004](features/FT-004-public-delivery.md#ft-004-ac-004) | [done](tasks/TASK-010-T2-FT-004-W7.task.json) |
 | REQ-014 | EP-001 | FT-005 | [FT-005-AC-001](features/FT-005-event-archive.md#ft-005-ac-001), [FT-005-AC-002](features/FT-005-event-archive.md#ft-005-ac-002) | [done](tasks/TASK-011-T2-FT-005-W8.task.json) |
-| REQ-015 | EP-001 | FT-005 | [FT-005-AC-003](features/FT-005-event-archive.md#ft-005-ac-003) | [planned](tasks/TASK-012-T3-FT-005-W9.task.json) |
-| REQ-016 | EP-001 | FT-001, FT-002, FT-004, FT-005 | [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004) | [in_progress](tasks/TASK-012-T3-FT-005-W9.task.json) |
+| REQ-015 | EP-001 | FT-005 | [FT-005-AC-003](features/FT-005-event-archive.md#ft-005-ac-003) | [done](tasks/TASK-012-T3-FT-005-W9.task.json) |
+| REQ-016 | EP-001 | FT-001, FT-002, FT-004, FT-005 | [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004) | [done_for_prod](tasks/TASK-005-T3-FT-002-W4.task.json) |
 | REQ-017 | EP-001 | FT-002 | [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004) | [done_for_prod](tasks/TASK-005-T3-FT-002-W4.task.json) |
-| REQ-018 | EP-001 | FT-001, FT-002, FT-004, FT-005 | [FT-001-AC-004](features/FT-001-scenarios.md#ft-001-ac-004), [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004), [FT-004-AC-001](features/FT-004-public-delivery.md#ft-004-ac-001), [FT-004-AC-003](features/FT-004-public-delivery.md#ft-004-ac-003), [FT-005-AC-002](features/FT-005-event-archive.md#ft-005-ac-002), [FT-005-AC-003](features/FT-005-event-archive.md#ft-005-ac-003) | [in_progress](tasks/TASK-012-T3-FT-005-W9.task.json) |
+| REQ-018 | EP-001 | FT-001, FT-002, FT-004, FT-005 | [FT-001-AC-004](features/FT-001-scenarios.md#ft-001-ac-004), [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004), [FT-004-AC-001](features/FT-004-public-delivery.md#ft-004-ac-001), [FT-004-AC-003](features/FT-004-public-delivery.md#ft-004-ac-003), [FT-005-AC-002](features/FT-005-event-archive.md#ft-005-ac-002), [FT-005-AC-003](features/FT-005-event-archive.md#ft-005-ac-003) | [done_for_prod](tasks/TASK-005-T3-FT-002-W4.task.json) |
 
 Исключения — [за пределами первой версии](prd.md#за-пределами-первой-версии).
 Их изменение возвращается в PRD; художественная оценка AI-видео не является критерием приёмки.

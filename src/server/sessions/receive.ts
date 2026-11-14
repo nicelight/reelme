@@ -2,7 +2,8 @@
  * capabilities atomically. Receive grants only its own form/photo/frame; download
  * grants only its video. Email acceptance owns first confirmation and pending,
  * never SMTP or sent. Neither opening nor retry changes the first confirmation.
- * Ready cards are internal projections for the authenticated display/archive. */
+ * Deleting events issue no capabilities or ready publication. Ready cards are internal projections for the authenticated display/archive. */
+import { sessionAvailable } from './availability.js';
 import { randomBytes } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
@@ -27,7 +28,7 @@ const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
 const missing = () => new HttpError(404, 'NOT_FOUND', 'Ссылка недоступна. Обратитесь к сотруднику.');
 function delivery(db: DB, token: string, kind: 'receive' | 'download'): Delivery {
   if (!tokenPattern.test(token)) throw missing();
-  const row = db.prepare(`SELECT d.*,s.number FROM session_delivery d JOIN capture_sessions s ON s.id=d.session_id WHERE d.${kind}_token=? AND s.state='ready'`).get(token) as Delivery | undefined;
+  const row = db.prepare(`SELECT d.*,s.number FROM session_delivery d JOIN capture_sessions s ON s.id=d.session_id WHERE d.${kind}_token=? AND s.state='ready' AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.deleting=0)`).get(token) as Delivery | undefined;
   if (!row) throw missing();
   return row;
 }
@@ -36,7 +37,7 @@ function status(row: Delivery): ReceiveStatus {
     canSubmit: row.email_state === 'not_requested' || row.email_state === 'failed', openedAt: row.opened_at, emailConfirmedAt: row.email_confirmed_at };
 }
 export function readyCard(db: DB, origin: string, sessionId: string): ReadyCard | undefined {
-  const row = db.prepare("SELECT d.*,s.number FROM session_delivery d JOIN capture_sessions s ON s.id=d.session_id WHERE s.id=? AND s.state='ready'").get(sessionId) as Delivery | undefined;
+  const row = db.prepare("SELECT d.*,s.number FROM session_delivery d JOIN capture_sessions s ON s.id=d.session_id WHERE s.id=? AND s.state='ready' AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.deleting=0)").get(sessionId) as Delivery | undefined;
   if (!row) return undefined;
   const base = `${origin}/api/receive/${row.receive_token}`;
   return { number: row.number, photoUrl: `${base}/photo`, frameUrl: `${base}/frame`, receiveUrl: `${origin}/receive/${row.receive_token}` };
@@ -46,7 +47,7 @@ export function readyCard(db: DB, origin: string, sessionId: string): ReadyCard 
  * Ordinary generation already decoded them; the recheck closes the saved-file
  * boundary before issuing permanent capabilities. No remote access or SQL awaits. */
 export async function publishReady(db: DB, dataDir: string, sessionId: string) {
-  const row = db.prepare(`SELECT g.* FROM generation_jobs g JOIN capture_sessions s ON s.id=g.session_id WHERE s.id=? AND s.state='preparing' AND g.video_path IS NOT NULL`).get(sessionId) as { video_path: string; frame_path: string; video_size: number; frame_size: number } | undefined;
+  const row = db.prepare(`SELECT g.* FROM generation_jobs g JOIN capture_sessions s ON s.id=g.session_id WHERE s.id=? AND s.state='preparing' AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.deleting=0) AND g.video_path IS NOT NULL`).get(sessionId) as { video_path: string; frame_path: string; video_size: number; frame_size: number } | undefined;
   if (!row) return;
   try {
     const video = join(dataDir, 'media', row.video_path);
@@ -57,12 +58,14 @@ export async function publishReady(db: DB, dataDir: string, sessionId: string) {
     await sharp(frame, { failOn: 'warning' }).stats();
     await sharp(join(dataDir, 'media', photo.path), { failOn: 'warning' }).stats();
     db.transaction(() => {
+      if (!sessionAvailable(db, sessionId)) return;
       db.prepare('INSERT INTO session_delivery(session_id,receive_token,download_token) VALUES (?,?,?) ON CONFLICT(session_id) DO NOTHING').run(sessionId, randomBytes(32).toString('base64url'), randomBytes(32).toString('base64url'));
       db.prepare("UPDATE capture_sessions SET state='ready' WHERE id=? AND state='preparing'").run(sessionId);
       db.prepare('UPDATE generation_jobs SET error_code=NULL,error_message=NULL WHERE session_id=?').run(sessionId);
     }).immediate();
   } catch {
     db.transaction(() => {
+      if (!sessionAvailable(db, sessionId)) return;
       db.prepare("UPDATE capture_sessions SET state='failed' WHERE id=? AND state='preparing'").run(sessionId);
       db.prepare("UPDATE generation_jobs SET error_code='INVALID_RESULT',error_message='Результат недоступен. Обратитесь к сотруднику.' WHERE session_id=?").run(sessionId);
     }).immediate();

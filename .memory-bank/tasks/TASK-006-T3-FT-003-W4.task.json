@@ -22,9 +22,21 @@
   ],
   "tier": "T3",
   "gates": [
-    "npm test",
-    "npm run check",
-    "npm run build"
+    {
+      "name": "tests",
+      "command": "npm test",
+      "required": true
+    },
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    }
   ],
   "verify": [
     {

@@ -1,0 +1,11 @@
+
+Running 2 tests using 1 worker
+
+(node:408396) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+  ✓  1 tests/archive.spec.ts:9:1 › Chromium archive: both accounts browse dates, original thumbnails and their own playable videos after public hide (4.9s)
+
+  ✓  2 tests/cleanup.spec.ts:9:1 › Chromium: operator cannot delete; admin cancel preserves files, confirmation deletes without opening gallery (3.2s)
+
+  2 passed (9.6s)

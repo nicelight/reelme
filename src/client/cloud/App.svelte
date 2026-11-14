@@ -157,7 +157,7 @@
     </form>
   </main>
 {:else if archive}
-  <Archive onunauthorized={() => role = null} />
+  <Archive {role} onunauthorized={() => role = null} />
 {:else if role === 'operator'}
   <Display onunauthorized={() => role = null} />
 {:else}

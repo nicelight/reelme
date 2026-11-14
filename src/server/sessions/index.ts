@@ -4,7 +4,7 @@
  * including across edits, hidden slots and midnight. Photo bytes are written and
  * decoded before a short DB transaction publishes one position. Finalize changes
  * capturing to submit_pending once, only for a complete set; later photo writes
- * are refused, including uploads that started before finalize. No camera/fal calls; generation errors are a safe projection from Sessions. */
+ * are refused, including uploads that started before finalize or event deletion. No camera/fal calls; generation errors are a safe projection from Sessions. */
 import { randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdir, rm, stat } from 'node:fs/promises';
@@ -37,7 +37,7 @@ function receipt(row: SessionRow): StartReceipt {
   return { sessionId: row.id, date: row.event_date, number: row.number, state: row.state, posePlan: photoPoses.slice(0, snapshot.expectedPhotos).map(pose => ({ ...pose })) };
 }
 export function readSession(db: DB, sessionId: string) {
-  const row = db.prepare('SELECT * FROM capture_sessions WHERE id=?').get(sessionId) as SessionRow | undefined;
+  const row = db.prepare('SELECT s.* FROM capture_sessions s JOIN events e ON e.date=s.event_date WHERE s.id=? AND e.deleting=0').get(sessionId) as SessionRow | undefined;
   if (!row) throw new HttpError(404, 'NOT_FOUND', 'Сессия не найдена');
   return { ...row, snapshot: JSON.parse(row.snapshot) as SlotSnapshot };
 }
@@ -67,6 +67,7 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
   const start = db.transaction((startRequestId: string, slotId: string) => {
     const previous = db.prepare('SELECT * FROM capture_sessions WHERE start_request_id=?').get(startRequestId) as SessionRow | undefined;
     if (previous) {
+      readSession(db, previous.id);
       if (previous.slot_id !== slotId) throw new HttpError(409, 'START_CONFLICT', 'Этот запрос уже относится к другому сюжету');
       return { created: false, value: receipt(previous) };
     }
@@ -74,6 +75,7 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     const snapshot = snapshotSlot(db, slotId);
     const createdAt = now(); const date = eventDate(createdAt);
     db.prepare('INSERT INTO events(date,next_number) VALUES (?,1) ON CONFLICT(date) DO NOTHING').run(date);
+    if (db.prepare('SELECT 1 FROM events WHERE date=? AND deleting=1').get(date)) throw new HttpError(409, 'EVENT_DELETING', 'Мероприятие удаляется');
     const { number } = db.prepare('UPDATE events SET next_number=next_number+1 WHERE date=? RETURNING next_number-1 AS number').get(date) as { number: number };
     const row: SessionRow = {
       id: randomUUID(), start_request_id: startRequestId, event_date: date, number,

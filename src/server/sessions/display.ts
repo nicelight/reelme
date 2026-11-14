@@ -19,7 +19,7 @@ interface Row {
 }
 const selection = `SELECT s.id,s.number,s.state,d.email,d.email_state,d.opened_at,d.email_confirmed_at
   FROM capture_sessions s LEFT JOIN session_delivery d ON d.session_id=s.id
-  WHERE s.event_date=? AND (d.email_confirmed_at IS NULL OR d.email_confirmed_at+180000>?)`;
+  WHERE s.event_date=? AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.deleting=0) AND (d.email_confirmed_at IS NULL OR d.email_confirmed_at+180000>?)`;
 // Match the PRD's local-prefix***@***.suffix presentation, bounding long names.
 export function maskEmail(email: string) {
   const [name, domain] = email.split('@');
