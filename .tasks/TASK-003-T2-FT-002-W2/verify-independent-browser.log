@@ -1,0 +1,9 @@
+
+> reelme@0.1.0 test:ui
+> playwright test
+
+
+Running 3 tests using 1 worker
+
+(node:245539) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)

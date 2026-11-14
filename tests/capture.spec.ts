@@ -1,7 +1,7 @@
 import { test, expect } from './browser-fixture';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { request as apiRequest } from '@playwright/test';
-const artifacts = '.tasks/TASK-002-T2-FT-001-W2';
+const artifacts = process.env.REELME_BROWSER_ARTIFACTS ? `${process.env.REELME_BROWSER_ARTIFACTS}/catalog-regression` : '.tasks/TASK-002-T2-FT-001-W2';
 const local = 'http://localhost:5513/reelme.html';
 
 test('visitor catalog, protected media, durable start and lost acknowledgement recovery', async ({ page, app }) => {
@@ -88,10 +88,10 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   expect(response.status()).toBe(201);
   const receipt = await response.json();
   expect(receipt.sessionId).toBeTruthy(); expect(receipt.posePlan).toHaveLength(1);
-  await expect(page.locator('.poses li')).toHaveCount(1);
-  expect(await page.locator('main').innerText()).not.toMatch(/\d/);
+  await expect(page.locator('.pose-panel .eyebrow')).toHaveText('ФОТО 1 ИЗ 1');
+  expect(await page.locator('main').innerText()).not.toMatch(/Ищи свое видео|Ваш номер|Фото отправлены/);
   await page.reload();
-  await expect(page.locator('.poses li')).toHaveCount(1);
+  await expect(page.locator('.pose-panel .eyebrow')).toHaveText('ФОТО 1 ИЗ 1');
   expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!).receipt.sessionId) === receipt.sessionId).toBe(true);
   await page.screenshot({ path: `${artifacts}/browser-handoff.png`, fullPage: true });
   // Lose the acknowledgement after the server commits. A reload/retry must reuse the request.
@@ -111,12 +111,12 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   expect(app.sessionCount()).toBe(before + 1);
   await page.reload();
   await page.getByRole('button', { name: 'Повторить старт' }).click();
-  await expect(page.locator('.poses li')).toHaveCount(4);
+  await expect(page.locator('.pose-panel .eyebrow')).toHaveText('ФОТО 1 ИЗ 4');
   expect(requests).toHaveLength(2); expect(requests[0] === requests[1]).toBe(true);
   const recovered = await page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!).receipt);
   expect(recovered.sessionId === lostReceipt!.sessionId && recovered.number === lostReceipt!.number).toBe(true);
   expect(app.sessionCount()).toBe(before + 1);
-  expect(await page.locator('main').innerText()).not.toMatch(/\d/);
+  expect(await page.locator('main').innerText()).not.toMatch(/Ищи свое видео|Ваш номер|Фото отправлены/);
   expect((await page.context().cookies()).length).toBe(0);
   expect(leakedKey).toBe(false); expect(errors).toEqual([]);
   // Only the deliberately lost acknowledgement and optional favicon are allowed.

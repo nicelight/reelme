@@ -1,7 +1,7 @@
 {
   "id": "TASK-003-T2-FT-002-W2",
   "title": "Реализовать съёмку и получение кадров через контракт digiCamControl",
-  "status": "planned",
+  "status": "done_for_prod",
   "wave": "W2",
   "feature": "FT-002",
   "reqs": [
@@ -19,8 +19,55 @@
     "README.md"
   ],
   "tier": "T2",
-  "gates": [],
-  "verify": [],
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "api-and-camera",
+      "command": "npm test",
+      "required": true
+    },
+    {
+      "name": "browser",
+      "command": "REELME_BROWSER_ARTIFACTS=.tasks/TASK-003-T2-FT-002-W2 npm run test:ui",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-14",
+      "result": "PASS",
+      "summary": "Реализованы адаптер digiCamControl и экран по серверному плану 1/4 поз: образцы, инструкции, 3–2–1 со звуком, зеркальное превью/fallback, получение нового JPEG и повтор текущего файла. Исходные Blob связаны с sessionId/poseIndex и остаются в памяти; номер и успешная облачная передача не показываются.",
+      "checks": [
+        "npm run check: PASS, 0 errors/warnings; npm run build: PASS.",
+        "npm test: 24/24 PASS; HTTP camera fixtures проверяют разницу списков, задержку, разные сессии/оригиналы, сбои списка/скачивания, таймаут, потерю ответа затвора, неверный JPEG, abort и запрет перекрывающихся команд.",
+        "Делегированный Chromium QA: 3/3 PASS (54.4 s). Планы 1/4, порядок поз, byte-identical JPEG, retry без нового затвора, CSS orientation, потеря/недоступность превью, countdown/WebAudio, каталог и редактор; screenshots просмотрены.",
+        "Browser выявил native fetch receiver error и краткий countdown 0 при повторе; оба исправлены и перепроверены.",
+        "git diff --check: PASS."
+      ],
+      "evidence": [
+        ".tasks/TASK-003-T2-FT-002-W2/verification.md",
+        ".tasks/TASK-003-T2-FT-002-W2/browser-report.md",
+        ".tasks/TASK-003-T2-FT-002-W2/camera-observations.json"
+      ],
+      "limitations": [
+        "Реальное оборудование недоступно: управляемые HTTP-ответы не означают PASS Canon/digiCamControl. WebAudio проверен по вызовам, физическая слышимость не проверялась.",
+        "Между посетителями browser fixture сбрасывает sessionStorage/reload; продуктовый следующий посетитель, upload/finalize и номер принадлежат TASK-004. Blob после перезагрузки не восстанавливаются.",
+        "После отправленного затвора повтор ожидает текущий JPEG без второго затвора; если снимка нет, нужна помощь сотрудника."
+      ],
+      "remaining": [
+        "TASK-005: сквозная приёмка на Windows 11 Pro / Canon EOS 1100D, реальный Live View, звук и переключение с DSLR Remote Pro после завершения разработки приложения."
+      ]
+    }
+  ],
   "docs": [
     ".memory-bank/features/FT-002-photo-session.md"
   ],

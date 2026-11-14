@@ -3,9 +3,12 @@
   import type { CatalogItem, CatalogPage, StartReceipt } from '../../shared/capture';
   import { ApiError, installationKeyStorage, request, startStorage } from './api';
   import ProtectedMedia from './ProtectedMedia.svelte';
+  import Capture from './Capture.svelte';
+  import type { CapturedPhoto } from './photos';
   import './style.css';
-  /** Visitor catalog → durable start request → real capture handoff. A receipt
-   * remains in sessionStorage for FT-002; its visitor number is never rendered. */
+  /** Module contract: visitor catalog → durable start → local camera session.
+   * Keeps original photos in memory for the upload owner (TASK-004); sessionStorage
+   * recovers the start receipt only. No number or successful transfer is shown. */
   type StartState = { startRequestId: string; slotId: string; receipt?: StartReceipt };
   let key = $state('');
   let setup = $state(false);
@@ -15,6 +18,7 @@
   let catalog = $state<CatalogPage>();
   let selected = $state<CatalogItem>();
   let start = $state<StartState>();
+  let capturedPhotos = $state<CapturedPhoto[]>([]);
   let busy = $state(false);
   let loading = $state(false);
   let error = $state('');
@@ -118,10 +122,11 @@
   {:else if !storageReady || !key}
     <section class="narrow"><p class="eyebrow">СКОРО НАЧНЁМ</p><h1>Нужна настройка установки</h1><p class="intro">Пожалуйста, позовите сотрудника — он подготовит всё для съёмки.</p></section>
   {:else if start}
-    <section class="narrow handoff" aria-live="polite"><p class="eyebrow">ВАШ СЮЖЕТ ВЫБРАН</p><h1>Готовимся к съёмке</h1>
-      {#if start.receipt}<p class="intro">Сессия создана. Ожидайте начала съёмки.</p><p class="muted">Сотрудник поможет вам подготовиться.</p><ol class="poses">{#each start.receipt.posePlan as pose}<li>{pose.instruction}</li>{/each}</ol>
-      {:else}<p class="intro">{busy ? 'Создаём сессию…' : 'Нужно подтвердить начало вашей сессии.'}</p><button class="primary" onclick={begin} disabled={busy}>{busy ? 'Подождите…' : 'Повторить старт'}</button>{/if}
-    </section>
+    {#if start.receipt}
+      {#key start.receipt.sessionId}<Capture receipt={start.receipt} oncomplete={photos => { capturedPhotos = photos; }} />{/key}
+    {:else}
+      <section class="narrow handoff" aria-live="polite"><p class="eyebrow">ВАШ СЮЖЕТ ВЫБРАН</p><h1>Готовимся к съёмке</h1><p class="intro">{busy ? 'Создаём сессию…' : 'Нужно подтвердить начало вашей сессии.'}</p><button class="primary" onclick={begin} disabled={busy}>{busy ? 'Подождите…' : 'Повторить старт'}</button></section>
+    {/if}
   {:else if loading}
     <section class="narrow" role="status"><h1>Загружаем сюжеты…</h1></section>
   {:else if selected}

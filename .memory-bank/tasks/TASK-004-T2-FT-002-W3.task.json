@@ -1,7 +1,7 @@
 {
   "id": "TASK-004-T2-FT-002-W3",
   "title": "Сохранить фотографии на сервере, выдать номер и освободить установку",
-  "status": "planned",
+  "status": "ready",
   "wave": "W3",
   "feature": "FT-002",
   "reqs": [
@@ -22,7 +22,36 @@
   ],
   "tier": "T2",
   "gates": [],
-  "verify": [],
+  "verify": [
+    {
+      "date": "2026-11-14",
+      "result": "BLOCKED",
+      "summary": "Проверены индекс, зависимости и текущий код. TASK-002 завершена; TASK-003 остаётся planned без результатов. Адаптер digiCamControl и экран съёмки отсутствуют: App.svelte после старта показывает только ожидание и план поз. Подключать загрузку и повтор Blob к готовой съёмке пока не к чему.",
+      "checks": [
+        "Read-only проверка карточек TASK-002/003 и src/client/capture/: необходимая реализация TASK-003 отсутствует.",
+        "Реализация TASK-004 не начата; функциональные тесты и сборка не запускались."
+      ],
+      "evidence": [
+        ".memory-bank/tasks/TASK-003-T2-FT-002-W2.task.json",
+        "src/client/capture/App.svelte"
+      ],
+      "remaining": [
+        "Выполнить TASK-003 до done или done_for_prod, затем возобновить TASK-004. Доступ к реальной камере не требуется; аппаратная приёмка остаётся в TASK-005."
+      ]
+    },
+    {
+      "date": "2026-11-14",
+      "result": "PREREQUISITE_RESOLVED",
+      "summary": "По поручению оператора выполнена TASK-003 (done_for_prod); адаптер и экран съёмки доступны, причина блокировки устранена. TASK-002 остаётся done. Ранее запрошенная TASK-004 возвращена в ready; её реализация и проверки ещё не выполнены.",
+      "evidence": [
+        ".memory-bank/tasks/TASK-003-T2-FT-002-W2.task.json",
+        ".tasks/TASK-003-T2-FT-002-W2/verification.md"
+      ],
+      "remaining": [
+        "Выполнить загрузку/повтор, finalize, выдачу номера и освобождение установки по этой карточке."
+      ]
+    }
+  ],
   "docs": [
     ".memory-bank/features/FT-002-photo-session.md"
   ],
