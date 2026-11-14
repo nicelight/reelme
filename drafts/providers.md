@@ -26,3 +26,16 @@
 6. Gemini Omni 1.2 Flash (4 референса), общий промпт обязателен. 
  
  
+### First-last-shot
+
+| Модель | Первый + последний кадр | Промежуточные кадры | Фото персонажей помимо кадров | 720p / 768p | Для лиц, на мой взгляд |
+| --- | --- | --- | --- | --- | --- |
+| kling/v4/reference-to-video | Да | До 8 (входят в лимит 10 картинок) | До 7 персонажей по 4 фото | 720p, 1080p | Лучший выбор |
+| minimax/h3-max/reference-to-video | Да | 1, с точным временем (только 480P/768P) | До 9 фото общим списком | 768P, 1080P | Очень хорошо |
+| fal-ai/kling-video/o3/pro/reference-to-video | Да | Нет | Персонажи по 4 фото | Не указано | Хорошо |
+| google/gemini-omni-flash/v1.2/image-to-video | Да | Нет | Нет | 720p, 1080p | Средне |
+| kling/v4/flash/reference-to-video | Только первый | Нет | До 7 персонажей по 4 фото | 720p | Не подходит |
+| fal-ai/vidu/q4/reference-to-video | Нет | Нет | До 12 фото | 720p | Не подходит |
+| fal-ai/kling-video/v3/pro/image-to-video | Да | Нет | Персонажи по 4 фото | Не указано | Хорошо |
+| alibaba/wan-3.0-prime/image-to-video | Да | Нет | Нет | 720p, 1080p | Средне |
+| blackforestlabs/flux-3-max/keyframes-to-video | Да | До 10 кадров с привязкой ко времени | Не проверено | 720p, 1080p | Не проверено |

@@ -41,5 +41,6 @@ status: active
 - [.memory-bank/contracts/boundary-map.md](contracts/boundary-map.md): Canonical accepted module/change-unit dependency graph and boundary contracts.
 - [.memory-bank/states/](states/): Lifecycle/state rules (prefer when present).
 - [.memory-bank/runbooks/](runbooks/): Runbooks и operational procedures.
+- [deploy_to_nskigorprod.md](../deploy_to_nskigorprod.md): Подготовка VPS igornskprod, локальная сборка Docker, будущий деплой и откат.
 - [.memory-bank/testing/index.md](testing/index.md): Router for testing documentation.
 - [.memory-bank/skills/index.md](skills/index.md): Skill registry.

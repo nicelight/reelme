@@ -1,0 +1,41 @@
+name: reelme
+services:
+  app:
+    image: ${REELME_IMAGE:?Set REELME_IMAGE to the locally built release tag}
+    pull_policy: never
+    restart: unless-stopped
+    init: true
+    user: "989:988"
+    env_file:
+      - path: /etc/reelme/app.env
+        format: raw
+    environment:
+      NODE_ENV: production
+      APP_ORIGIN: https://reelme.natureonzoom.win
+      HOST: 0.0.0.0
+      PORT: "3000"
+      DATA_DIR: /data
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - /srv/reelme-data:/data:Z
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1g
+    memswap_limit: 1g
+    pids_limit: 256
+    stop_grace_period: 150s
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
