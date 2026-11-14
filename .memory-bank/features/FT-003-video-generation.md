@@ -9,6 +9,8 @@ spec_design_links:
   - .memory-bank/domains/core-domain.md
   - .memory-bank/states/lifecycle-map.md
   - .memory-bank/contracts/boundary-map.md
+  - .memory-bank/contracts/http-api.md
+  - .memory-bank/contracts/access.md
 ---
 # FT-003 — Генерация и подготовка видео
 
@@ -52,3 +54,17 @@ spec_design_links:
 
 Модельные поля заданы [справкой fal](../analysis/fal-api.md), очередь и файлы —
 [интеграциями](../contracts/integrations.md#генерация-fal). Реальные API-проходы входят в задачи.
+
+Задачи — в [индексе](../tasks/index.json):
+
+- [TASK-006](../tasks/TASK-006-T3-FT-003-W4.task.json): Recast, выдача входов fal,
+  обработка/восстановление и проверенное локальное видео (Recast из AC-001,
+  V2V-часть AC-002, AC-003, файловая часть AC-004). Требует TASK-004.
+- [TASK-007](../tasks/TASK-007-T2-FT-003-W5.task.json): остальные десять моделей
+  и P2V-материалы (оставшаяся часть AC-001/002); требует TASK-006.
+- [TASK-008](../tasks/TASK-008-T3-FT-003-W5.task.json): собственная ссылка,
+  форма получения и переход ready (оставшаяся часть AC-004); требует TASK-006.
+
+Реальные API-проходы включены в TASK-006/007; нужны доступ fal и доступный провайдеру
+HTTPS-сервер с тестовыми материалами, камера не нужна. Недоступные проверки не являются PASS.
+Граница формы и отправки письма описана в [HTTP-контракте](../contracts/http-api.md#граница-генерации-и-выдачи).
