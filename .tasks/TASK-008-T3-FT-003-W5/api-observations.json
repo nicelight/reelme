@@ -1,0 +1,10 @@
+{
+  "localOnly": true,
+  "ready": true,
+  "sessions": 2,
+  "videoSha256": "16c8a2c16337bfd904a0342b9f011828939a67b7e9954eaa1a84863bad36d92f",
+  "restartPreservesTokensAndBytes": true,
+  "originalPhotoMatches": true,
+  "wrongScopeRejected": true,
+  "noAccountPrivileges": true
+}

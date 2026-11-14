@@ -1,7 +1,8 @@
 /** Module contract: one in-process Sessions worker advances durable fal work.
  * Submit inputs use the saved snapshot/photos only. Confirmed IDs are committed
  * before observation and never resubmitted; network/files never run in SQL
- * transactions. A verified local result stays preparing until issuance owns ready.
+ * transactions. A verified local result stays preparing until the issuance callback
+ * owns ready; standalone generation has no authority to publish capabilities.
  * Errors retain the session/photos; public errors are fixed safe messages. */
 import type { FastifyBaseLogger } from 'fastify';
 import type { DB } from '../db.js';
@@ -12,7 +13,7 @@ import type { FalTransport } from './fal.js';
 import { InvalidVideo, prepareVideo } from './video.js';
 
 interface Job { request_id: string | null; result_url: string | null; video_path: string | null; frame_path: string | null }
-export interface GenerationOptions { client: FalTransport; download?: typeof fetch; intervalMs?: number; secret?: string }
+export interface GenerationOptions { client: FalTransport; download?: typeof fetch; intervalMs?: number; secret?: string; publishReady?: (id: string) => Promise<void> }
 class GenerationFailure extends Error {
   constructor(readonly code: string, message: string, options?: ErrorOptions) { super(message, options); }
 }
@@ -113,6 +114,7 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
         const prepared = await prepareVideo(dataDir, id, job.result_url, options.download);
         db.prepare(`UPDATE generation_jobs SET video_path=@video_path,frame_path=@frame_path,video_size=@video_size,frame_size=@frame_size,width=@width,height=@height,duration=@duration,error_code=NULL,error_message=NULL WHERE session_id=@id`).run({ ...prepared, id });
       }
+      if (session.state === 'preparing') await options.publishReady?.(id);
     } catch (error) {
       const code = error instanceof GenerationFailure ? error.code : error instanceof InvalidVideo ? 'INVALID_RESULT' : 'GENERATION_RETRY';
       const rejectedStatus = session.state === 'observing' && (httpStatus(error) ?? 0) >= 400 && (httpStatus(error) ?? 0) < 500 && ![408,429].includes(httpStatus(error)!);
@@ -121,7 +123,7 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
   }
   async function pass() {
     const rows = db.prepare(`SELECT s.id FROM capture_sessions s LEFT JOIN generation_jobs g ON g.session_id=s.id
-      WHERE s.state IN ('submit_pending','observing') OR (s.state='preparing' AND g.video_path IS NULL) ORDER BY s.created_at,s.id`).all() as { id: string }[];
+      WHERE s.state IN ('submit_pending','observing') OR (s.state='preparing' AND (g.video_path IS NULL OR ?)) ORDER BY s.created_at,s.id`).all(options.publishReady ? 1 : 0) as { id: string }[];
     for (const row of rows) { if (stopped) break; await advance(row.id); }
   }
   function runOnce(): Promise<void> {

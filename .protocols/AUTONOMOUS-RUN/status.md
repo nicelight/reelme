@@ -1,11 +1,11 @@
 # Autopilot
 
 STATE: RUNNING
-Stage: closure
-Current task: TASK-007-T2-FT-003-W5
+Stage: wave-boundary
+Current task: TASK-008-T3-FT-003-W5
 
-Последний результат: [TASK-007](../../.memory-bank/tasks/TASK-007-T2-FT-003-W5.task.json) done; независимый verify PASS, 10 актуальных схем, 12 payload. Локально npm test 36/36, check/build PASS. TASK-006 отправлена: a46733a; TASK-004: 8d1495d.
-Следующий шаг: commit/push TASK-007, затем TASK-008 (W5). TASK-005 исключена как Production acceptance до отдельного поручения.
+Последний результат: [TASK-008](../../.memory-bank/tasks/TASK-008-T3-FT-003-W5.task.json) done, независимый verify PASS, 40/40 tests, check/build и Chromium1/1 PASS. W5/FT-003 development завершены с принятым ограничением live fal unverified. TASK-007 push: 4c43c94; TASK-006: a46733a; TASK-004: 8d1495d.
+Следующий шаг: commit/push TASK-008, затем TASK-009 (W6). TASK-005 исключена как Production acceptance до отдельного поручения.
 
 Счётчики: неуспешных завершённых попыток 0; последовательных неудач 0; открытых блокеров 0. Лимиты: 2 повтора после первой неудачи, 3 последовательных неудачи, 3 блокера.
 Условия оператора: задачи последовательно; после каждой закрытой задачи commit/push; непредвиденные существенные ситуации/правки спецификаций требуют консультации. Проверки можно делегировать. После двух повторных сообщений агента о завершении удваивать интервал опроса; по умолчанию ждать уведомления, завершённых агентов не опрашивать.

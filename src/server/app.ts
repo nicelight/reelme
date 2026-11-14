@@ -19,13 +19,14 @@ import { registerSessions } from './sessions/index.js';
 import { registerProviderMedia } from './sessions/provider-media.js';
 import { createFalTransport } from './sessions/fal.js';
 import { createGenerationWorker, type GenerationOptions } from './sessions/generation.js';
+import { registerReceive, publishReady } from './sessions/receive.js';
 
 export async function createApp(config: Config, options: { now?: () => number; logger?: boolean; generation?: GenerationOptions } = {}) {
   const app = Fastify({ logger: options.logger ? { redact: ['req.url', 'req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'] } : false, bodyLimit: 64 * 1024 });
   const db = openDatabase(config.dataDir);
   app.addHook('onClose', async () => { db.close(); });
   app.addHook('onSend', async (request, reply) => {
-    reply.header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', request.url.startsWith('/provider-media/') ? 'no-referrer' : 'same-origin');
+    reply.header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', /^\/(provider-media|receive|download|api\/receive)\//.test(request.url) ? 'no-referrer' : 'same-origin');
     if (request.url.startsWith('/api/')) reply.header('Cache-Control', 'no-store');
   });
   app.setErrorHandler((error: Error & { statusCode?: number; code?: string }, _request, reply) => {
@@ -43,9 +44,17 @@ export async function createApp(config: Config, options: { now?: () => number; l
   registerScenarios(app, db, config.dataDir, access);
   registerSessions(app, db, config.dataDir, access, options.now ?? Date.now);
   registerProviderMedia(app, db, config.dataDir);
+  registerReceive(app, db, config.dataDir, config.clientDir, options.now ?? Date.now);
+  const publish = (id: string) => publishReady(db, config.dataDir, id);
+  app.addHook('onReady', async () => {
+    // A serving client entrypoint is part of ready, also when fal is disabled.
+    await readFile(join(config.clientDir, 'index.html'));
+    const rows = db.prepare("SELECT s.id FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id WHERE s.state='preparing' AND g.video_path IS NOT NULL").all() as { id: string }[];
+    for (const row of rows) await publish(row.id);
+  });
   const generation = options.generation ?? (config.falKey ? { client: createFalTransport(config.falKey), secret: config.falKey } : undefined);
   if (generation) {
-    const worker = createGenerationWorker(db, config.dataDir, config.origin, app.log, generation);
+    const worker = createGenerationWorker(db, config.dataDir, config.origin, app.log, { ...generation, publishReady: publish });
     app.addHook('onReady', async () => { worker.start(); });
     app.addHook('onClose', async () => { await worker.stop(); });
   }

@@ -2,7 +2,8 @@
  * sessions/photos and generation state. Metadata stays in SQLite; media bytes stay outside the build. Repeated
  * setup/start preserves rows. Session number and start-request uniqueness are DB
  * invariants. One accepted photo belongs to one session/pose. Generation records
- * preserve confirmed fal identity and verified files; issuance is separate. */
+ * preserve confirmed fal identity and verified files. Session issuance owns scoped
+ * capabilities, first-open/confirmation times and the independent email state. */
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -60,7 +61,15 @@ export function openDatabase(dataDir: string) {
       CHECK ((slot_media_id IS NOT NULL AND session_id IS NULL AND pose_index IS NULL)
         OR (slot_media_id IS NULL AND session_id IS NOT NULL AND pose_index IS NOT NULL))
     );
-    PRAGMA user_version = 4;
+    CREATE TABLE IF NOT EXISTS session_delivery (
+      session_id TEXT PRIMARY KEY REFERENCES capture_sessions(id) ON DELETE CASCADE,
+      receive_token TEXT UNIQUE NOT NULL, download_token TEXT UNIQUE NOT NULL,
+      opened_at INTEGER, email_confirmed_at INTEGER, email TEXT,
+      email_state TEXT NOT NULL DEFAULT 'not_requested'
+        CHECK(email_state IN ('not_requested','pending','sending','sent','failed')),
+      email_error TEXT, sent_at INTEGER
+    );
+    PRAGMA user_version = 5;
   `);
   return db;
 }

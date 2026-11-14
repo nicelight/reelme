@@ -1,0 +1,13 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/receive.spec.ts
+
+
+Running 1 test using 1 worker
+
+(node:299647) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+  ✓  1 tests/receive.spec.ts:9:1 › visitor form at mobile/desktop: validation, pending, retry, sent, restart and download (11.7s)
+
+  1 passed (12.9s)

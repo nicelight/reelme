@@ -1,0 +1,20 @@
+{
+  "clock": "controlled fixture clock, milliseconds since epoch",
+  "openedAt": 1767225600000,
+  "firstConfirmedAt": 1767225620000,
+  "afterRetryConfirmedAt": 1767225620000,
+  "afterRestartEmailState": "pending",
+  "concurrentAcceptStatuses": [
+    200,
+    409
+  ],
+  "repeatDenied": [
+    "pending",
+    "sending",
+    "sent"
+  ],
+  "manualRetryAllowedFrom": "failed",
+  "generationRemained": "ready",
+  "missingOpenedInferred": true,
+  "smtpCalled": false
+}

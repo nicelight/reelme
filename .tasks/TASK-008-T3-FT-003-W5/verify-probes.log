@@ -1,0 +1,4 @@
+PASS: persisted capabilities do not expose form/media/download or accept email while preparing.
+PASS: verified publication activates previously persisted capabilities.
+PASS: corrupt original photo prevents ready and capability publication.
+PASS: missing client entrypoint rejects startup without publishing waiting result.

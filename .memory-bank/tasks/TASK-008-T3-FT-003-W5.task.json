@@ -1,7 +1,7 @@
 {
   "id": "TASK-008-T3-FT-003-W5",
   "title": "Подготовить готовый результат со ссылкой скачивания и формой получения",
-  "status": "planned",
+  "status": "done",
   "wave": "W5",
   "feature": "FT-003",
   "reqs": [
@@ -19,7 +19,56 @@
   ],
   "tier": "T3",
   "gates": [],
-  "verify": [],
+  "verify": [
+    {
+      "date": "2026-11-14",
+      "kind": "implementation",
+      "result": "PASS: scoped receive/download, persisted ready, original photo/number form, atomic email pending/first confirmation and failed-only retry. Inputs frozen for independent verification; lifecycle remains in_progress.",
+      "checks": [
+        "npm run check: PASS (0 errors/warnings)",
+        "npm run build: PASS",
+        "npm test: PASS 40/40",
+        "tests/receive.test.ts: PASS 4/4",
+        "Chromium tests/receive.spec.ts: PASS 1/1, mobile+desktop/dark, restart and byte-identical browser download",
+        "git diff --check: PASS"
+      ],
+      "evidence": [
+        ".tasks/TASK-008-T3-FT-003-W5/evidence.md",
+        ".tasks/TASK-008-T3-FT-003-W5/inputs.sha256"
+      ],
+      "limitations": [
+        "No live fal/SMTP calls per operator; mail states in browser seeded locally. SMTP worker/public display/timer remain FT-004.",
+        "ui_qa launcher unavailable; authorized native Playwright fallback."
+      ]
+    },
+    {
+      "date": "2026-11-14",
+      "kind": "independent-verification",
+      "result": "VERDICT: PASS — task-scoped receive/download, ready/recovery and email acceptance meet the agreed contracts; no material findings.",
+      "checks": [
+        "Frozen inputs: SHA-256 11/11 match before/after review",
+        "Independent tests/receive.test.ts: PASS 4/4",
+        "Independent probes: preparing capabilities denied; verified publication activates; corrupt original photo blocks ready; missing client entrypoint blocks publication — PASS 4/4",
+        "Code/spec review and four saved screenshots reviewed; applicable Chromium 1/1, check/build and full tests 40/40 evidence reused",
+        "git diff --check: PASS"
+      ],
+      "evidence": [
+        ".tasks/TASK-008-T3-FT-003-W5/verify-report.md",
+        ".tasks/TASK-008-T3-FT-003-W5/verify-receive.log",
+        ".tasks/TASK-008-T3-FT-003-W5/verify-probes.log"
+      ],
+      "limitations": [
+        "Local synthetic media and real SQLite/FFmpeg; no live fal/SMTP by operator decision. SMTP worker/public display/timer/archive remain outside task.",
+        "Browser/check/build/full suite were not rerun by verifier; frozen applicable evidence and screenshots inspected."
+      ]
+    },
+    {
+      "date": "2026-11-14",
+      "stage": "closure",
+      "result": "DONE",
+      "summary": "Выдача/форма/ready приняты: локальные tests40/40, check/build, Chromium1/1 и независимый verify PASS. FT-003 development завершена с принятым ограничением live fal unverified; SMTP worker следует в TASK-009."
+    }
+  ],
   "docs": [
     ".memory-bank/features/FT-003-video-generation.md"
   ],
