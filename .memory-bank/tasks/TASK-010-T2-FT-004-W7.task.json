@@ -1,7 +1,7 @@
 {
   "id": "TASK-010-T2-FT-004-W7",
   "title": "Показать прогресс и QR-карточки, скрывая их через три минуты",
-  "status": "planned",
+  "status": "done",
   "wave": "W7",
   "feature": "FT-004",
   "reqs": [
@@ -20,8 +20,86 @@
     "README.md"
   ],
   "tier": "T2",
-  "gates": [],
-  "verify": [],
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "api-regressions",
+      "command": "npm test",
+      "required": true
+    },
+    {
+      "name": "display-browser",
+      "command": "REELME_BROWSER_ARTIFACTS=.tasks/TASK-010-T2-FT-004-W7 npm run test:ui -- tests/display.spec.ts tests/editor.spec.ts",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-14",
+      "result": "implementation_ready_for_independent_review",
+      "summary": "Operator-only общий экран и media, шесть этапов, QR существующей формы, стабильный порядок/10-секундная пагинация, маскирование и скрытие обеих поверхностей по первому email confirmation. БД/файлы/receive/download сохраняются.",
+      "checks": [
+        "npm run check: PASS (Svelte 0 errors/0 warnings, tsc)",
+        "npm run build: PASS",
+        "npm test: PASS 60/60; display API 2/2",
+        "Chromium display+editor: PASS 2/2; финальный display repeat PASS 1/1; QR декодирован из отрисованной карточки, форма открыта без аккаунта, настоящий worker/test transport failed→retry→sent",
+        "UI/API 2:59→3:00, no opened on display, retry/restart/reload timestamp, failed polling deadline, day boundary/files/links: PASS",
+        "Light/dark desktop и mobile375 визуально просмотрены; git diff --check: PASS"
+      ],
+      "evidence": [
+        ".tasks/TASK-010-T2-FT-004-W7/evidence.md",
+        ".tasks/TASK-010-T2-FT-004-W7/api-tests.log",
+        ".tasks/TASK-010-T2-FT-004-W7/display-observations.json",
+        ".tasks/TASK-010-T2-FT-004-W7/browser-tests.log",
+        ".tasks/TASK-010-T2-FT-004-W7/display-browser-tests.log"
+      ],
+      "limitations": [
+        "Live fal и SMTP.BZ отменены оператором; внешних вызовов не было.",
+        "UI архива — FT-005; здесь проверена сохранность прежних записей/файлов и ссылок.",
+        "ui_qa launcher отсутствует: согласованный project-native Playwright fallback."
+      ],
+      "remaining": "Независимая проверка и решение оркестратора о закрытии; код заморожен, commit/push не выполнялись."
+    },
+    {
+      "date": "2026-11-14",
+      "result": "PASS",
+      "summary": "Независимая проверка TASK-010: существенных нарушений AC-001/002/004 и публичной части AC-003 не обнаружено. Operator-only display/media, шесть этапов, QR/пагинация/маска и сохранённый срок скрытия соответствуют принятому scope.",
+      "checks": [
+        "Независимый display API repeat: PASS 2/2; права JSON/media, QR/session, no opened, retry/restart/deadline/day/data preservation.",
+        "Независимый npm run check: PASS (Svelte 0 errors/0 warnings, server tsc); git diff --check: PASS.",
+        "Дополнительный boundary probe: на 179.999 s JSON+photo/frame/QR доступны, на 180.000 s hidden/404; receive/download сохранены.",
+        "QR независимо декодирован из desktop/mobile PNG; лично просмотрены все 7 display screenshots.",
+        "Сверены код/контракты и применимость сохранённых build PASS, full API 60/60, Chromium display+editor 2/2 и final display 1/1; эти прогоны повторно использованы."
+      ],
+      "evidence": [
+        ".tasks/TASK-010-T2-FT-004-W7/verify-report.md",
+        ".tasks/TASK-010-T2-FT-004-W7/verify-api.log",
+        ".tasks/TASK-010-T2-FT-004-W7/verify-check.log",
+        ".tasks/TASK-010-T2-FT-004-W7/verify-boundary.log"
+      ],
+      "limitations": [
+        "Live fal/SMTP.BZ отменены оператором; камера и UI архива не проверялись. Сохранность данных и ссылок проверена.",
+        "Chromium evidence переиспользовано; ui_qa launcher отсутствует, project-native Playwright fallback согласован.",
+        "2:59 PNG содержит ещё не загруженные image pixels и не доказывает читаемый QR в этот момент; доступность media перед границей независимо проверена, DOM visibility/исчезновение подтверждены browser evidence."
+      ],
+      "remaining": "Оркестратор принимает решение о закрытии. Verifier не менял lifecycle, код или specs и не выполнял commit/push."
+    },
+    {
+      "date": "2026-11-14",
+      "stage": "closure",
+      "result": "DONE",
+      "summary": "Публичный экран принят: независимый verify PASS, граница179.999→180с и QR desktop/mobile подтверждены. Локально60/60, check/build, Chromium display+editor PASS. FT-004 development завершена; live SMTP/fal не проверялись по решению оператора."
+    }
+  ],
   "docs": [
     ".memory-bank/features/FT-004-public-delivery.md"
   ],

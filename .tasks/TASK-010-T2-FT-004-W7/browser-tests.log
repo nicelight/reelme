@@ -1,0 +1,10 @@
+
+Running 2 tests using 1 worker
+
+(node:346981) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+  ✓  1 tests/display.spec.ts:11:1 › Chromium operator journey: stages, QR, paging, email retry, durable deadline and preserved links (19.7s)
+  ✓  2 tests/editor.spec.ts:19:1 › admin saves both modes, reopens after restart, model rules, access and local capture (4.9s)
+
+  2 passed (27.4s)

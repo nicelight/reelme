@@ -29,29 +29,33 @@ status: active
 
 ## Трассировка
 
-Все требования относятся к [EP-001](epics/EP-001-reelme-event.md). Статус planned означает,
-что реализация и проверка ещё не выполнены. Ссылки AC задают план проверки, а не PASS.
+Все требования относятся к [EP-001](epics/EP-001-reelme-event.md). Ссылки AC задают
+критерии; ссылки lifecycle ведут к фактическим результатам карточек задач.
+`done` означает принятую разработку, `done_for_prod` сохраняет аппаратную/production
+приёмку в [TASK-005](tasks/TASK-005-T3-FT-002-W4.task.json), `in_progress` — незавершённую
+реализацию требования. Реальные fal/SMTP-проверки отменены оператором на этапе
+разработки и не объявляются выполненными.
 
 | REQ | Epic | Feature | Test | Lifecycle |
 |---|---|---|---|---|
-| REQ-001 | EP-001 | FT-001–FT-005 | [FT-002-AC-003](features/FT-002-photo-session.md#ft-002-ac-003), [FT-005-AC-001](features/FT-005-event-archive.md#ft-005-ac-001) | planned |
-| REQ-002 | EP-001 | FT-001 | [FT-001-AC-001](features/FT-001-scenarios.md#ft-001-ac-001), [FT-001-AC-002](features/FT-001-scenarios.md#ft-001-ac-002) | planned |
-| REQ-003 | EP-001 | FT-001 | [FT-001-AC-003](features/FT-001-scenarios.md#ft-001-ac-003) | planned |
-| REQ-004 | EP-001 | FT-002 | [FT-002-AC-001](features/FT-002-photo-session.md#ft-002-ac-001) | planned |
-| REQ-005 | EP-001 | FT-002 | [FT-002-AC-001](features/FT-002-photo-session.md#ft-002-ac-001) | planned |
-| REQ-006 | EP-001 | FT-002 | [FT-002-AC-002](features/FT-002-photo-session.md#ft-002-ac-002), [FT-002-AC-003](features/FT-002-photo-session.md#ft-002-ac-003) | planned |
-| REQ-007 | EP-001 | FT-003 | [FT-003-AC-001](features/FT-003-video-generation.md#ft-003-ac-001), [FT-003-AC-002](features/FT-003-video-generation.md#ft-003-ac-002) | planned |
-| REQ-008 | EP-001 | FT-003 | [FT-003-AC-003](features/FT-003-video-generation.md#ft-003-ac-003) | planned |
-| REQ-009 | EP-001 | FT-003 | [FT-003-AC-004](features/FT-003-video-generation.md#ft-003-ac-004) | planned |
-| REQ-010 | EP-001 | FT-004 | [FT-004-AC-001](features/FT-004-public-delivery.md#ft-004-ac-001) | planned |
-| REQ-011 | EP-001 | FT-004 | [FT-004-AC-002](features/FT-004-public-delivery.md#ft-004-ac-002) | planned |
-| REQ-012 | EP-001 | FT-004 | [FT-004-AC-003](features/FT-004-public-delivery.md#ft-004-ac-003) | planned |
-| REQ-013 | EP-001 | FT-004 | [FT-004-AC-004](features/FT-004-public-delivery.md#ft-004-ac-004) | planned |
-| REQ-014 | EP-001 | FT-005 | [FT-005-AC-001](features/FT-005-event-archive.md#ft-005-ac-001), [FT-005-AC-002](features/FT-005-event-archive.md#ft-005-ac-002) | planned |
-| REQ-015 | EP-001 | FT-005 | [FT-005-AC-003](features/FT-005-event-archive.md#ft-005-ac-003) | planned |
-| REQ-016 | EP-001 | FT-001, FT-002, FT-004, FT-005 | [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004) | planned |
-| REQ-017 | EP-001 | FT-002 | [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004) | planned |
-| REQ-018 | EP-001 | FT-001, FT-002, FT-004, FT-005 | [FT-001-AC-004](features/FT-001-scenarios.md#ft-001-ac-004), [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004), [FT-004-AC-001](features/FT-004-public-delivery.md#ft-004-ac-001), [FT-004-AC-003](features/FT-004-public-delivery.md#ft-004-ac-003), [FT-005-AC-002](features/FT-005-event-archive.md#ft-005-ac-002), [FT-005-AC-003](features/FT-005-event-archive.md#ft-005-ac-003) | planned |
+| REQ-001 | EP-001 | FT-001–FT-005 | [FT-002-AC-003](features/FT-002-photo-session.md#ft-002-ac-003), [FT-005-AC-001](features/FT-005-event-archive.md#ft-005-ac-001) | [in_progress](tasks/TASK-011-T2-FT-005-W8.task.json) |
+| REQ-002 | EP-001 | FT-001 | [FT-001-AC-001](features/FT-001-scenarios.md#ft-001-ac-001), [FT-001-AC-002](features/FT-001-scenarios.md#ft-001-ac-002) | [done](tasks/TASK-001-T3-FT-001-W1.task.json) |
+| REQ-003 | EP-001 | FT-001 | [FT-001-AC-003](features/FT-001-scenarios.md#ft-001-ac-003) | [done](tasks/TASK-002-T2-FT-001-W2.task.json) |
+| REQ-004 | EP-001 | FT-002 | [FT-002-AC-001](features/FT-002-photo-session.md#ft-002-ac-001) | [done_for_prod](tasks/TASK-003-T2-FT-002-W2.task.json) |
+| REQ-005 | EP-001 | FT-002 | [FT-002-AC-001](features/FT-002-photo-session.md#ft-002-ac-001) | [done_for_prod](tasks/TASK-003-T2-FT-002-W2.task.json) |
+| REQ-006 | EP-001 | FT-002 | [FT-002-AC-002](features/FT-002-photo-session.md#ft-002-ac-002), [FT-002-AC-003](features/FT-002-photo-session.md#ft-002-ac-003) | [done_for_prod](tasks/TASK-004-T2-FT-002-W3.task.json) |
+| REQ-007 | EP-001 | FT-003 | [FT-003-AC-001](features/FT-003-video-generation.md#ft-003-ac-001), [FT-003-AC-002](features/FT-003-video-generation.md#ft-003-ac-002) | [done](tasks/TASK-007-T2-FT-003-W5.task.json) |
+| REQ-008 | EP-001 | FT-003 | [FT-003-AC-003](features/FT-003-video-generation.md#ft-003-ac-003) | [done](tasks/TASK-006-T3-FT-003-W4.task.json) |
+| REQ-009 | EP-001 | FT-003 | [FT-003-AC-004](features/FT-003-video-generation.md#ft-003-ac-004) | [done](tasks/TASK-008-T3-FT-003-W5.task.json) |
+| REQ-010 | EP-001 | FT-004 | [FT-004-AC-001](features/FT-004-public-delivery.md#ft-004-ac-001) | [done](tasks/TASK-010-T2-FT-004-W7.task.json) |
+| REQ-011 | EP-001 | FT-004 | [FT-004-AC-002](features/FT-004-public-delivery.md#ft-004-ac-002) | [done](tasks/TASK-010-T2-FT-004-W7.task.json) |
+| REQ-012 | EP-001 | FT-004 | [FT-004-AC-003](features/FT-004-public-delivery.md#ft-004-ac-003) | [done](tasks/TASK-010-T2-FT-004-W7.task.json) |
+| REQ-013 | EP-001 | FT-004 | [FT-004-AC-004](features/FT-004-public-delivery.md#ft-004-ac-004) | [done](tasks/TASK-010-T2-FT-004-W7.task.json) |
+| REQ-014 | EP-001 | FT-005 | [FT-005-AC-001](features/FT-005-event-archive.md#ft-005-ac-001), [FT-005-AC-002](features/FT-005-event-archive.md#ft-005-ac-002) | [planned](tasks/TASK-011-T2-FT-005-W8.task.json) |
+| REQ-015 | EP-001 | FT-005 | [FT-005-AC-003](features/FT-005-event-archive.md#ft-005-ac-003) | [planned](tasks/TASK-012-T3-FT-005-W9.task.json) |
+| REQ-016 | EP-001 | FT-001, FT-002, FT-004, FT-005 | [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004) | [in_progress](tasks/TASK-012-T3-FT-005-W9.task.json) |
+| REQ-017 | EP-001 | FT-002 | [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004) | [done_for_prod](tasks/TASK-005-T3-FT-002-W4.task.json) |
+| REQ-018 | EP-001 | FT-001, FT-002, FT-004, FT-005 | [FT-001-AC-004](features/FT-001-scenarios.md#ft-001-ac-004), [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004), [FT-004-AC-001](features/FT-004-public-delivery.md#ft-004-ac-001), [FT-004-AC-003](features/FT-004-public-delivery.md#ft-004-ac-003), [FT-005-AC-002](features/FT-005-event-archive.md#ft-005-ac-002), [FT-005-AC-003](features/FT-005-event-archive.md#ft-005-ac-003) | [in_progress](tasks/TASK-012-T3-FT-005-W9.task.json) |
 
 Исключения — [за пределами первой версии](prd.md#за-пределами-первой-версии).
 Их изменение возвращается в PRD; художественная оценка AI-видео не является критерием приёмки.

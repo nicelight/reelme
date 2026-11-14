@@ -1,0 +1,5 @@
+179.999s: JSON session and photo/frame/QR all accessible to operator
+180.000s: JSON session hidden; photo/frame/QR all 404
+Receive and exact download bytes preserved after deadline
+display-ready-desktop.png: rendered QR independently decoded to receive form
+display-mobile-dark.png: rendered QR independently decoded to receive form

@@ -1,0 +1,10 @@
+{
+  "pageErrors": [],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized) /api/auth/session",
+    "Failed to load resource: the server responded with a status of 404 (Not Found) /favicon.ico"
+  ],
+  "unexpectedHttpErrors": [],
+  "modelCount": 11,
+  "captureOrigin": "http://localhost:5513"
+}

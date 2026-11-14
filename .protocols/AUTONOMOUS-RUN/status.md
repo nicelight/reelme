@@ -2,10 +2,10 @@
 
 STATE: RUNNING
 Stage: wave-boundary
-Current task: TASK-009-T3-FT-004-W6
+Current task: TASK-010-T2-FT-004-W7
 
-Последний результат: [TASK-009](../../.memory-bank/tasks/TASK-009-T3-FT-004-W6.task.json) done на попытке2/3 после R1. Независимый red-verify semantic-pass, SMTP18/18, check/build PASS; прежние full53/53 и Chromium1/1 evidence применимы. W6 development завершена. TASK-008 push: ac3eed1; TASK-007: 4c43c94; TASK-006: a46733a; TASK-004: 8d1495d.
-Следующий шаг: commit/push TASK-009, затем TASK-010 (W7). TASK-005 исключена как Production acceptance до отдельного поручения.
+Последний результат: [TASK-010](../../.memory-bank/tasks/TASK-010-T2-FT-004-W7.task.json) done; независимый verify PASS,60/60 tests, check/build, Chromium display+editor PASS. W7/FT-004 development завершены. REQ lifecycle сверены с карточками. TASK-009 push8f586c8, TASK-008 ac3eed1, TASK-007 4c43c94, TASK-006 a46733a, TASK-004 8d1495d.
+Следующий шаг: commit/push TASK-010, затем TASK-011 (W8). TASK-005 исключена как Production acceptance до отдельного поручения.
 
 Счётчики: TASK-009 завершена на попытке2/3 (retry1/2); всего неуспешных завершённых попыток 1; последовательных неудач 0; открытых блокеров 0. Лимиты: 2 повтора после первой неудачи, 3 последовательных неудачи, 3 блокера.
 Условия оператора: задачи последовательно; после каждой закрытой задачи commit/push; непредвиденные существенные ситуации/правки спецификаций требуют консультации. Проверки можно делегировать. После двух повторных сообщений агента о завершении удваивать интервал опроса; по умолчанию ждать уведомления, завершённых агентов не опрашивать.

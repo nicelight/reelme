@@ -20,6 +20,7 @@ import { registerProviderMedia } from './sessions/provider-media.js';
 import { createFalTransport } from './sessions/fal.js';
 import { createGenerationWorker, type GenerationOptions } from './sessions/generation.js';
 import { registerReceive, publishReady } from './sessions/receive.js';
+import { registerDisplay } from './sessions/display.js';
 import { createEmailWorker, createSmtpTransport, recoverEmail, type EmailOptions } from './sessions/email.js';
 
 export async function createApp(config: Config, options: { now?: () => number; logger?: boolean; generation?: GenerationOptions; email?: EmailOptions } = {}) {
@@ -45,6 +46,7 @@ export async function createApp(config: Config, options: { now?: () => number; l
   registerScenarios(app, db, config.dataDir, access);
   registerSessions(app, db, config.dataDir, access, options.now ?? Date.now);
   registerProviderMedia(app, db, config.dataDir);
+  registerDisplay(app, db, config.dataDir, config.origin, access, options.now ?? Date.now);
   registerReceive(app, db, config.dataDir, config.clientDir, options.now ?? Date.now);
   const publish = (id: string) => publishReady(db, config.dataDir, id);
   app.addHook('onReady', async () => {

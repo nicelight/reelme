@@ -1,11 +1,12 @@
 <script lang="ts">
-  /** Module contract: account entry and the admin-only scenario editor. Model
+  /** Module contract: account entry, operator display and admin-only scenario editor. Model
    * changes remove incompatible fields; API remains the authority for access,
    * validation and persistence. No generation or capture behavior belongs here. */
   import { onMount } from 'svelte';
   import { models, recastId, blankSlot, slotSchema, titleFrom, videoProblem } from '../../shared/scenarios';
   import type { Media, Mode, Slot, SlotInput } from '../../shared/scenarios';
   import { api, ApiError, mediaUrl } from './api';
+  import Display from './Display.svelte';
   import MediaField from './MediaField.svelte';
 
   let ready = $state(false);
@@ -122,7 +123,7 @@
 </script>
 
 <svelte:window onbeforeunload={beforeUnload} />
-<svelte:head><title>ReelMe — {role === 'admin' ? 'Сюжеты' : 'Вход'}</title></svelte:head>
+<svelte:head><title>ReelMe — {role === 'admin' ? 'Сюжеты' : role === 'operator' ? 'Ваши видео' : 'Вход'}</title></svelte:head>
 
 <header class="app-header">
   <a class="brand" href="/" aria-label="ReelMe — главная">Reel<span>Me</span><span class="brand-caption">STUDIO</span></a>
@@ -147,7 +148,7 @@
     </form>
   </main>
 {:else if role === 'operator'}
-  <main class="centered operator-screen"><p class="eyebrow">REELME / ОПЕРАТОР</p><h1>Вы вошли в аккаунт.</h1><p>Настройка сюжетов доступна администратору.</p><p class="hint">Экран результатов и архив появятся на следующем этапе разработки.</p>{#if error}<p class="error" role="alert">{error}</p>{/if}</main>
+  <Display onunauthorized={() => role = null} />
 {:else}
   <main class="workspace">
     <aside class="library" aria-label="Список сюжетов">

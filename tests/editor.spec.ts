@@ -103,10 +103,10 @@ test('admin saves both modes, reopens after restart, model rules, access and loc
   await page.screenshot({ path: `${artifacts}/browser-mobile.png`, fullPage: true });
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await login('operator');
-  await expect(page.getByRole('heading', { name: 'Вы вошли в аккаунт.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Ваша история — здесь.' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Редактор сюжета' })).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Вы вошли в аккаунт.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Ваша история — здесь.' })).toBeVisible();
   const assets: string[] = [];
   page.on('response', response => { if (response.url().startsWith(app.origin + '/assets/')) assets.push(response.url()); });
   await page.goto('http://localhost:5513/reelme.html');
