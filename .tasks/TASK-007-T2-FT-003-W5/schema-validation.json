@@ -1,0 +1,62 @@
+[
+  {
+    "endpoint": "fal-ai/kling-video/o1/video-to-video/edit",
+    "sessionId": "cddb5c73-50f8-4484-96bd-8e8a5f3fafe2",
+    "result": "PASS"
+  },
+  {
+    "endpoint": "fal-ai/kling-video/o3/pro/video-to-video/edit",
+    "sessionId": "637c6ef2-b639-4573-b2ba-840ae11840e7",
+    "result": "PASS"
+  },
+  {
+    "endpoint": "kling/v4/video-to-video/edit",
+    "sessionId": "bbb2db51-b5d9-400d-8839-4bcc94c09678",
+    "result": "PASS"
+  },
+  {
+    "endpoint": "kling/v4/flash/video-to-video",
+    "sessionId": "ffb7be4d-5d65-4e28-b749-b6db99aeb3d5",
+    "result": "PASS"
+  },
+  {
+    "endpoint": "kling/v4/reference-to-video",
+    "sessionId": "cb50cb06-2343-47ec-8b70-8b86004a550b",
+    "result": "PASS"
+  },
+  {
+    "endpoint": "fal-ai/kling-video/o3/pro/reference-to-video",
+    "sessionId": "8d1dc554-993b-4a4e-b3b5-75e0bed9cb1c",
+    "result": "PASS"
+  },
+  {
+    "endpoint": "kling/v4/flash/reference-to-video",
+    "sessionId": "f8a14935-ec2f-4c89-b025-8299c4d70614",
+    "result": "PASS"
+  },
+  {
+    "endpoint": "minimax/h3-max/reference-to-video",
+    "sessionId": "bc3111a2-9305-45a2-9583-ae6d14baa5bd",
+    "result": "PASS"
+  },
+  {
+    "endpoint": "fal-ai/vidu/q4/reference-to-video",
+    "sessionId": "86923340-34e0-483c-8440-32080f4f17f6",
+    "result": "PASS"
+  },
+  {
+    "endpoint": "google/gemini-omni-flash/v1.2/reference-to-video",
+    "sessionId": "27fdf406-093e-41e2-99da-2184d0ef2e28",
+    "result": "PASS"
+  },
+  {
+    "endpoint": "kling/v4/reference-to-video",
+    "sessionId": "717dbbe3-0798-43eb-b0f6-4eff59c3256e",
+    "result": "PASS"
+  },
+  {
+    "endpoint": "google/gemini-omni-flash/v1.2/reference-to-video",
+    "sessionId": "99f42714-844b-4c71-8b7d-d506d2f6494d",
+    "result": "PASS"
+  }
+]

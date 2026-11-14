@@ -1,0 +1,11 @@
+PASS fal-ai/kling-video/o1/video-to-video/edit: current official schema identical; 1 payload(s) valid
+PASS fal-ai/kling-video/o3/pro/video-to-video/edit: current official schema identical; 1 payload(s) valid
+PASS kling/v4/video-to-video/edit: current official schema identical; 1 payload(s) valid
+PASS kling/v4/flash/video-to-video: current official schema identical; 1 payload(s) valid
+PASS kling/v4/reference-to-video: current official schema identical; 2 payload(s) valid
+PASS fal-ai/kling-video/o3/pro/reference-to-video: current official schema identical; 1 payload(s) valid
+PASS kling/v4/flash/reference-to-video: current official schema identical; 1 payload(s) valid
+PASS minimax/h3-max/reference-to-video: current official schema identical; 1 payload(s) valid
+PASS fal-ai/vidu/q4/reference-to-video: current official schema identical; 1 payload(s) valid
+PASS google/gemini-omni-flash/v1.2/reference-to-video: current official schema identical; 2 payload(s) valid
+PASS: 10 freshly retrieved official schemas; 12 saved payloads validated; no inference requests.

@@ -1,7 +1,7 @@
 {
   "id": "TASK-007-T2-FT-003-W5",
   "title": "Генерировать видео остальными десятью согласованными моделями",
-  "status": "planned",
+  "status": "done",
   "wave": "W5",
   "feature": "FT-003",
   "reqs": [
@@ -17,7 +17,66 @@
   ],
   "tier": "T2",
   "gates": [],
-  "verify": [],
+  "verify": [
+    {
+      "date": "2026-11-14",
+      "stage": "execute",
+      "result": "PASS",
+      "summary": "Добавлены десять fal payload-адаптеров поверх существующего worker; Kling использует один элемент с четырьмя ракурсами, прочие P2V — порядок человек→слот. Snapshot, стабильные reference URLs, исключение демо и модельные поля подтверждены. Общая валидация ограничивает prompt O1/O3 до 2500, Vidu до 5000 по официальным схемам. Lifecycle оставлен оркестратору.",
+      "checks": [
+        "npm test: 36/36 PASS, 0 skipped/cancelled; 12 сессий охватывают все десять новых endpoint и snapshot/reuse, реальный FFmpeg decode/JPEG на управляемом fal SDK HTTP",
+        "npm run check: 0 errors/warnings",
+        "npm run build: PASS",
+        "jsonschema 4.26.0: 12 фактических payload / 10 официальных OpenAPI endpoint PASS",
+        "git diff --check: PASS"
+      ],
+      "evidence": [
+        ".tasks/TASK-007-T2-FT-003-W5/evidence.md",
+        ".tasks/TASK-007-T2-FT-003-W5/model-observations.json",
+        ".tasks/TASK-007-T2-FT-003-W5/official-schemas.json",
+        ".tasks/TASK-007-T2-FT-003-W5/schema-validation.json",
+        ".tasks/TASK-007-T2-FT-003-W5/tests.log",
+        ".tasks/TASK-007-T2-FT-003-W5/check.log",
+        ".tasks/TASK-007-T2-FT-003-W5/build.log"
+      ],
+      "limitations": [
+        "Реальные API-прогоны всех fal-моделей отменены оператором на этапе разработки; не выполнялись и не считаются PASS.",
+        "HTTPS-origin provider-media проверены in-process; публичный TLS/VPS и художественное качество не проверялись. Browser regression не запускался: UI не менялся."
+      ],
+      "remaining": [
+        "Финальная проверка, lifecycle и commit/push принадлежат оркестратору."
+      ]
+    },
+    {
+      "date": "2026-11-14",
+      "stage": "verify",
+      "result": "PASS",
+      "summary": "Независимо подтверждены десять адаптеров, роли/порядок фото, исключение P2V-демо, snapshot isolation и reuse URL; существенных нарушений assigned outcome не обнаружено.",
+      "checks": [
+        "Независимый tests/model-generation.test.ts: 2/2 PASS; 12 сессий, десять endpoint, реальный FFmpeg decode/JPEG и привязка результата к сессии.",
+        "Десять заново полученных официальных OpenAPI полностью совпали с артефактом; независимый Draft202012Validator: 12/12 payload PASS.",
+        "Прочитаны diff, module contracts, схемы и execution evidence; npm test 36/36, check/build PASS переиспользованы без повторного запуска; git diff --check PASS."
+      ],
+      "evidence": [
+        ".tasks/TASK-007-T2-FT-003-W5/verify-report.md",
+        ".tasks/TASK-007-T2-FT-003-W5/verify-tests.log",
+        ".tasks/TASK-007-T2-FT-003-W5/verify-schemas.log"
+      ],
+      "limitations": [
+        "Live fal отменён оператором; реальная совместимость, художественное качество и публичный TLS/VPS не проверены.",
+        "PASS для входов в документированных лимитах; полная provider-specific x-fal валидация медиа приложением не заявлена. Локальный тест не доказывает заказанное качество/длительность генерации."
+      ],
+      "remaining": [
+        "Lifecycle и закрытие задачи принадлежат оркестратору."
+      ]
+    },
+    {
+      "date": "2026-11-14",
+      "stage": "closure",
+      "result": "DONE",
+      "summary": "Десять адаптеров приняты по локальным проверкам и независимому verify PASS; реальный fal API не проверялся по решению оператора."
+    }
+  ],
   "docs": [
     ".memory-bank/features/FT-003-video-generation.md"
   ],

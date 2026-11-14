@@ -6,7 +6,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { DB } from '../db.js';
 import { readSession } from './index.js';
-import { recastId } from '../../shared/scenarios.js';
+import { buildModelInput } from './model-input.js';
 import { photoProviderUrl, slotProviderUrl } from './provider-media.js';
 import type { FalTransport } from './fal.js';
 import { InvalidVideo, prepareVideo } from './video.js';
@@ -21,7 +21,6 @@ const messages: Record<string, string> = {
   FAL_FAILED: 'Не удалось создать видео. Обратитесь к сотруднику.',
   INVALID_RESULT: 'Сервис вернул непригодное видео. Обратитесь к сотруднику.',
   GENERATION_RETRY: 'Обработка временно недоступна. Сервер повторит текущий шаг.',
-  UNSUPPORTED_MODEL: 'Обработка этой модели пока недоступна.',
 };
 function httpStatus(error: unknown): number | undefined {
   const status = (error as { status?: unknown })?.status;
@@ -61,14 +60,16 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
         // Also recover an accepted ID if a prior record already contains it.
         if (job.request_id) { db.prepare("UPDATE capture_sessions SET state='observing' WHERE id=?").run(id); return; }
         const input = session.snapshot.generation;
-        if (input.model !== recastId) {
-          // Future adapters own these queued sessions; never submit to another model.
-          db.prepare('UPDATE generation_jobs SET error_code=?,error_message=? WHERE session_id=?').run('UNSUPPORTED_MODEL', messages.UNSUPPORTED_MODEL, id);
-          return;
-        }
         const photos = db.prepare('SELECT pose_index FROM capture_photos WHERE session_id=? ORDER BY pose_index').all(id) as { pose_index: number }[];
-        if (session.snapshot.expectedPhotos !== 1 || photos.length !== 1 || photos[0].pose_index !== 0 || !input.videoId) throw new GenerationFailure('FAL_REJECTED', 'Invalid Recast snapshot/photos');
-        const payload = { video_url: slotProviderUrl(db, origin, input.videoId), reference_image_urls: [photoProviderUrl(db, origin, id, 0)], resolution: input.resolution };
+        let payload: Record<string, unknown>;
+        try {
+          if (photos.some((photo, index) => photo.pose_index !== index)) throw new Error('Invalid photo order');
+          payload = buildModelInput(session.snapshot, {
+            photos: photos.map(photo => photoProviderUrl(db, origin, id, photo.pose_index)),
+            video: input.videoId ? slotProviderUrl(db, origin, input.videoId) : undefined,
+            references: input.referenceIds.map(mediaId => slotProviderUrl(db, origin, mediaId)),
+          });
+        } catch (error) { throw new GenerationFailure('FAL_REJECTED', 'Invalid generation snapshot/photos', { cause: error }); }
         let accepted;
         try { accepted = await options.client.submit(input.model, payload); }
         catch (error) {

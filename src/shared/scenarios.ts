@@ -42,6 +42,8 @@ export const slotSchema = z.object({
   const model = models.find(m => m.id === slot.model);
   if (!model || model.mode !== slot.mode) { fail('model', 'Модель не соответствует режиму'); return; }
   if (model.prompt && !slot.prompt) fail('prompt', 'Введите промпт');
+  const promptLimit = model.id.startsWith('fal-ai/kling-video/') ? 2500 : model.id === 'fal-ai/vidu/q4/reference-to-video' ? 5000 : 10000;
+  if (slot.prompt && slot.prompt.length > promptLimit) fail('prompt', `Промпт: не более ${promptLimit} символов`);
   if (!model.prompt && slot.prompt !== undefined) fail('prompt', 'Recast не принимает промпт');
   if (model.resolutions.length ? !model.resolutions.includes(slot.resolution ?? '') : slot.resolution !== undefined) fail('resolution', 'Недопустимое разрешение модели');
   if (slot.mode === 'V2V') {
