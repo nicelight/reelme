@@ -93,6 +93,47 @@ test('Chromium operator journey: stages, QR, paging, email retry, durable deadli
     // Overflow pages cycle on a controlled 10-second clock and never open forms.
     await page.clock.install(); await page.clock.pauseAt(new Date());
     await page.getByRole('button', { name: 'Продолжить смену страниц' }).click();
+    // DOM visibility alone misses clipped QR codes on short operator screens.
+    // Never scroll a locator into view before measuring the actual viewport.
+    const viewportChecks = [];
+    for (const [width, height] of [[1280, 720], [1366, 768], [1440, 900], [1920, 1080], [1920, 1300]]) {
+      await page.setViewportSize({ width, height });
+      await page.reload(); await expect(first).toBeVisible();
+      await page.evaluate(() => scrollTo(0, 0));
+      for (const phase of ['initial', 'next'] as const) {
+        if (phase === 'next') {
+          await page.clock.fastForward(10_000);
+          await expect(page.locator(`[data-session="${height >= 1300 ? 7 : 4}"]`)).toBeVisible();
+        }
+        await expect.poll(() => page.locator('.result-qr').evaluateAll(nodes =>
+          nodes.length > 0 && nodes.every(node => (node as HTMLImageElement).complete && (node as HTMLImageElement).naturalWidth > 0))).toBe(true);
+        const bounds = await page.locator('.result-card, .result-qr').evaluateAll(nodes => nodes.map(node => {
+          const { top, right, bottom, left, width, height } = node.getBoundingClientRect();
+          return { kind: node.classList.contains('result-qr') ? 'qr' : 'card', top, right, bottom, left, width, height };
+        }));
+        expect(await page.evaluate(() => scrollY)).toBe(0);
+        for (const box of bounds) {
+          expect(box.top, `${width}x${height} ${phase} ${box.kind} top`).toBeGreaterThanOrEqual(0);
+          expect(box.left).toBeGreaterThanOrEqual(0);
+          expect(box.right).toBeLessThanOrEqual(width);
+          expect(box.bottom, `${width}x${height} ${phase} ${box.kind} bottom`).toBeLessThanOrEqual(height);
+          if (box.kind === 'qr') expect(box.width).toBe(height >= 1300 ? 128 : 154);
+        }
+        if (height <= 768) {
+          const shot = await page.screenshot({ path: join(artifacts, `display-fit-${width}x${height}-${phase}.png`) });
+          const box = bounds.find(box => box.kind === 'qr')!;
+          const raster = await sharp(shot).extract({ left: Math.floor(box.left), top: Math.floor(box.top),
+            width: Math.ceil(box.width), height: Math.ceil(box.height) }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+          const qr = jsQR(new Uint8ClampedArray(raster.data), raster.info.width, raster.info.height)?.data;
+          const token = await page.locator('.result-card:has(.result-qr)').first().getAttribute('data-session');
+          const delivery = db.prepare('SELECT receive_token FROM session_delivery WHERE session_id=?').get(seeds[Number(token) - 1].id) as Delivery;
+          expect(qr).toBe(`${origin}/receive/${delivery.receive_token}`);
+        }
+        viewportChecks.push({ width, height, phase, bounds });
+      }
+    }
+    await writeFile(join(artifacts, 'display-viewport-observations.json'), JSON.stringify(viewportChecks, null, 2) + '\n');
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.reload(); await expect(first).toBeVisible();
     await page.clock.fastForward(9999); await expect(first).toBeVisible();
     await page.clock.fastForward(1); await expect(page.locator('[data-session="4"]')).toBeVisible();

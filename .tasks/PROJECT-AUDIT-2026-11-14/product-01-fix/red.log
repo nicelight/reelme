@@ -1,0 +1,35 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/display.spec.ts
+
+
+Running 1 test using 1 worker
+
+(node:576824) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+  ✘  1 tests/display.spec.ts:11:1 › Chromium operator journey: stages, QR, paging, email retry, durable deadline and preserved links (14.5s)
+
+
+  1) tests/display.spec.ts:11:1 › Chromium operator journey: stages, QR, paging, email retry, durable deadline and preserved links 
+
+    Error: 1280x720 initial card bottom
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 720
+    Received:    855.65625
+
+      117 |           expect(box.left).toBeGreaterThanOrEqual(0);
+      118 |           expect(box.right).toBeLessThanOrEqual(width);
+    > 119 |           expect(box.bottom, `${width}x${height} ${phase} ${box.kind} bottom`).toBeLessThanOrEqual(height);
+          |                                                                                ^
+      120 |           if (box.kind === 'qr') expect(box.width).toBe(height >= 1300 ? 128 : 154);
+      121 |         }
+      122 |         if (height <= 768) {
+        at /home/serg/Projects/reelme/tests/display.spec.ts:119:80
+
+    Error Context: .tasks/PROJECT-AUDIT-2026-11-14/product-01-fix/red/browser-results/display-Chromium-operator--5a17b-eadline-and-preserved-links/error-context.md
+
+  1 failed
+    tests/display.spec.ts:11:1 › Chromium operator journey: stages, QR, paging, email retry, durable deadline and preserved links 

@@ -98,6 +98,15 @@
       "stage": "closure",
       "result": "DONE",
       "summary": "Публичный экран принят: независимый verify PASS, граница179.999→180с и QR desktop/mobile подтверждены. Локально60/60, check/build, Chromium display+editor PASS. FT-004 development завершена; live SMTP/fal не проверялись по решению оператора."
+    },
+    {
+      "date": "2026-11-14",
+      "stage": "repair",
+      "result": "PASS",
+      "summary": "По поручению оператора устранена PRODUCT-01 из последующего Astra-аудита: компактный CSS сохраняет QR 154 px и полную карточку на 1280x720/1366x768. Regression RED→GREEN: bounds и screenshot decode до/после 10 с paging; также проверены 1440x900/1920x1080/1920x1300. Chromium display 1/1, check/build PASS. Независимый повтор аудита не выполнялся.",
+      "evidence": [
+        ".tasks/PROJECT-AUDIT-2026-11-14/product-01-fix/evidence.md"
+      ]
     }
   ],
   "docs": [

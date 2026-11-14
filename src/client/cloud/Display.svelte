@@ -150,5 +150,20 @@
   .connection { padding:12px 16px; background:var(--surface); border:1px solid var(--line); border-radius:6px; }
   @media(min-width:720px) { .display { padding:36px 32px; } .display-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .display-count { display:block; } }
   @media(min-width:1200px) { .display { padding:32px 40px; } .display-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } .result-title p { font-size:16px; } .result-qr { width:154px; height:154px; } }
+  /* Reserve room for the account header/navigation and full-size QR on short screens. */
+  @media(min-width:720px) and (max-height:850px) {
+    .display { padding-top:12px; padding-bottom:12px; }
+    .display-heading { margin-bottom:12px; }
+    .display-heading .eyebrow { margin-bottom:4px; }
+    .display-heading h1 { font-size:28px; }
+    .display-instruction { margin-top:4px; font-size:14px; }
+    .result-progress { padding:12px 16px; }
+    .result-title { min-height:40px; margin:8px 0; gap:12px; }
+    .result-title h2 { font-size:32px; }
+    figure img { height:clamp(88px,calc(100dvh - 620px),140px); }
+    .result-receive { padding:10px 16px; }
+    .result-waiting { min-height:0; padding:16px; }
+    .display-footer { padding-top:12px; }
+  }
   @media(min-width:1200px) and (min-height:1300px) { figure img { height:140px; } .result-title { min-height:44px; margin:10px 0 14px; } .result-progress { padding:16px 20px; } .result-qr { width:128px; height:128px; } .result-receive { padding:10px 16px; } .result-waiting { min-height:290px; } }
 </style>

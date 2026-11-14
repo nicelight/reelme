@@ -1,0 +1,13 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/display.spec.ts
+
+
+Running 1 test using 1 worker
+
+(node:578739) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+  ✓  1 tests/display.spec.ts:11:1 › Chromium operator journey: stages, QR, paging, email retry, durable deadline and preserved links (18.8s)
+
+  1 passed (20.1s)
