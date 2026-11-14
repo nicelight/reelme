@@ -1,0 +1,35 @@
+{
+  "browser": "Chromium",
+  "stages": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "filledSegmentsMatchStage": true,
+  "capturingNotGeneration": true,
+  "generationFailureNoSuccess": true,
+  "currentStageColorAcrossFilledBar": true,
+  "qrDecodedFromRenderedCard": true,
+  "noOpenedFromDisplayOrMedia": true,
+  "pagingMilliseconds": 10000,
+  "wraps": true,
+  "unauthenticatedQrForm": true,
+  "email": "real worker / injected local transport / failed then sent",
+  "firstConfirmationSurvivesRetryRestartReload": true,
+  "visibleAtSeconds": 179,
+  "hiddenAtSeconds": 180,
+  "hiddenWithoutSuccessfulPoll": true,
+  "fullEmailAbsent": true,
+  "mobileWidth": 375,
+  "theme": [
+    "light",
+    "dark"
+  ],
+  "filesAndLinksPreservedAfterHideAndDayChange": true,
+  "archiveUi": "deferred to FT-005",
+  "pageErrors": [],
+  "externalFalOrSmtp": false
+}

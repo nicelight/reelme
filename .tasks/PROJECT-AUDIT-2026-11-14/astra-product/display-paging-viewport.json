@@ -1,0 +1,29 @@
+{
+  "firstPage": [
+    "1",
+    "2",
+    "3"
+  ],
+  "secondPage": [
+    "4",
+    "5",
+    "6"
+  ],
+  "afterPaging": [
+    {
+      "bottom": 838.65625,
+      "viewport": 720,
+      "fullyVisible": false
+    },
+    {
+      "bottom": 838.65625,
+      "viewport": 720,
+      "fullyVisible": false
+    },
+    {
+      "bottom": 838.65625,
+      "viewport": 720,
+      "fullyVisible": false
+    }
+  ]
+}

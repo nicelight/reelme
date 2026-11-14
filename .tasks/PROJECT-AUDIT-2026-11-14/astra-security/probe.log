@@ -1,0 +1,11 @@
+{
+  "result": "PASS",
+  "observations": [
+    "API concurrent start/finalize, immutable old snapshot, worker coalescing, saved-ID restart and download-only retry: PASS",
+    "Role separation, invalid bearer cannot fall back to cookie, Origin/CORS, noninterchangeable receive/download/provider capabilities, closed media directory: PASS",
+    "Concurrent email acceptance, uncertain SMTP no fallback/retry, explicit corrected retry, sent lockout, original 180000 ms display deadline and private email projection: PASS",
+    "Past-event API deletion revokes owned capabilities/files/rows and old replaced material; current event, its photographs and current slot material survive: PASS"
+  ],
+  "externalCalls": 0,
+  "directDomainStateMutations": 0
+}

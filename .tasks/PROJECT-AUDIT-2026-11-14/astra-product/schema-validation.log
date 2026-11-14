@@ -1,0 +1,1 @@
+PASS: 12 fresh payloads across 10 endpoints; schema source is saved official snapshot, no live inference.

@@ -1,0 +1,39 @@
+{
+  "browser": "Chromium",
+  "isolatedFixture": "/tmp/reelme-cleanup-browser-K2Fu86",
+  "operatorDeleteHidden": true,
+  "cancel": {
+    "deleteRequests": 0,
+    "galleryRequests": 0,
+    "filesAndRowsUnchanged": true
+  },
+  "confirmed": {
+    "deleteRequests": 1,
+    "galleryRequests": 0,
+    "otherDayReadable": true,
+    "sharedMaterialsPreserved": true
+  },
+  "beforeFiles": [
+    "bee01b49-7e06-4e09-a87e-d8f8177e58a9",
+    "cd214c72-2462-4a9f-8e5d-3a02b5b83059",
+    "sessions",
+    "sessions/284deaf5-916b-4d0d-886c-d37014716948",
+    "sessions/284deaf5-916b-4d0d-886c-d37014716948/partial.jpg",
+    "sessions/7c3dd36c-a0df-408e-938a-deee1bd6d0cd",
+    "sessions/7c3dd36c-a0df-408e-938a-deee1bd6d0cd/photo.jpg",
+    "sessions/7c3dd36c-a0df-408e-938a-deee1bd6d0cd/result.jpg",
+    "sessions/7c3dd36c-a0df-408e-938a-deee1bd6d0cd/result.mp4",
+    "sessions/86792202-77e9-4f84-82cb-f2abcadb55eb",
+    "sessions/86792202-77e9-4f84-82cb-f2abcadb55eb/extra.jpg",
+    "sessions/86792202-77e9-4f84-82cb-f2abcadb55eb/photo.jpg",
+    "sessions/86792202-77e9-4f84-82cb-f2abcadb55eb/result.jpg",
+    "sessions/86792202-77e9-4f84-82cb-f2abcadb55eb/result.mp4"
+  ],
+  "afterFiles": [
+    "bee01b49-7e06-4e09-a87e-d8f8177e58a9",
+    "cd214c72-2462-4a9f-8e5d-3a02b5b83059",
+    "sessions"
+  ],
+  "pageErrors": [],
+  "externalFalOrSmtp": false
+}

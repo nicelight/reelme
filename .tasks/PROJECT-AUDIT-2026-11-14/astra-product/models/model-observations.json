@@ -1,0 +1,511 @@
+{
+  "transport": "controlled fal SDK HTTP; no live API or CDN uploads",
+  "inputs": [
+    {
+      "sessionId": "b29a1674-e708-4dc4-a078-17f7e36993e2",
+      "endpoint": "fal-ai/kling-video/o1/video-to-video/edit",
+      "input": {
+        "prompt": "@Element1 walks through the scene.",
+        "elements": [
+          {
+            "frontal_image_url": "https://reelme.test/provider-media/5bVVLGxtfw_zOxF2f06Ro5Vj0PmFKy9kPkPwIJOH4B0",
+            "reference_image_urls": [
+              "https://reelme.test/provider-media/CxnfomRhRToY7vtwsKSb611dl8q0Z0uioP1r-NI5PnM",
+              "https://reelme.test/provider-media/L2fYUVhvs4qLaKcYwhW_V2Itzr13b-lwEEr4usoloo8",
+              "https://reelme.test/provider-media/dHGkdIKG57AraINCxUS0fluHvkIh1bbvEu9pKasPUqo"
+            ]
+          }
+        ],
+        "image_urls": [],
+        "video_url": "https://reelme.test/provider-media/ZH5RMEmE-_Mo_Iw427nVBavNGCqbRYEyZOVNWZ5TkDo"
+      }
+    },
+    {
+      "sessionId": "cb0ebd29-dee8-4052-ac1d-a90d7a9449d9",
+      "endpoint": "fal-ai/kling-video/o3/pro/video-to-video/edit",
+      "input": {
+        "prompt": "@Element1 walks through the scene.",
+        "elements": [
+          {
+            "frontal_image_url": "https://reelme.test/provider-media/A2h4CaOolziluMIYkJfLr6YTZ-S01MYX93KJmtthliY",
+            "reference_image_urls": [
+              "https://reelme.test/provider-media/Yoen84SVXFIUQdoPvBCjG-qcsPHHIDIewEh6hwxgriA",
+              "https://reelme.test/provider-media/2S15-MYU0TufaUKoPzoGKraNTnEzlFJnAYOoJl1SC_o",
+              "https://reelme.test/provider-media/ZC-m6hJyPZYwzWCMInV8rRM9x-LPH8tglAPSp51GHVs"
+            ]
+          }
+        ],
+        "image_urls": [],
+        "video_url": "https://reelme.test/provider-media/ZH5RMEmE-_Mo_Iw427nVBavNGCqbRYEyZOVNWZ5TkDo"
+      }
+    },
+    {
+      "sessionId": "66a2f4dd-f37e-472b-8500-06b4a65f5696",
+      "endpoint": "kling/v4/video-to-video/edit",
+      "input": {
+        "prompt": "@Element1 walks through the scene.",
+        "elements": [
+          {
+            "frontal_image_url": "https://reelme.test/provider-media/Dt8NKRw5TFmZvHp6TA6DjI4zlDfjzRBtHDnmXcwQHP8",
+            "reference_image_urls": [
+              "https://reelme.test/provider-media/xcwj-uq-87yk0XgkxYJmMGq79tfydVJVxFhS0nn_42Y",
+              "https://reelme.test/provider-media/dZ8Xrx-ITrIHetM5FGQMI_rMoAU6o1u0AfvwS7UbKpI",
+              "https://reelme.test/provider-media/0utKXKqHhm-moU0iYJi8NHNz5Z9NC4ChFUd5FIpmpdU"
+            ]
+          }
+        ],
+        "image_urls": [],
+        "video_url": "https://reelme.test/provider-media/ZH5RMEmE-_Mo_Iw427nVBavNGCqbRYEyZOVNWZ5TkDo",
+        "resolution": "1080p"
+      }
+    },
+    {
+      "sessionId": "4045e499-8ca4-4713-b558-01c47b5c883f",
+      "endpoint": "kling/v4/flash/video-to-video",
+      "input": {
+        "prompt": "@Element1 walks through the scene.",
+        "elements": [
+          {
+            "frontal_image_url": "https://reelme.test/provider-media/9f9pnHsY3hK8we1LFB2DSMIUlURmOWz8kkDwIRAeevk",
+            "reference_image_urls": [
+              "https://reelme.test/provider-media/_jvRZCsab5ZjQYBgA6aronoCw4f3u7zuJbPNhVs7nYs",
+              "https://reelme.test/provider-media/L3XFZFRaDloij6Q3yNKtW8ae5AoHLYjriyf46y6ujV4",
+              "https://reelme.test/provider-media/bkZ8JPorG4t_a-A7Ppa1PHPnqECONmAflhhaqsS6grk"
+            ]
+          }
+        ],
+        "image_urls": [],
+        "video_url": "https://reelme.test/provider-media/ZH5RMEmE-_Mo_Iw427nVBavNGCqbRYEyZOVNWZ5TkDo",
+        "resolution": "720p"
+      }
+    },
+    {
+      "sessionId": "b80e49c2-64a7-4fd6-8a00-8fbd3e64a989",
+      "endpoint": "kling/v4/reference-to-video",
+      "input": {
+        "prompt": "@Element1 walks through the scene.",
+        "elements": [
+          {
+            "frontal_image_url": "https://reelme.test/provider-media/ucFhnazw2jJs7gqbBMGs_AcaQlIjrvmdZbRvB_XwmaE",
+            "reference_image_urls": [
+              "https://reelme.test/provider-media/Hn-zJSRxJ5K5gVh3YnUSGaiWXbokLWEFYQFtnQlbPCc",
+              "https://reelme.test/provider-media/0N7_MIPDdv6Umwjo8ETYAljqv0ok1AHJrtib-D4K1JU",
+              "https://reelme.test/provider-media/v14D1jPQqbjZ2XXIxcisNXMJzNZ3yBe25FHL3zGuNFc"
+            ]
+          }
+        ],
+        "image_urls": [
+          "https://reelme.test/provider-media/7r2t_77_1OaCnPtOlTO1LT4lk91_W5v1bShZu3K7OnA",
+          "https://reelme.test/provider-media/O1QmcZXaRHTIegBbCVV8YAAs3FfqC3yu0nD01k0Jt2o",
+          "https://reelme.test/provider-media/9_76ca43hLVx3wqXYvbA52UTKw9Yv4ga0raicFTIiZ4"
+        ],
+        "duration": 10,
+        "resolution": "1080p"
+      }
+    },
+    {
+      "sessionId": "458a0bc5-9974-4acf-a40b-a0ab8860d811",
+      "endpoint": "fal-ai/kling-video/o3/pro/reference-to-video",
+      "input": {
+        "prompt": "@Element1 walks through the scene.",
+        "elements": [
+          {
+            "frontal_image_url": "https://reelme.test/provider-media/sQUuT5lH-kRpY93be0_O3guLq0_m2_Q3HzH-TUqduYQ",
+            "reference_image_urls": [
+              "https://reelme.test/provider-media/1bdk22dXxrr6pWIUCiaJq5L6vRo09kLndItcsrJiucY",
+              "https://reelme.test/provider-media/_Fn45TXsfnY9AhmYr3p0Yl-tVPdAwUBhMHVXXEh2zB4",
+              "https://reelme.test/provider-media/cXv7qg3iktTikc-s5uV3FZi2WzhGB65-8msLctrZpNY"
+            ]
+          }
+        ],
+        "image_urls": [
+          "https://reelme.test/provider-media/7r2t_77_1OaCnPtOlTO1LT4lk91_W5v1bShZu3K7OnA",
+          "https://reelme.test/provider-media/O1QmcZXaRHTIegBbCVV8YAAs3FfqC3yu0nD01k0Jt2o",
+          "https://reelme.test/provider-media/9_76ca43hLVx3wqXYvbA52UTKw9Yv4ga0raicFTIiZ4"
+        ],
+        "duration": "10"
+      }
+    },
+    {
+      "sessionId": "a310b58a-6451-4b53-bb32-9292350bab93",
+      "endpoint": "kling/v4/flash/reference-to-video",
+      "input": {
+        "prompt": "@Element1 walks through the scene.",
+        "elements": [
+          {
+            "frontal_image_url": "https://reelme.test/provider-media/3MKjTkGkzrnuuhGjQpyI9nhL9Uo3gfWTdgI__NSNl7M",
+            "reference_image_urls": [
+              "https://reelme.test/provider-media/NfGi5r3oiPG6tM-eYtykLROCQ3K0p2K2WTZUMkCEZII",
+              "https://reelme.test/provider-media/8ek_ow3jN96aXJ5forUxdWoJb1OIAVu3tk1x-6BD16k",
+              "https://reelme.test/provider-media/fiZw8MarihaTXTcXeFwWSOF_n6jUDC1baOg4SVoC8QE"
+            ]
+          }
+        ],
+        "image_urls": [
+          "https://reelme.test/provider-media/7r2t_77_1OaCnPtOlTO1LT4lk91_W5v1bShZu3K7OnA",
+          "https://reelme.test/provider-media/O1QmcZXaRHTIegBbCVV8YAAs3FfqC3yu0nD01k0Jt2o",
+          "https://reelme.test/provider-media/9_76ca43hLVx3wqXYvbA52UTKw9Yv4ga0raicFTIiZ4"
+        ],
+        "duration": 10,
+        "resolution": "720p"
+      }
+    },
+    {
+      "sessionId": "ba2e1611-9a13-477d-b7e8-40f2b3dc0538",
+      "endpoint": "minimax/h3-max/reference-to-video",
+      "input": {
+        "prompt": "Image 1, Image 2, Image 3 and Image 4 show the same person walking through Image 5.",
+        "reference_image_urls": [
+          "https://reelme.test/provider-media/NjfhnQvTlSOTgUBTzvuRDpvpJzHhBQWu4sLREvG6LTM",
+          "https://reelme.test/provider-media/ZPCHAciTfG3FJoGEZkxXWm-Ydq1JvjqwhRfUxg0yhEc",
+          "https://reelme.test/provider-media/GxiHzyajdWY4FFMnNvpbHpswVqVC24TdTqE9aGA6fNs",
+          "https://reelme.test/provider-media/euADxzdudAUCzQ57PugaIQ4SjymTwZtbjvJP56LkSTA",
+          "https://reelme.test/provider-media/7r2t_77_1OaCnPtOlTO1LT4lk91_W5v1bShZu3K7OnA",
+          "https://reelme.test/provider-media/O1QmcZXaRHTIegBbCVV8YAAs3FfqC3yu0nD01k0Jt2o",
+          "https://reelme.test/provider-media/9_76ca43hLVx3wqXYvbA52UTKw9Yv4ga0raicFTIiZ4"
+        ],
+        "duration": 0.92,
+        "resolution": "1080P",
+        "prompt_expansion_mode": "disabled"
+      }
+    },
+    {
+      "sessionId": "9d7d345b-b421-4744-9d63-16822b1b4b26",
+      "endpoint": "fal-ai/vidu/q4/reference-to-video",
+      "input": {
+        "prompt": "[@reference_image_1], [@reference_image_2], [@reference_image_3], [@reference_image_4] show the same person in [@reference_image_5].",
+        "reference_image_urls": [
+          "https://reelme.test/provider-media/vDPKC81Oj5w0qkS-Tt4fjn1dIMiYFkMItCE6_f6yi4U",
+          "https://reelme.test/provider-media/Y3sEWkIhAe6FKmhq4_VZXc4unqcvQ0t8-obxjlhFYMo",
+          "https://reelme.test/provider-media/xkQh1xN_pcNqxh4_quChoTyI2WwSIJG2B5ofpoZiRmY",
+          "https://reelme.test/provider-media/0aRpE22wnztJ2PANVr4MnuJF0GPfplbVzDeVc_AahEk",
+          "https://reelme.test/provider-media/7r2t_77_1OaCnPtOlTO1LT4lk91_W5v1bShZu3K7OnA",
+          "https://reelme.test/provider-media/O1QmcZXaRHTIegBbCVV8YAAs3FfqC3yu0nD01k0Jt2o",
+          "https://reelme.test/provider-media/9_76ca43hLVx3wqXYvbA52UTKw9Yv4ga0raicFTIiZ4"
+        ],
+        "duration": 10,
+        "resolution": "4K"
+      }
+    },
+    {
+      "sessionId": "da624f18-2145-45b1-a5f4-8d21c792171b",
+      "endpoint": "google/gemini-omni-flash/v1.2/reference-to-video",
+      "input": {
+        "prompt": "<IMAGE_REF_0>, <IMAGE_REF_1>, <IMAGE_REF_2>, <IMAGE_REF_3> show the same person in <IMAGE_REF_4>.",
+        "image_urls": [
+          "https://reelme.test/provider-media/v44bk6G8EzRbVXdPa9_1nsoDr40_qhM_193-Gr2tcZw",
+          "https://reelme.test/provider-media/MAyOqm-u71UfDpt_ow7dzrMkdve98NfDNfaaPwyL7IY",
+          "https://reelme.test/provider-media/2GkzD1-eiJBdaYtfq_yV0NWdwLK-EPYOlsYt6EM-quA",
+          "https://reelme.test/provider-media/v6RpU_Wpz-1r5-h8O-tlWzdD9V698lyAXVQESruY47E",
+          "https://reelme.test/provider-media/7r2t_77_1OaCnPtOlTO1LT4lk91_W5v1bShZu3K7OnA",
+          "https://reelme.test/provider-media/O1QmcZXaRHTIegBbCVV8YAAs3FfqC3yu0nD01k0Jt2o",
+          "https://reelme.test/provider-media/9_76ca43hLVx3wqXYvbA52UTKw9Yv4ga0raicFTIiZ4"
+        ],
+        "duration": 10,
+        "resolution": "4k"
+      }
+    },
+    {
+      "sessionId": "da3327d2-911d-4576-8cd6-0099b82addd0",
+      "endpoint": "kling/v4/reference-to-video",
+      "input": {
+        "prompt": "@Element1 walks through the scene.",
+        "elements": [
+          {
+            "frontal_image_url": "https://reelme.test/provider-media/MjLCKgWWpLAJG7f5HUun_eKp5T1ZiAsY2-RhX6XRoxE",
+            "reference_image_urls": [
+              "https://reelme.test/provider-media/6GAOx2kKeS4FHLKephOXxVehDZI7-BMc3SRHS8Mspfw",
+              "https://reelme.test/provider-media/1gsJ5ML53nNvUHzaCcms1oArCgJmbt0Ry_0J-UaoSSA",
+              "https://reelme.test/provider-media/hWf7ayRdsTt2ERzsZqe3kf11nXQaqSiDdLxuDSzYeHI"
+            ]
+          }
+        ],
+        "image_urls": [
+          "https://reelme.test/provider-media/7r2t_77_1OaCnPtOlTO1LT4lk91_W5v1bShZu3K7OnA",
+          "https://reelme.test/provider-media/O1QmcZXaRHTIegBbCVV8YAAs3FfqC3yu0nD01k0Jt2o",
+          "https://reelme.test/provider-media/9_76ca43hLVx3wqXYvbA52UTKw9Yv4ga0raicFTIiZ4"
+        ],
+        "duration": 10,
+        "resolution": "1080p"
+      }
+    },
+    {
+      "sessionId": "663a462d-d145-432d-a929-85a43aad98d3",
+      "endpoint": "google/gemini-omni-flash/v1.2/reference-to-video",
+      "input": {
+        "prompt": "Changed prompt <IMAGE_REF_0>",
+        "image_urls": [
+          "https://reelme.test/provider-media/zaYbSu810SHl98ZBKzrExhw02G3yCI-sY0suCvwFWCo",
+          "https://reelme.test/provider-media/EA8kneDAPGT7NH3iJ6Qu2x-KEg1nrsbdyUSAm44fDtk",
+          "https://reelme.test/provider-media/E-hmFwX0v7x28k6R2RU-Md_sV_QAWWNNDZpE3Rw03YQ",
+          "https://reelme.test/provider-media/LnGcO6qGKgiIfoerZrmF1XIL6GAeaQnMLpoujPwQkL4",
+          "https://reelme.test/provider-media/9_76ca43hLVx3wqXYvbA52UTKw9Yv4ga0raicFTIiZ4"
+        ],
+        "duration": 15,
+        "resolution": "4k"
+      }
+    }
+  ],
+  "jobs": [
+    {
+      "sessionId": "b29a1674-e708-4dc4-a078-17f7e36993e2",
+      "requestId": "request-6",
+      "videoSize": 5445,
+      "width": 1280,
+      "height": 720,
+      "duration": 3
+    },
+    {
+      "sessionId": "cb0ebd29-dee8-4052-ac1d-a90d7a9449d9",
+      "requestId": "request-9",
+      "videoSize": 5445,
+      "width": 1280,
+      "height": 720,
+      "duration": 3
+    },
+    {
+      "sessionId": "66a2f4dd-f37e-472b-8500-06b4a65f5696",
+      "requestId": "request-3",
+      "videoSize": 5445,
+      "width": 1280,
+      "height": 720,
+      "duration": 3
+    },
+    {
+      "sessionId": "4045e499-8ca4-4713-b558-01c47b5c883f",
+      "requestId": "request-0",
+      "videoSize": 5445,
+      "width": 1280,
+      "height": 720,
+      "duration": 3
+    },
+    {
+      "sessionId": "b80e49c2-64a7-4fd6-8a00-8fbd3e64a989",
+      "requestId": "request-7",
+      "videoSize": 5445,
+      "width": 1280,
+      "height": 720,
+      "duration": 3
+    },
+    {
+      "sessionId": "458a0bc5-9974-4acf-a40b-a0ab8860d811",
+      "requestId": "request-1",
+      "videoSize": 5445,
+      "width": 1280,
+      "height": 720,
+      "duration": 3
+    },
+    {
+      "sessionId": "a310b58a-6451-4b53-bb32-9292350bab93",
+      "requestId": "request-5",
+      "videoSize": 5445,
+      "width": 1280,
+      "height": 720,
+      "duration": 3
+    },
+    {
+      "sessionId": "ba2e1611-9a13-477d-b7e8-40f2b3dc0538",
+      "requestId": "request-8",
+      "videoSize": 5445,
+      "width": 1280,
+      "height": 720,
+      "duration": 3
+    },
+    {
+      "sessionId": "9d7d345b-b421-4744-9d63-16822b1b4b26",
+      "requestId": "request-4",
+      "videoSize": 5445,
+      "width": 1280,
+      "height": 720,
+      "duration": 3
+    },
+    {
+      "sessionId": "da624f18-2145-45b1-a5f4-8d21c792171b",
+      "requestId": "request-11",
+      "videoSize": 5445,
+      "width": 1280,
+      "height": 720,
+      "duration": 3
+    },
+    {
+      "sessionId": "da3327d2-911d-4576-8cd6-0099b82addd0",
+      "requestId": "request-10",
+      "videoSize": 5445,
+      "width": 1280,
+      "height": 720,
+      "duration": 3
+    },
+    {
+      "sessionId": "663a462d-d145-432d-a929-85a43aad98d3",
+      "requestId": "request-2",
+      "videoSize": 5445,
+      "width": 1280,
+      "height": 720,
+      "duration": 3
+    }
+  ],
+  "stableP2VReferences": true,
+  "oldSnapshotRetained": true,
+  "demoExcluded": true,
+  "providerMediaRoutes": "in-process HTTPS-origin requests; public TLS not exercised",
+  "httpCalls": [
+    {
+      "method": "POST",
+      "url": "https://queue.fal.run/kling/v4/flash/video-to-video"
+    },
+    {
+      "method": "POST",
+      "url": "https://queue.fal.run/fal-ai/kling-video/o3/pro/reference-to-video"
+    },
+    {
+      "method": "POST",
+      "url": "https://queue.fal.run/google/gemini-omni-flash/v1.2/reference-to-video"
+    },
+    {
+      "method": "POST",
+      "url": "https://queue.fal.run/kling/v4/video-to-video/edit"
+    },
+    {
+      "method": "POST",
+      "url": "https://queue.fal.run/fal-ai/vidu/q4/reference-to-video"
+    },
+    {
+      "method": "POST",
+      "url": "https://queue.fal.run/kling/v4/flash/reference-to-video"
+    },
+    {
+      "method": "POST",
+      "url": "https://queue.fal.run/fal-ai/kling-video/o1/video-to-video/edit"
+    },
+    {
+      "method": "POST",
+      "url": "https://queue.fal.run/kling/v4/reference-to-video"
+    },
+    {
+      "method": "POST",
+      "url": "https://queue.fal.run/minimax/h3-max/reference-to-video"
+    },
+    {
+      "method": "POST",
+      "url": "https://queue.fal.run/fal-ai/kling-video/o3/pro/video-to-video/edit"
+    },
+    {
+      "method": "POST",
+      "url": "https://queue.fal.run/kling/v4/reference-to-video"
+    },
+    {
+      "method": "POST",
+      "url": "https://queue.fal.run/google/gemini-omni-flash/v1.2/reference-to-video"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/kling/v4/requests/request-0/status?logs=0"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/kling/v4/requests/request-0"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/fal-ai/kling-video/requests/request-1/status?logs=0"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/fal-ai/kling-video/requests/request-1"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/google/gemini-omni-flash/requests/request-2/status?logs=0"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/google/gemini-omni-flash/requests/request-2"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/kling/v4/requests/request-3/status?logs=0"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/kling/v4/requests/request-3"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/fal-ai/vidu/requests/request-4/status?logs=0"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/fal-ai/vidu/requests/request-4"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/kling/v4/requests/request-5/status?logs=0"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/kling/v4/requests/request-5"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/fal-ai/kling-video/requests/request-6/status?logs=0"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/fal-ai/kling-video/requests/request-6"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/kling/v4/requests/request-7/status?logs=0"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/kling/v4/requests/request-7"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/minimax/h3-max/requests/request-8/status?logs=0"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/minimax/h3-max/requests/request-8"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/fal-ai/kling-video/requests/request-9/status?logs=0"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/fal-ai/kling-video/requests/request-9"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/kling/v4/requests/request-10/status?logs=0"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/kling/v4/requests/request-10"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/google/gemini-omni-flash/requests/request-11/status?logs=0"
+    },
+    {
+      "method": "GET",
+      "url": "https://queue.fal.run/google/gemini-omni-flash/requests/request-11"
+    }
+  ],
+  "downloads": [
+    "https://cdn.fal.test/request-0.mp4",
+    "https://cdn.fal.test/request-1.mp4",
+    "https://cdn.fal.test/request-2.mp4",
+    "https://cdn.fal.test/request-3.mp4",
+    "https://cdn.fal.test/request-4.mp4",
+    "https://cdn.fal.test/request-5.mp4",
+    "https://cdn.fal.test/request-6.mp4",
+    "https://cdn.fal.test/request-7.mp4",
+    "https://cdn.fal.test/request-8.mp4",
+    "https://cdn.fal.test/request-9.mp4",
+    "https://cdn.fal.test/request-10.mp4",
+    "https://cdn.fal.test/request-11.mp4"
+  ]
+}

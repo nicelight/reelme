@@ -1,0 +1,25 @@
+
+> reelme@0.1.0 test:ui
+> playwright test
+
+
+Running 9 tests using 1 worker
+
+(node:554208) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+  ✓  1 tests/archive.spec.ts:9:1 › Chromium archive: both accounts browse dates, original thumbnails and their own playable videos after public hide (5.1s)
+  ✓  2 tests/camera.spec.ts:11:1 › camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and preview fallback (38.4s)
+  ✓  3 tests/capture.spec.ts:7:1 › visitor catalog, protected media, durable start and lost acknowledgement recovery (6.2s)
+
+  ✓  4 tests/cleanup.spec.ts:9:1 › Chromium: operator cannot delete; admin cancel preserves files, confirmation deletes without opening gallery (4.1s)
+
+  ✓  5 tests/display.spec.ts:11:1 › Chromium operator journey: stages, QR, paging, email retry, durable deadline and preserved links (17.4s)
+  ✓  6 tests/editor.spec.ts:19:1 › admin saves both modes, reopens after restart, model rules, access and local capture (5.0s)
+
+  ✓  7 tests/email.spec.ts:10:1 › real worker form: pending, sending, uncertain failure and explicit corrected retry to sent (11.6s)
+
+  ✓  8 tests/receive.spec.ts:9:1 › visitor form at mobile/desktop: validation, pending, retry, sent, restart and download (12.3s)
+  ✓  9 tests/transfer.spec.ts:14:1 › accepted JPEGs, same-Blob upload retry, lost finalize acknowledgement and two visitors before generation (34.4s)
+
+  9 passed (2.3m)

@@ -1,0 +1,30 @@
+{
+  "browser": "Chromium",
+  "roles": [
+    "operator",
+    "admin"
+  ],
+  "expectedTotals": {
+    "date": "2026-11-14",
+    "photoBytes": 7222,
+    "videoBytes": 4055
+  },
+  "order": [
+    "2026-11-14",
+    "2026-11-13"
+  ],
+  "todayRejected": true,
+  "publicHideThenMidnightPreservesArchive": true,
+  "snapshotThumbnailBytesMatch": true,
+  "selectedVideosVerifiedByBytesAndPlayback": true,
+  "incompleteResultsDisabled": true,
+  "deliveryUnchanged": true,
+  "openedCalls": [],
+  "pageErrors": [],
+  "mobileWidth": 375,
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "externalFalOrSmtp": false
+}
