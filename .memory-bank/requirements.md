@@ -25,7 +25,7 @@ status: active
 | REQ-015 | Удаление мероприятия с подтверждением; автоматическое удаление старше 14 дней | [Хранение](prd.md#мероприятия-и-срок-хранения) |
 | REQ-016 | Облачные экраны и локальный HTTP HTML с загружаемыми скриптами; принятые домен, VPS и Caddy | [Размещение](prd.md#принятая-схема-размещения) |
 | REQ-017 | Canon/digiCamControl на Windows, облачные обновления, сохранение существующего процесса DSLR Remote Pro | [Установка](prd.md#принятая-схема-размещения) |
-| REQ-018 | Публичный доступ к прогрессу отделён от админских действий; email публично замаскирован | [Роли](prd.md#поверхности-и-роли), [Email](prd.md#получение-по-email) |
+| REQ-018 | Два аккаунта: оператор показывает результаты и читает архив, администратор управляет слотами и удалением; отдельный ключ установки; QR без входа; email на экране замаскирован | [Роли](prd.md#поверхности-и-роли), [Email](prd.md#получение-по-email) |
 
 ## Трассировка
 
@@ -51,7 +51,7 @@ status: active
 | REQ-015 | EP-001 | FT-005 | [FT-005-AC-003](features/FT-005-event-archive.md#ft-005-ac-003) | planned |
 | REQ-016 | EP-001 | FT-001, FT-002, FT-004, FT-005 | [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004) | planned |
 | REQ-017 | EP-001 | FT-002 | [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004) | planned |
-| REQ-018 | EP-001 | FT-001, FT-004, FT-005 | [FT-001-AC-004](features/FT-001-scenarios.md#ft-001-ac-004), [FT-004-AC-003](features/FT-004-public-delivery.md#ft-004-ac-003), [FT-005-AC-003](features/FT-005-event-archive.md#ft-005-ac-003) | planned |
+| REQ-018 | EP-001 | FT-001, FT-002, FT-004, FT-005 | [FT-001-AC-004](features/FT-001-scenarios.md#ft-001-ac-004), [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004), [FT-004-AC-001](features/FT-004-public-delivery.md#ft-004-ac-001), [FT-004-AC-003](features/FT-004-public-delivery.md#ft-004-ac-003), [FT-005-AC-002](features/FT-005-event-archive.md#ft-005-ac-002), [FT-005-AC-003](features/FT-005-event-archive.md#ft-005-ac-003) | planned |
 
 Исключения — [за пределами первой версии](prd.md#за-пределами-первой-версии).
 Их изменение возвращается в PRD; художественная оценка AI-видео не является критерием приёмки.
