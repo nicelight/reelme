@@ -1,7 +1,7 @@
 {
   "id": "TASK-001-T3-FT-001-W1",
   "title": "Инициализировать приложение и БД: администратор сохраняет первый сюжет",
-  "status": "ready",
+  "status": "done",
   "tier": "T3",
   "wave": "W1",
   "feature": "FT-001",
@@ -26,8 +26,96 @@
     "WebServer/reelme.html",
     "README.md"
   ],
-  "gates": [],
-  "verify": [],
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "api-and-models",
+      "command": "npm test",
+      "required": true
+    },
+    {
+      "name": "browser",
+      "command": "npm run test:ui",
+      "required": true
+    },
+    {
+      "name": "clean-bootstrap",
+      "command": "node .tasks/TASK-001-T3-FT-001-W1/bootstrap-check.mjs",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-14",
+      "result": "PASS",
+      "summary": "Инициализированы Svelte 5/Vite, TypeScript/Fastify, SQLite и setup двух аккаунтов/ключа. Админский редактор сохраняет V2V/P2V для всех 11 моделей; материалы защищены и не перезаписываются. Локальный capture entrypoint загружает текущую облачную сборку.",
+      "checks": [
+        "Чистая копия: npm ci/setup/check/build и реальный запуск/повторный setup/restart PASS; оба слота и байты сохранены.",
+        "npm test: 17/17 PASS (11 моделей, HTTP 401/403/400/200/201, Origin, 30 дней admin, бессрочный operator, logout, медиа, CORS).",
+        "npm run test:ui: 1/1 PASS, Chromium; оба режима, 3 P2V-референса без demo, 11 моделей, visibility/title/thumbnail, mobile375 и localhost:5513.",
+        "npm audit --omit=dev: 0 vulnerabilities; 2 low dev findings записаны в PAPERCUTS."
+      ],
+      "evidence": [
+        ".tasks/TASK-001-T3-FT-001-W1/verification.md",
+        ".tasks/TASK-001-T3-FT-001-W1/bootstrap.log",
+        ".tasks/TASK-001-T3-FT-001-W1/browser-report.md"
+      ],
+      "limitations": [
+        "Пределы 200/300 MB проверены по метаданным, без физической загрузки 300 MB.",
+        "Recast: длительность непрерывных кадров подтверждается администратором; общая длительность измеряется сервером.",
+        "Реальные камера/digiCamControl, fal/SMTP и VPS вне объёма этой задачи."
+      ],
+      "remaining": []
+    },
+    {
+      "date": "2026-11-14",
+      "result": "PASS",
+      "summary": "Независимый verifier проверил baseline до TASK-002: согласованный outcome TASK-001 подтверждён; материальных нарушений не найдено. Status не изменён.",
+      "checks": [
+        "Повторно npm run check/build: PASS; npm test: 17/17 PASS; npm run test:ui: 1/1 PASS.",
+        "Повторно clean bootstrap: npm ci/setup/check/build/start, повторный setup и restart; V2V/P2V, байты медиа, ключ и сессия сохранены.",
+        "Код Access/Scenarios/UI сопоставлен с AC/контрактами; правила 11 моделей — с принятой fal-api.md."
+      ],
+      "evidence": [
+        ".tasks/TASK-001-T3-FT-001-W1/verify-report.md"
+      ],
+      "limitations": [
+        "Текущие OpenAPI заново не открывались; live fal compatibility и генерация не проверены.",
+        "Размеры 200/300 MB проверены на метаданных; непрерывные кадры Recast подтверждает администратор.",
+        "Камера/digiCamControl, SMTP, VPS и снимок начатой сессии вне task scope."
+      ],
+      "remaining": []
+    },
+    {
+      "date": "2026-11-14",
+      "result": "semantic-pass",
+      "summary": "SEMANTIC_VERDICT: semantic-pass. Проверено текущее рабочее дерево с начатой TASK-002: существенных нарушений результата TASK-001 не обнаружено; status не изменён.",
+      "checks": [
+        "npm test: 20/20 PASS; npm run check: 0 ошибок/предупреждений; npm run build: PASS.",
+        "Дополнительные HTTP-пробы: смешанные cookie/bearer не повышают права; пять неверных PUT не меняют сохранённый слот; ошибочная загрузка не оставляет файл; приватные пути дают 404; повторный login отзывает прежнюю cookie.",
+        "Chromium: текущие облачные JS/CSS загружаются в localhost:5513, новый экран настройки смонтирован без page errors; admin editor открывается, prompt Recast disabled, O3 P2V без resolution."
+      ],
+      "evidence": [
+        ".tasks/TASK-001-T3-FT-001-W1/red-verification.md"
+      ],
+      "limitations": [
+        "Полный test:ui не повторялся: последнее ожидание старой заглушки устарело после начала TASK-002; текущий mount проверен отдельно. Clean bootstrap заново не запускался.",
+        "Лимиты 200/300 MB проверены по метаданным, кадры Recast подтверждает администратор; текущие схемы/live fal, камера, SMTP и VPS не проверены."
+      ],
+      "remaining": [
+        "При завершении TASK-002 актуализировать browser assertion локального entrypoint и повторить полный UI-сценарий."
+      ]
+    }
+  ],
   "docs": [
     ".memory-bank/features/FT-001-scenarios.md"
   ],

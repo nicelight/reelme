@@ -1,0 +1,23 @@
+
+> reelme@0.1.0 build
+> npm run build:client && tsc -p tsconfig.server.json
+
+
+> reelme@0.1.0 build:client
+> vite build
+
+6:42:25 AM [vite-plugin-svelte] no Svelte config found at /home/serg/Projects/reelme - using default configuration.
+vite v8.3.8 building client environment for production...
+transforming...
+✓ 214 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/client/index.html                             0.45 kB │ gzip:  0.32 kB
+dist/client/.vite/manifest.json                    0.65 kB │ gzip:  0.24 kB
+dist/client/assets/capture-DM3WC4D_.css            5.42 kB │ gzip:  1.73 kB
+dist/client/assets/cloud-CLLJ_qqx.css              9.11 kB │ gzip:  2.66 kB
+dist/client/assets/capture-CLpcjJDJ.js            11.66 kB │ gzip:  4.93 kB
+dist/client/assets/disclose-version-pz4LQjyE.js   41.95 kB │ gzip: 16.22 kB
+dist/client/assets/cloud-DMMfTczb.js             109.32 kB │ gzip: 32.96 kB
+
+✓ built in 742ms

@@ -1,0 +1,10 @@
+Clean source snapshot copied; node_modules/dist/data absent.
+npm ci: PASS
+npm run setup with empty data directory: PASS
+npm run check with server credentials in .env: PASS
+npm run build with server credentials in .env: PASS
+Built server startup + cloud HTML: HTTP 200
+Repeated setup without password env: PASS; installation key unchanged.
+V2V + P2V, image + video, admin session after real process restart: HTTP 200, bytes/config unchanged.
+Installation denied editor: HTTP 403. Generated credentials absent from client assets.
+BOOTSTRAP PASS

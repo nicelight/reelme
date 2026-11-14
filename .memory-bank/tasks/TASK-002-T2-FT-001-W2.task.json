@@ -1,7 +1,7 @@
 {
   "id": "TASK-002-T2-FT-001-W2",
   "title": "Посетитель выбирает сюжет и начинает сессию с неизменным снимком слота",
-  "status": "planned",
+  "status": "done",
   "tier": "T2",
   "wave": "W2",
   "feature": "FT-001",
@@ -23,8 +23,69 @@
     "WebServer/reelme.html",
     "README.md"
   ],
-  "gates": [],
-  "verify": [],
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "api-and-models",
+      "command": "npm test",
+      "required": true
+    },
+    {
+      "name": "browser",
+      "command": "REELME_BROWSER_ARTIFACTS=.tasks/TASK-002-T2-FT-001-W2/browser-editor-regression npm run test:ui",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-14",
+      "result": "PASS",
+      "summary": "Каталог установки показывает видимые слоты по 12, описание и защищённые V2V/P2V-примеры. Настройка сохраняет проверенный bearer-ключ в браузерном профиле. Старт атомарно сохраняет снимок, дату Новосибирска, номер и план 1/4 поз; клиент сохраняет результат, не показывая номер и не имитируя съёмку.",
+      "checks": [
+        "npm run check: PASS, 0 errors/warnings; npm run build: PASS.",
+        "npm test: 20/20 PASS, включая 3 новых integration cases: 12+1/hidden404, роли401/403, Range206, retry200/new201, concurrent starts, midnight, A/B snapshots/files after restart.",
+        "Browser suite: 2/2 PASS (12.4s), реальная загрузка/проигрывание видео, setup/reload, каталог и editor regression; lost acknowledgement после commit + reload/retry создаёт одну строку с прежним receipt.",
+        "git diff --check: PASS."
+      ],
+      "evidence": [
+        ".tasks/TASK-002-T2-FT-001-W2/verification.md",
+        ".tasks/TASK-002-T2-FT-001-W2/browser-report.md",
+        ".tasks/TASK-002-T2-FT-001-W2/browser-observations.json"
+      ],
+      "limitations": [
+        "Canon/digiCamControl, приём фото/finalize, fal и выдача не входят в эту задачу.",
+        "Повторная установка зависимостей не запускалась; использовано применимое clean-bootstrap evidence TASK-001, текущая схема проверена с временными данными и restart."
+      ],
+      "remaining": []
+    },
+    {
+      "date": "2026-11-14",
+      "result": "PASS",
+      "summary": "Независимый verify текущего рабочего каталога: согласованный результат TASK-002 подтверждён; существенных нарушений не обнаружено, статус done не изменён.",
+      "checks": [
+        "Повторно npm run check/build: PASS; npm test: 20/20 PASS; Chromium browser suite: 2/2 PASS (15.5 s).",
+        "Код и фактические API/browser результаты: installation-only каталог 12+1, protected media, сохранённый ключ, атомарный старт, повтор через полночь/правку/restart, неизменные снимки A/B и файлы, demo вне generation, планы 1/4 и восстановление lost acknowledgement без дубля.",
+        "Просмотрены новые desktop/mobile screenshots; номер посетителя не показан, съёмка не имитируется. git diff --check: PASS."
+      ],
+      "evidence": [
+        ".tasks/TASK-002-T2-FT-001-W2/verify-report.md"
+      ],
+      "limitations": [
+        "Локальные HTTP/SQLite/Chromium fixtures; Windows/Canon, фото/finalize, live fal, SMTP и VPS вне проверки.",
+        "Clean dependency install не повторялся; использовано независимое evidence TASK-001. Browser — согласованный Playwright fallback."
+      ],
+      "remaining": []
+    }
+  ],
   "docs": [
     ".memory-bank/features/FT-001-scenarios.md"
   ],

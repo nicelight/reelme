@@ -1,0 +1,15 @@
+{
+  "catalog": "12+1 visible, hidden unavailable",
+  "protectedMedia": "real decoded image/video via blob URLs",
+  "setupPersistence": true,
+  "plans": [
+    1,
+    4
+  ],
+  "lostAcknowledgement": "same request, session and number; one DB row",
+  "numberVisible": false,
+  "keyInURL": false,
+  "visitorCookies": 0,
+  "pageErrors": [],
+  "expectedAbortedRequests": 1
+}

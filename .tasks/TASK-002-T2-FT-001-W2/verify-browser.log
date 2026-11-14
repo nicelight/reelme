@@ -1,0 +1,13 @@
+
+> reelme@0.1.0 test:ui
+> playwright test
+
+
+Running 2 tests using 1 worker
+
+(node:230063) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/capture.spec.ts:7:1 › visitor catalog, protected media, durable start and lost acknowledgement recovery (6.0s)
+  ✓  2 tests/editor.spec.ts:19:1 › admin saves both modes, reopens after restart, model rules, access and local capture (7.6s)
+
+  2 passed (15.5s)
