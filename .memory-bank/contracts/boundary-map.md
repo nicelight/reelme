@@ -1,33 +1,60 @@
 ---
-description: Canonical accepted module/change-unit dependency graph and boundary contracts.
-status: draft
+description: Принятые модули ReelMe, зависимости и внутренние контракты.
+status: active
 ---
 # Boundary Map
 
-## Purpose
-- Keep one accepted inventory of project modules/change units and every allowed significant dependency between them.
-- Treat `Consumer -> Provider` as the direction of dependency. Observed imports or calls are evidence, not accepted edges by themselves.
+Три серверных модуля приняты оператором. Пути ниже — план будущего кода;
+HTTP-контракты проектируются до реализации. Направление Consumer → Provider
+обозначает использование контракта, а не право записи в чужие таблицы.
 
 ## Modules
+
 | Module / Change Unit | Parent Architecture Unit | Code Root | Responsibility |
 |---|---|---|---|
+| Access | Сервер ReelMe | `src/server/access/` | Аккаунты, сессии входа, ключ установки, проверка прав |
+| Scenarios | Сервер ReelMe | `src/server/scenarios/` | Каталог, слоты, параметры моделей и материалы слотов |
+| Sessions | Сервер ReelMe | `src/server/sessions/` | Приём фото, мероприятия/номера, fal, результат, QR/email, архив/очистка |
+| CaptureClient | Локальный интерфейс | `src/client/capture/` | Камера, позы, повтор загрузки и выдача номера |
+| CloudClient | Облачные интерфейсы | `src/client/cloud/` | Вход, админка, общий экран, архив и форма посетителя |
 
 ## Dependency Graph
 
-`Consumer -> Provider` means Consumer depends on Provider through the linked contract.
-
 | Consumer | Provider | Contract |
 |---|---|---|
+| CaptureClient | Scenarios | [Каталог](http-api.md#каталог-и-слоты) |
+| CaptureClient | Sessions | [Съёмка](http-api.md#съёмка) |
+| CloudClient | Access | [Вход](access.md#аккаунты) |
+| CloudClient | Scenarios | [Слоты](http-api.md#каталог-и-слоты) |
+| CloudClient | Sessions | [Экран и архив](http-api.md#экран-и-архив), [выдача](http-api.md#получение-и-email) |
+| Scenarios | Access | [Проверка контекста](#контекст-доступа) |
+| Sessions | Access | [Проверка контекста](#контекст-доступа) |
+| Sessions | Scenarios | [Снимок слота](#снимок-слота) |
 
 ## Inline Contracts
 
-Add a `### <Contract>` block here only for a simple internal boundary. Use an exact heading link from the graph. A contract with independent complexity, multiple consumers, reuse, or its own compatibility surface belongs in a subject contract.
+### Контекст доступа
 
-Each contract block defines only the applicable public surface, allowed interaction, state/data authority, failure and compatibility rules, forbidden bypasses, and verification. Topology remains exclusively in `Dependency Graph`.
+HTTP-обработчик запрашивает у Access проверенный контекст operator, admin либо
+installation; отсутствие/неверные credentials даёт 401, недостаточное право — 403.
+Контекст и роль из тела запроса не принимаются. Матрица — [доступ](access.md).
+QR/download-токены принадлежат Sessions и разрешают только соответствующую
+сессию/файл, не превращаясь в аккаунт или ключ установки.
+Проверяется разрешённое действие, а не только возможность открыть страницу.
 
-## Update Rules
-- `Module / Change Unit` is the unique graph key. Use stable functional responsibility names, not feature/task IDs, current paths, or generic technical layers.
-- Every graph row names registered modules and links to one exact contract heading. The graph row alone owns consumer, provider, and direction.
-- Include every accepted significant inter-module dependency. An absent edge is not authorized.
-- Keep the detailed module inventory here. `system-architecture.md` owns only larger architecture units and links to `#modules`.
-- Plans and tasks link relevant graph/contract blocks through existing fields; they do not copy the subgraph or introduce graph-specific task fields.
+### Снимок слота
+
+При начале съёмки Sessions получает от Scenarios текущую конфигурацию выбранного слота
+и сохраняет её в сессии вместе со ссылками на материалы. Изменения слота не меняют снимок.
+Это обычные вызовы внутри одного приложения, без протокола pin/release и отдельного
+реестра закреплений. Материалы не удаляются, пока нужны текущему слоту или сохранённой
+сессии; при уборке учитываются эти ссылки. Общая SQLite позволяет использовать обычные
+запросы, не создавая для этого дополнительный слой хранения.
+
+## Реализация границ
+
+fal, SMTP.BZ и файловые операции — конкретные внутренние адаптеры владельца данных,
+а не дополнительные предметные модули. Общие утилиты SQLite/файлов и типы DTO допустимы;
+они не обходят права и владение записями. Общая БД не разрешает произвольную межмодульную запись.
+Клиенты не импортируют серверные секреты или реализации адаптеров.
+Граф и контракты обновляются вместе с изменением границ, без копирования в задачи.

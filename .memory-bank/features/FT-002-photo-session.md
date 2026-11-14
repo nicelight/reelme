@@ -3,7 +3,13 @@ type: feature
 id: FT-002
 epic: EP-001
 status: active
-spec_design_status: blocked
+spec_design_status: complete
+spec_design_links:
+  - .memory-bank/contracts/integrations.md
+  - .memory-bank/domains/core-domain.md
+  - .memory-bank/states/lifecycle-map.md
+  - .memory-bank/contracts/http-api.md
+  - .memory-bank/contracts/access.md
 ---
 # FT-002 — Автоматическая фотосессия
 
@@ -45,8 +51,7 @@ spec_design_status: blocked
   облачного обновления и переключения между приложениями после их остановки;
   успешная передача с ключом и отказ без ключа либо с неверным ключом.
 
-## Design Needed
+## Реализация и проверка
 
-Нужны контракт локального адаптера и сопоставления нового JPEG, протокол приёма фото,
-состояния съёмки/повтора, момент создания сессии и выдачи номера, процедура установки.
-Состояние — [backbone](../spec-backbone.md).
+Камера и установка описаны в [интеграциях](../contracts/integrations.md#камера-digicamcontrol).
+Испытание на Windows/Canon выполняется рано в реализации; документация не является PASS.

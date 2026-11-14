@@ -3,7 +3,12 @@ type: feature
 id: FT-003
 epic: EP-001
 status: active
-spec_design_status: blocked
+spec_design_status: complete
+spec_design_links:
+  - .memory-bank/contracts/integrations.md
+  - .memory-bank/domains/core-domain.md
+  - .memory-bank/states/lifecycle-map.md
+  - .memory-bank/contracts/boundary-map.md
 ---
 # FT-003 — Генерация и подготовка видео
 
@@ -43,8 +48,7 @@ spec_design_status: blocked
 - Проверка: успех и повреждённый/пустой результат, сбой скачивания, `COMPLETED` с ошибкой;
   проверка выдаваемого файла и финального состояния.
 
-## Design Needed
+## Реализация и проверка
 
-Нужны хранение файлов и результатов, устойчивое состояние фоновой обработки,
-контракты адаптеров, границы повторов передачи без подтверждения и восстановления наблюдения.
-Состояние — [backbone](../spec-backbone.md).
+Модельные поля заданы [справкой fal](../analysis/fal-api.md), очередь и файлы —
+[интеграциями](../contracts/integrations.md#генерация-fal). Реальные API-проходы входят в задачи.

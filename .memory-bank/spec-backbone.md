@@ -16,19 +16,19 @@ status: active
   результат, отправка email. Значения — в [словаре](glossary.md).
 - Фиксированные платформенные решения: Caddy, Svelte 5, TypeScript / Node.js / Fastify,
   SQLite и медиафайлы на диске VPS; детали — в [архитектуре](architecture/system-architecture.md).
-- Границы уже заданной интеграции: локальная камера и клиентская страница; сервер ReelMe;
-  внешний fal.ai; отправка почты. Это контекст, а не утверждённая модульная архитектура.
+- Принятые серверные модули — Access, Scenarios, Sessions; граф и внутренний контракт
+  снимка слота — [Boundary Map](contracts/boundary-map.md).
 - Состояния: съёмка и передача; генерация и подготовка; получение по email; публичный
   показ; хранение мероприятия. Шесть публичных этапов не заменяют внутренние состояния.
+- Дата, номер и снимок слота закрепляются при начале съёмки; данные — [модель](domains/core-domain.md),
+  по обработке/выдаче/очистке — [жизненный цикл](states/lifecycle-map.md).
 - Доказательства интеграций: [fal API](analysis/fal-api.md); проверок камеры и реальных генераций пока нет.
 
 ## Open Design Questions
-- Состояния фоновых заданий и восстановление обработки на принятом стеке.
-- Удаление файлов на VPS и копий fal при сохранении общих материалов слота.
-- Подключение выбранного SMTP.BZ и проверки из [AD-008](architecture/system-architecture.md#ad-008--отправка-писем-через-smtpbz).
-- Механизм сессий двух аккаунтов и хранение ключа установки — [AD-009](architecture/system-architecture.md#ad-009--аккаунты-оператора-и-администратора-ключ-установки).
-- Контракты и состояния на границах камеры, загрузки, fal и email; восстановление после перезапуска.
-- От этих решений зависят технические спецификации и задачи реализации, а не уже принятые продуктовые требования.
+- Архитектурных вопросов, блокирующих постановку задач, нет.
+- Конкретный VPS, credentials fal/SMTP и адрес отправителя задаются при подключении.
+- Работа Canon, фактические ограничения вложений/брендинг SMTP.BZ и реальные генерации
+  проверяются в задачах; эти испытания пока не выполнены.
 
 ## Backbone Area Matrix
 | Area | Status | Authoritative source | Notes |
@@ -36,10 +36,10 @@ status: active
 | requirements_and_scenarios | authoritative | [PRD](prd.md), [REQ](requirements.md) | Принятое поведение и функциональная приёмка |
 | vocabulary | authoritative | [Glossary](glossary.md) | Один смысл для сессии, мероприятия, номера и подтверждений |
 | deployment_constraints | authoritative | [Размещение](prd.md#принятая-схема-размещения) | Домен, VPS, локальный HTTP origin и оборудование |
-| architecture_style | needed_before_tasks | [System Architecture](architecture/system-architecture.md) | Стек принят; внутренние границы и контракты ещё уточняются |
-| domain_data_and_states | needed_before_tasks | [PRD](prd.md) | Владение данными, снимок параметров, номера, состояния и удаление |
-| module_and_api_contracts | needed_before_tasks | [Boundary Map](contracts/boundary-map.md) | Модули и контракты пока не определены |
-| runtime_and_operations | needed_before_tasks | [Архитектура](architecture/system-architecture.md) | Медиа на VPS, SMTP.BZ, два аккаунта и ключ установки приняты; нужны детали подключения, сессий, очистки и установки |
+| architecture_style | authoritative | [System Architecture](architecture/system-architecture.md) | Приняты три серверных модуля и отсутствие отдельной Foundation |
+| domain_data_and_states | authoritative | [Данные](domains/core-domain.md), [состояния](states/lifecycle-map.md) | Основной путь и владение файлами определены |
+| module_and_api_contracts | authoritative | [Boundary Map](contracts/boundary-map.md), [HTTP](contracts/http-api.md) | HTTP и [внешние интеграции](contracts/integrations.md) достаточны для задач |
+| runtime_and_operations | authoritative | [Архитектура](architecture/system-architecture.md) | Один процесс/systemd, Caddy, SQLite/файлы, SMTP, роли и установка определены |
 | verification | authoritative | [Функции](epics/EP-001-reelme-event.md) | План функциональных проверок; результатов выполнения пока нет |
 
 ## Handoff To /prd-to-features
@@ -47,14 +47,16 @@ status: active
 - Результат: [EP-001](epics/EP-001-reelme-event.md) и пять функций с критериями приёмки.
 - Изменения требований согласовываются в PRD и отражаются в связанных REQ/AC.
 
-## Handoff To /spec-design
-- Прочитать [PRD](prd.md), [Constitution](constitution.md), пять функций и [fal API](analysis/fal-api.md).
-- Уточнить механизм принятой авторизации и подключение SMTP.BZ, затем состояния/данные, контракты, очистку и эксплуатацию.
-- Foundation и границы задач пока не выбраны; их определит принятая архитектура.
+## Handoff To /feature-to-tasks
+- /spec-design завершён в минимально достаточном объёме; пять функций имеют ссылки на спецификации.
+- Следующий шаг — задачи реализации. Приоритет первого сквозного сценария — MiniMax H3 Max Recast.
+- [Отдельный Foundation не нужен](foundation.md); сборка/запуск входят в первую сквозную задачу.
+- Проверки основного пути и подтверждённых интеграционных ограничений включаются в задачи,
+  без дополнительных механизмов и проверочных матриц для гипотетических сбоев.
 
 ## Global Backbone Status
-- Status: blocked
-- Planning Revision: 0
-- Mode: pending
-- Architecture artifact strategy: pending
-- Причина: механизм сессий и хранение ключа установки ещё не определены; подключение SMTP.BZ, состояния и контракты требуют проработки.
+- Status: minimal
+- Planning Revision: 1
+- Mode: local_simple_backbone
+- Architecture artifact strategy: split-by-boundary-topic
+- Основание: минимальная архитектура, данные, состояния, доступ и внешние интеграции определены.

@@ -19,19 +19,23 @@ source_of_truth:
 | Type | Path | Status | Scope | Change route |
 |---|---|---|---|---|
 | governance | [.memory-bank/constitution.md](constitution.md) | active | Top governing policy. | /constitution |
-| architecture | [.memory-bank/architecture/system-architecture.md](architecture/system-architecture.md) | draft | Принятые границы и обсуждаемая серверная основа ReelMe. | /spec-design; затем /spec-redesign |
+| architecture | [.memory-bank/architecture/system-architecture.md](architecture/system-architecture.md) | active | Серверная основа, модули и развёртывание ReelMe. | /spec-design; затем /spec-redesign |
+| data | [.memory-bank/domains/core-domain.md](domains/core-domain.md) | active | Идентичность сессии, снимок слота, файлы, даты и номера. | /spec-design |
+| lifecycle | [.memory-bank/states/lifecycle-map.md](states/lifecycle-map.md) | active | Обработка, выдача, восстановление и удаление. | /spec-design |
 | invariants | [.memory-bank/invariants.md](invariants.md) | planned | Global MUST/NEVER rules when evidence exists. | /spec-init or initial /spec-design; post-acceptance /spec-redesign |
 | glossary | [.memory-bank/glossary.md](glossary.md) | active | Термины ReelMe: слот, фотосессия, мероприятие, номер, подтверждения. | /spec-init or initial /spec-design; post-acceptance /spec-redesign |
-| contract | [.memory-bank/contracts/boundary-map.md](contracts/boundary-map.md) | draft | Canonical accepted module/change-unit dependency graph and boundary contracts. | initial /spec-design, post-acceptance /spec-redesign, or /feature-to-tasks |
+| contract | [.memory-bank/contracts/boundary-map.md](contracts/boundary-map.md) | active | Canonical accepted module/change-unit dependency graph and boundary contracts. | initial /spec-design, post-acceptance /spec-redesign, or /feature-to-tasks |
+| contract | [.memory-bank/contracts/http-api.md](contracts/http-api.md) | active | Каталог, съёмка, экран, архив и выдача; payloads, ошибки и повторы. | /spec-design |
+| contract | [.memory-bank/contracts/access.md](contracts/access.md) | active | Права, сроки входа, ключ установки и ссылки посетителя. | /spec-design |
+| contract | [.memory-bank/contracts/integrations.md](contracts/integrations.md) | active | Камера, SMTP, очередь fal и хранение медиа. | /spec-design |
+| foundation | [.memory-bank/foundation.md](foundation.md) | active | Принятое отсутствие отдельной Foundation-очереди. | /spec-design |
 | testing | [.memory-bank/testing/strategy.md](testing/strategy.md) | active | Framework baseline testing policy. | explicit project-level user decision |
 
 ## Planned Specs
 | Area | Expected path | Needed by | Notes |
 |---|---|---|---|
 | user_scenarios | .memory-bank/user-scenarios.md | /prd-to-features, /spec-design | Create only when scenario evidence exists or gaps must be explicit. |
-| core_domain | .memory-bank/domains/core-domain.md | /prd-to-features, /spec-design | Create only when domain model affects decomposition or shared design. |
 | module_dependency_graph | .memory-bank/contracts/boundary-map.md | /spec-design, /feature-to-tasks | Establish accepted architecture units first, then register concrete modules, allowed dependency edges, and exact contract blocks before task handoff. |
-| lifecycle_hints | .memory-bank/states/lifecycle-map.md | /prd-to-features, /spec-design | Create only when lifecycles affect feature boundaries. |
 | system_architecture | .memory-bank/architecture/system-architecture.md | /spec-design | Candidate architecture hub; fill only when selected or needed by /spec-design. |
 | interface_contract_specs | .memory-bank/contracts/*, .memory-bank/testing/*, and .memory-bank/runbooks/* | /spec-design, /foundation-to-tasks, /feature-to-tasks | Generate/update Interface Specification and only applicable Component/API/Event/Data contracts, protocol/agent/tool I/O, boundary compatibility, evidence/redaction, safety/security, testing, runbook, or verification contracts. Data Contract defines payloads crossing a boundary. |
 | data_specs | .memory-bank/domains/* and .memory-bank/states/* | /spec-design, /feature-to-tasks | Generate/update Data Specification for internal models, DB schemas, storage/persistence/migrations, internal data formats, validation/serialization rules, lifecycle, retention, seed, or runtime data paths. |
