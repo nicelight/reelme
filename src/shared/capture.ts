@@ -43,6 +43,7 @@ export interface CaptureStatus extends StartReceipt {
   acceptedPoseIndices: number[];
   complete: boolean;
   finalized: boolean;
+  error?: { code: string; message: string };
 }
 /** The saved description/thumbnail/demo are display material. Only generation
  * contains future model inputs; a P2V demo is never a generation input. */

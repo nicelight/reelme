@@ -1,0 +1,51 @@
+{
+  "transport": "controlled fake fal; no external API calls",
+  "sessions": [
+    "d60c71f7-bf9c-481a-8ac1-4d4b8d0eddac",
+    "2535707a-be5e-4052-b96f-1371e85f3b65",
+    "4afc587f-c553-4760-b598-ebee74ab34c7"
+  ],
+  "jobs": [
+    {
+      "session_id": "2535707a-be5e-4052-b96f-1371e85f3b65",
+      "request_id": "request-1",
+      "video_size": 3039,
+      "frame_size": 674,
+      "width": 320,
+      "height": 240,
+      "duration": 5
+    },
+    {
+      "session_id": "4afc587f-c553-4760-b598-ebee74ab34c7",
+      "request_id": "request-2",
+      "video_size": 3039,
+      "frame_size": 674,
+      "width": 320,
+      "height": 240,
+      "duration": 5
+    },
+    {
+      "session_id": "d60c71f7-bf9c-481a-8ac1-4d4b8d0eddac",
+      "request_id": "request-3",
+      "video_size": 3039,
+      "frame_size": 674,
+      "width": 320,
+      "height": 240,
+      "duration": 5
+    }
+  ],
+  "inputAResolution": "768P",
+  "inputBResolution": "1080P",
+  "oldAndNewVideoUrlsDiffer": true,
+  "unchangedMaterialUrlIsStable": true,
+  "submitCount": 3,
+  "downloadCount": 3,
+  "stateAfterRestart": "preparing",
+  "videoSha256": "3804418dddc0054524cdae5c684b514c1fea8215f70efa1a1a977bea7acf3917",
+  "verified": [
+    "complete FFmpeg decode",
+    "ffprobe 320x240, 5 seconds",
+    "JPEG extracted",
+    "no ready before issuance"
+  ]
+}

@@ -4,7 +4,7 @@
  * including across edits, hidden slots and midnight. Photo bytes are written and
  * decoded before a short DB transaction publishes one position. Finalize changes
  * capturing to submit_pending once, only for a complete set; later photo writes
- * are refused, including uploads that started before finalize. No camera/fal calls. */
+ * are refused, including uploads that started before finalize. No camera/fal calls; generation errors are a safe projection from Sessions. */
 import { randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdir, rm, stat } from 'node:fs/promises';
@@ -46,7 +46,8 @@ export function captureStatus(db: DB, sessionId: string): CaptureStatus {
   const acceptedPoseIndices = (db.prepare('SELECT pose_index FROM capture_photos WHERE session_id=? ORDER BY pose_index').all(sessionId) as { pose_index: number }[]).map(row => row.pose_index);
   const posePlan = photoPoses.slice(0, session.snapshot.expectedPhotos).map(pose => ({ ...pose }));
   const complete = acceptedPoseIndices.length === posePlan.length && posePlan.every(pose => acceptedPoseIndices.includes(pose.index));
-  return { sessionId, date: session.event_date, number: session.number, state: session.state, posePlan, acceptedPoseIndices, complete, finalized: complete && session.state !== 'capturing' };
+  const error = db.prepare('SELECT error_code,error_message FROM generation_jobs WHERE session_id=?').get(sessionId) as { error_code: string | null; error_message: string | null } | undefined;
+  return { ...(error?.error_code ? { error: { code: error.error_code, message: error.error_message! } } : {}), sessionId, date: session.event_date, number: session.number, state: session.state, posePlan, acceptedPoseIndices, complete, finalized: complete && session.state !== 'capturing' };
 }
 function requireCapturing(db: DB, sessionId: string, poseIndex: number) {
   const session = readSession(db, sessionId);

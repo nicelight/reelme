@@ -17,6 +17,7 @@
     "test:ui": "playwright test"
   },
   "dependencies": {
+    "@fal-ai/client": "^1.10.1",
     "@fastify/cookie": "^11.1.5",
     "@fastify/cors": "^11.4.3",
     "@fastify/multipart": "^10.1.8",

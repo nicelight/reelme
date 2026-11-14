@@ -1,8 +1,8 @@
 /** Module contract: idempotent SQLite schema for Access, Scenarios and capture
- * sessions/photos. Metadata stays in SQLite; media bytes stay outside the build. Repeated
+ * sessions/photos and generation state. Metadata stays in SQLite; media bytes stay outside the build. Repeated
  * setup/start preserves rows. Session number and start-request uniqueness are DB
- * invariants. One ready photo row belongs to one session/pose; generation and
- * issuance storage are added only by their owning tasks. */
+ * invariants. One accepted photo belongs to one session/pose. Generation records
+ * preserve confirmed fal identity and verified files; issuance is separate. */
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -44,7 +44,23 @@ export function openDatabase(dataDir: string) {
       width INTEGER NOT NULL, height INTEGER NOT NULL,
       PRIMARY KEY(session_id, pose_index)
     );
-    PRAGMA user_version = 3;
+    CREATE TABLE IF NOT EXISTS generation_jobs (
+      session_id TEXT PRIMARY KEY REFERENCES capture_sessions(id) ON DELETE CASCADE,
+      request_id TEXT, status_url TEXT, response_url TEXT, cancel_url TEXT,
+      result_url TEXT, video_path TEXT, frame_path TEXT,
+      video_size INTEGER, frame_size INTEGER, width INTEGER, height INTEGER, duration REAL,
+      error_code TEXT, error_message TEXT
+    );
+    CREATE TABLE IF NOT EXISTS provider_media (
+      token TEXT PRIMARY KEY,
+      slot_media_id TEXT UNIQUE REFERENCES slot_media(id) ON DELETE CASCADE,
+      session_id TEXT, pose_index INTEGER,
+      UNIQUE(session_id,pose_index),
+      FOREIGN KEY(session_id,pose_index) REFERENCES capture_photos(session_id,pose_index) ON DELETE CASCADE,
+      CHECK ((slot_media_id IS NOT NULL AND session_id IS NULL AND pose_index IS NULL)
+        OR (slot_media_id IS NULL AND session_id IS NOT NULL AND pose_index IS NOT NULL))
+    );
+    PRAGMA user_version = 4;
   `);
   return db;
 }

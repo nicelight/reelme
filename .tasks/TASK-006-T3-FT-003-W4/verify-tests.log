@@ -1,0 +1,52 @@
+TAP version 13
+# Subtest: saved A/B snapshots, stable scoped provider URLs and verified files survive restart without resubmit/redownload
+ok 1 - saved A/B snapshots, stable scoped provider URLs and verified files survive restart without resubmit/redownload
+  ---
+  duration_ms: 1662.461005
+  type: 'test'
+  ...
+# Subtest: missing submit acknowledgement retries, confirmed ID resumes after restart and transient polling only polls
+ok 2 - missing submit acknowledgement retries, confirmed ID resumes after restart and transient polling only polls
+  ---
+  duration_ms: 493.956745
+  type: 'test'
+  ...
+# Subtest: explicit submit refusals and terminal COMPLETED errors never resubmit or erase photos
+ok 3 - explicit submit refusals and terminal COMPLETED errors never resubmit or erase photos
+  ---
+  duration_ms: 441.869221
+  type: 'test'
+  ...
+# Subtest: download retry and preparing restart reuse saved result; empty/corrupt video never becomes ready
+ok 4 - download retry and preparing restart reuse saved result; empty/corrupt video never becomes ready
+  ---
+  duration_ms: 698.569284
+  type: 'test'
+  ...
+# Subtest: fal SDK sends the accepted headers and model payload without CDN uploads; status/result target confirmed ID
+ok 5 - fal SDK sends the accepted headers and model payload without CDN uploads; status/result target confirmed ID
+  ---
+  duration_ms: 8.84034
+  type: 'test'
+  ...
+# Subtest: background fal submission does not hold capture HTTP and startup consumes persisted pending sessions
+ok 6 - background fal submission does not hold capture HTTP and startup consumes persisted pending sessions
+  ---
+  duration_ms: 418.226424
+  type: 'test'
+  ...
+# Subtest: provider failure details stay server-side with credentials and capability URLs redacted
+ok 7 - provider failure details stay server-side with credentials and capability URLs redacted
+  ---
+  duration_ms: 357.719888
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5065.594207

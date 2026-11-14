@@ -1,0 +1,219 @@
+
+> reelme@0.1.0 test
+> tsx --test tests/*.test.ts
+
+TAP version 13
+# Subtest: roles, origin, fixed admin expiry, persistent operator and logout revocation
+ok 1 - roles, origin, fixed admin expiry, persistent operator and logout revocation
+  ---
+  duration_ms: 589.703316
+  type: 'test'
+  ...
+# Subtest: capture loader imports current manifest assets and permits localhost module CORS
+ok 2 - capture loader imports current manifest assets and permits localhost module CORS
+  ---
+  duration_ms: 185.895955
+  type: 'test'
+  ...
+# Subtest: all eleven models save; invalid model settings and wrong media are rejected
+    # Subtest: minimax/h3-max/recast
+    ok 1 - minimax/h3-max/recast
+      ---
+      duration_ms: 19.68906
+      type: 'test'
+      ...
+    # Subtest: fal-ai/kling-video/o1/video-to-video/edit
+    ok 2 - fal-ai/kling-video/o1/video-to-video/edit
+      ---
+      duration_ms: 9.404477
+      type: 'test'
+      ...
+    # Subtest: fal-ai/kling-video/o3/pro/video-to-video/edit
+    ok 3 - fal-ai/kling-video/o3/pro/video-to-video/edit
+      ---
+      duration_ms: 8.208338
+      type: 'test'
+      ...
+    # Subtest: kling/v4/video-to-video/edit
+    ok 4 - kling/v4/video-to-video/edit
+      ---
+      duration_ms: 8.778868
+      type: 'test'
+      ...
+    # Subtest: kling/v4/flash/video-to-video
+    ok 5 - kling/v4/flash/video-to-video
+      ---
+      duration_ms: 10.299568
+      type: 'test'
+      ...
+    # Subtest: kling/v4/reference-to-video
+    ok 6 - kling/v4/reference-to-video
+      ---
+      duration_ms: 8.823582
+      type: 'test'
+      ...
+    # Subtest: fal-ai/kling-video/o3/pro/reference-to-video
+    ok 7 - fal-ai/kling-video/o3/pro/reference-to-video
+      ---
+      duration_ms: 7.190606
+      type: 'test'
+      ...
+    # Subtest: kling/v4/flash/reference-to-video
+    ok 8 - kling/v4/flash/reference-to-video
+      ---
+      duration_ms: 9.50046
+      type: 'test'
+      ...
+    # Subtest: minimax/h3-max/reference-to-video
+    ok 9 - minimax/h3-max/reference-to-video
+      ---
+      duration_ms: 10.912337
+      type: 'test'
+      ...
+    # Subtest: fal-ai/vidu/q4/reference-to-video
+    ok 10 - fal-ai/vidu/q4/reference-to-video
+      ---
+      duration_ms: 9.43215
+      type: 'test'
+      ...
+    # Subtest: google/gemini-omni-flash/v1.2/reference-to-video
+    ok 11 - google/gemini-omni-flash/v1.2/reference-to-video
+      ---
+      duration_ms: 14.465537
+      type: 'test'
+      ...
+    1..11
+ok 3 - all eleven models save; invalid model settings and wrong media are rejected
+  ---
+  duration_ms: 667.364662
+  type: 'test'
+  ...
+# Subtest: real file validation, immutable replacement and restart preserve old media
+ok 4 - real file validation, immutable replacement and restart preserve old media
+  ---
+  duration_ms: 378.135129
+  type: 'test'
+  ...
+# Subtest: new JPEG waits for file-list difference; preserves original bytes across two sessions and shutter modes
+ok 5 - new JPEG waits for file-list difference; preserves original bytes across two sessions and shutter modes
+  ---
+  duration_ms: 171.903853
+  type: 'test'
+  ...
+# Subtest: retry recovers list/download errors at current pose and never replaces earlier Blobs
+ok 6 - retry recovers list/download errors at current pose and never replaces earlier Blobs
+  ---
+  duration_ms: 61.756631
+  type: 'test'
+  ...
+# Subtest: timeout or lost shutter response resumes the pending exposure; overlapping commands are refused
+ok 7 - timeout or lost shutter response resumes the pending exposure; overlapping commands are refused
+  ---
+  duration_ms: 99.312125
+  type: 'test'
+  ...
+# Subtest: invalid JPEG can be downloaded again without another exposure; abort stops polling
+ok 8 - invalid JPEG can be downloaded again without another exposure; abort stops polling
+  ---
+  duration_ms: 100.085263
+  type: 'test'
+  ...
+# Subtest: installation catalog paginates 13 visible slots and protects current preview media
+ok 9 - installation catalog paginates 13 visible slots and protects current preview media
+  ---
+  duration_ms: 658.10887
+  type: 'test'
+  ...
+# Subtest: starts are idempotent, numbered per Novosibirsk date, and reject unavailable or invalid requests
+ok 10 - starts are idempotent, numbered per Novosibirsk date, and reject unavailable or invalid requests
+  ---
+  duration_ms: 530.659144
+  type: 'test'
+  ...
+# Subtest: session snapshots preserve replaced settings and bytes across restart; P2V demo stays outside generation
+ok 11 - session snapshots preserve replaced settings and bytes across restart; P2V demo stays outside generation
+  ---
+  duration_ms: 561.537641
+  type: 'test'
+  ...
+# Subtest: saved A/B snapshots, stable scoped provider URLs and verified files survive restart without resubmit/redownload
+ok 12 - saved A/B snapshots, stable scoped provider URLs and verified files survive restart without resubmit/redownload
+  ---
+  duration_ms: 1584.425071
+  type: 'test'
+  ...
+# Subtest: missing submit acknowledgement retries, confirmed ID resumes after restart and transient polling only polls
+ok 13 - missing submit acknowledgement retries, confirmed ID resumes after restart and transient polling only polls
+  ---
+  duration_ms: 451.716549
+  type: 'test'
+  ...
+# Subtest: explicit submit refusals and terminal COMPLETED errors never resubmit or erase photos
+ok 14 - explicit submit refusals and terminal COMPLETED errors never resubmit or erase photos
+  ---
+  duration_ms: 402.69674
+  type: 'test'
+  ...
+# Subtest: download retry and preparing restart reuse saved result; empty/corrupt video never becomes ready
+ok 15 - download retry and preparing restart reuse saved result; empty/corrupt video never becomes ready
+  ---
+  duration_ms: 745.496308
+  type: 'test'
+  ...
+# Subtest: fal SDK sends the accepted headers and model payload without CDN uploads; status/result target confirmed ID
+ok 16 - fal SDK sends the accepted headers and model payload without CDN uploads; status/result target confirmed ID
+  ---
+  duration_ms: 12.295423
+  type: 'test'
+  ...
+# Subtest: background fal submission does not hold capture HTTP and startup consumes persisted pending sessions
+ok 17 - background fal submission does not hold capture HTTP and startup consumes persisted pending sessions
+  ---
+  duration_ms: 476.622007
+  type: 'test'
+  ...
+# Subtest: provider failure details stay server-side with credentials and capability URLs redacted
+ok 18 - provider failure details stay server-side with credentials and capability URLs redacted
+  ---
+  duration_ms: 345.235167
+  type: 'test'
+  ...
+# Subtest: video limits include boundary values and provider file size limits
+ok 19 - video limits include boundary values and provider file size limits
+  ---
+  duration_ms: 3.486078
+  type: 'test'
+  ...
+# Subtest: P2V permits optional demo and fractional H3 duration, rejects unexpected provider settings
+ok 20 - P2V permits optional demo and fractional H3 duration, rejects unexpected provider settings
+  ---
+  duration_ms: 11.444558
+  type: 'test'
+  ...
+# Subtest: complete sets persist across restart; retry replaces only one pose; finalize transitions once and releases next session
+ok 21 - complete sets persist across restart; retry replaces only one pose; finalize transitions once and releases next session
+  ---
+  duration_ms: 784.997022
+  type: 'test'
+  ...
+# Subtest: capture endpoints enforce installation key/CORS and reject malformed images, positions and oversized uploads
+ok 22 - capture endpoints enforce installation key/CORS and reject malformed images, positions and oversized uploads
+  ---
+  duration_ms: 536.368929
+  type: 'test'
+  ...
+# Subtest: an upload already in flight cannot change a finalized photo or hold a DB transaction while streaming
+ok 23 - an upload already in flight cannot change a finalized photo or hold a DB transaction while streaming
+  ---
+  duration_ms: 459.009307
+  type: 'test'
+  ...
+1..23
+# tests 34
+# suites 0
+# pass 34
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5189.289303

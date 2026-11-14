@@ -1,5 +1,5 @@
 /** Module contract: composes Fastify, Access, Scenarios and Sessions with private storage.
- * Only built client assets are public; capture-loader reads the current manifest
+ * Public assets and scoped provider capabilities are served; capture-loader reads the current manifest
  * and imports cloud assets without changing localhost origin. No device APIs here.
  */
 import Fastify from 'fastify';
@@ -16,13 +16,16 @@ import { openDatabase } from './db.js';
 import { createAccess } from './access/index.js';
 import { registerScenarios } from './scenarios/index.js';
 import { registerSessions } from './sessions/index.js';
+import { registerProviderMedia } from './sessions/provider-media.js';
+import { createFalTransport } from './sessions/fal.js';
+import { createGenerationWorker, type GenerationOptions } from './sessions/generation.js';
 
-export async function createApp(config: Config, options: { now?: () => number; logger?: boolean } = {}) {
-  const app = Fastify({ logger: options.logger ? { redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'] } : false, bodyLimit: 64 * 1024 });
+export async function createApp(config: Config, options: { now?: () => number; logger?: boolean; generation?: GenerationOptions } = {}) {
+  const app = Fastify({ logger: options.logger ? { redact: ['req.url', 'req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'] } : false, bodyLimit: 64 * 1024 });
   const db = openDatabase(config.dataDir);
   app.addHook('onClose', async () => { db.close(); });
   app.addHook('onSend', async (request, reply) => {
-    reply.header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', 'same-origin');
+    reply.header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', request.url.startsWith('/provider-media/') ? 'no-referrer' : 'same-origin');
     if (request.url.startsWith('/api/')) reply.header('Cache-Control', 'no-store');
   });
   app.setErrorHandler((error: Error & { statusCode?: number; code?: string }, _request, reply) => {
@@ -39,6 +42,13 @@ export async function createApp(config: Config, options: { now?: () => number; l
   const access = await createAccess(app, db, config, options.now ?? Date.now);
   registerScenarios(app, db, config.dataDir, access);
   registerSessions(app, db, config.dataDir, access, options.now ?? Date.now);
+  registerProviderMedia(app, db, config.dataDir);
+  const generation = options.generation ?? (config.falKey ? { client: createFalTransport(config.falKey), secret: config.falKey } : undefined);
+  if (generation) {
+    const worker = createGenerationWorker(db, config.dataDir, config.origin, app.log, generation);
+    app.addHook('onReady', async () => { worker.start(); });
+    app.addHook('onClose', async () => { await worker.stop(); });
+  }
   await app.register(fastifyStatic, { root: join(config.clientDir, 'assets'), prefix: '/assets/', decorateReply: false, immutable: true, maxAge: '1y', index: false });
   app.get('/', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
   app.get('/admin', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
