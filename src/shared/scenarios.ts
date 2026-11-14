@@ -29,7 +29,7 @@ export const recastId = models[0].id;
 const id = z.string().uuid();
 export const slotSchema = z.object({
   description: z.string().trim().min(1, 'Добавьте описание').max(5000),
-  visible: z.boolean(), thumbnailId: id,
+  visible: z.boolean(), thumbnailId: id, simulateGeneration: z.boolean().default(false), testPhotoId: id.optional(),
   mode: z.enum(['V2V', 'P2V']), model: z.string(),
   videoId: id.optional(), referenceIds: z.array(id).max(3).default([]), demoId: id.optional(),
   prompt: z.string().trim().max(10000).optional(),
@@ -60,11 +60,15 @@ export const slotSchema = z.object({
 });
 export type SlotInput = z.infer<typeof slotSchema>;
 export type Slot = SlotInput & { id: string };
+/** Admin-only projection of a retained real result. Unknown legacy times stay null. */
+export interface LastSlotVideo {
+  sessionId: string; videoUrl: string; submittedAt: number | null; readyAt: number | null; elapsedMs: number | null;
+}
 export interface Media { id: string; kind: 'image' | 'video'; mime: string; size: number; duration?: number; width: number; height: number }
 export const titleFrom = (description: string) => description.trim().split(/\s+/u).slice(0, 3).join(' ');
 export function blankSlot(mode: Mode = 'V2V'): SlotInput {
   const model = models.find(m => m.mode === mode)!;
-  return { description: '', visible: true, thumbnailId: '', mode, model: model.id, referenceIds: [], resolution: model.defaultResolution, ...(mode === 'P2V' ? { duration: 10, prompt: '' } : { recastShotsConfirmed: false }) };
+  return { description: '', visible: true, simulateGeneration: false, thumbnailId: '', mode, model: model.id, referenceIds: [], resolution: model.defaultResolution, ...(mode === 'P2V' ? { duration: 10, prompt: '' } : { recastShotsConfirmed: false }) };
 }
 export function videoProblem(model: Model, media: Media): string | undefined {
   if (media.kind !== 'video') return 'Нужен видеофайл';

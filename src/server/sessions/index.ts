@@ -1,13 +1,15 @@
 /** Module contract: Sessions owns session start, daily numbering and accepted JPEGs.
  * A single SQLite transaction fixes Novosibirsk date, unique number and a value
  * snapshot from Scenarios. Repeated startRequestId returns the saved receipt,
- * including across edits, hidden slots and midnight. Photo bytes are written and
+ * including across edits, hidden slots and midnight. Manual admin tests alone use
+ * a saved test JPEG, copied into independent photos through the same intake/finalize.
+ * Test retries retain their original source; concurrent preparation is rejected. Photo bytes are written and
  * decoded before a short DB transaction publishes one position. Finalize changes
  * capturing to submit_pending once, only for a complete set; later photo writes
  * are refused, including uploads that started before finalize or event deletion. No camera/fal calls; generation errors are a safe projection from Sessions. */
 import { randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { mkdir, rm, stat } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { FastifyInstance } from 'fastify';
@@ -16,7 +18,8 @@ import { z } from 'zod';
 import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
 import { snapshotSlot } from '../scenarios/store.js';
-import { photoPoses, type StartReceipt, type SlotSnapshot, type SessionState, type CaptureStatus } from '../../shared/capture.js';
+import { readTestPhoto } from '../scenarios/media.js';
+import { MAX_PHOTO_BYTES, photoPoses, type StartReceipt, type SlotSnapshot, type SessionState, type CaptureStatus } from '../../shared/capture.js';
 import { HttpError } from '../errors.js';
 
 interface SessionRow {
@@ -26,7 +29,6 @@ interface SessionRow {
 const startSchema = z.object({ startRequestId: z.string().uuid(), slotId: z.string().uuid() }).strict();
 const sessionParams = z.object({ id: z.string().uuid() });
 const photoParams = sessionParams.extend({ poseIndex: z.string().regex(/^[0-3]$/).transform(Number) });
-const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
 const dateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Novosibirsk', year: 'numeric', month: '2-digit', day: '2-digit' });
 export function eventDate(timestamp: number): string {
   const fields = Object.fromEntries(dateFormatter.formatToParts(new Date(timestamp)).map(part => [part.type, part.value]));
@@ -39,7 +41,9 @@ function receipt(row: SessionRow): StartReceipt {
 export function readSession(db: DB, sessionId: string) {
   const row = db.prepare('SELECT s.* FROM capture_sessions s JOIN events e ON e.date=s.event_date WHERE s.id=? AND e.deleting=0').get(sessionId) as SessionRow | undefined;
   if (!row) throw new HttpError(404, 'NOT_FOUND', 'Сессия не найдена');
-  return { ...row, snapshot: JSON.parse(row.snapshot) as SlotSnapshot };
+  const snapshot = JSON.parse(row.snapshot) as SlotSnapshot;
+  snapshot.generation.simulateGeneration ??= false;
+  return { ...row, snapshot };
 }
 export function captureStatus(db: DB, sessionId: string): CaptureStatus {
   const session = readSession(db, sessionId);
@@ -64,15 +68,15 @@ async function inspectPhoto(path: string) {
   } catch { throw new HttpError(400, 'INVALID_PHOTO', 'Нужен корректный JPEG до 40 мегапикселей'); }
 }
 export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, access: Access, now: () => number) {
-  const start = db.transaction((startRequestId: string, slotId: string) => {
+  const start = db.transaction((startRequestId: string, slotId: string, manualTest = false) => {
     const previous = db.prepare('SELECT * FROM capture_sessions WHERE start_request_id=?').get(startRequestId) as SessionRow | undefined;
     if (previous) {
-      readSession(db, previous.id);
-      if (previous.slot_id !== slotId) throw new HttpError(409, 'START_CONFLICT', 'Этот запрос уже относится к другому сюжету');
+      const saved = readSession(db, previous.id);
+      if (previous.slot_id !== slotId || !!saved.snapshot.testPhotoId !== manualTest) throw new HttpError(409, 'START_CONFLICT', 'Этот запрос уже относится к другому сюжету');
       return { created: false, value: receipt(previous) };
     }
     // Read the current visibility/config under the same write transaction as numbering.
-    const snapshot = snapshotSlot(db, slotId);
+    const snapshot = snapshotSlot(db, slotId, manualTest);
     const createdAt = now(); const date = eventDate(createdAt);
     db.prepare('INSERT INTO events(date,next_number) VALUES (?,1) ON CONFLICT(date) DO NOTHING').run(date);
     if (db.prepare('SELECT 1 FROM events WHERE date=? AND deleting=1').get(date)) throw new HttpError(409, 'EVENT_DELETING', 'Мероприятие удаляется');
@@ -93,10 +97,8 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     const { id } = sessionParams.parse(request.params);
     return captureStatus(db, id);
   });
-  app.put('/api/capture/sessions/:id/photos/:poseIndex', { preHandler: access.requireInstallation }, async request => {
-    const { id, poseIndex } = photoParams.parse(request.params);
+  async function storePhoto(id: string, poseIndex: number, write: (path: string) => Promise<void>) {
     requireCapturing(db, id, poseIndex);
-    if (!request.isMultipart()) throw new HttpError(415, 'INVALID_PHOTO', 'Передайте JPEG в multipart-поле file');
     // Unique path per attempt: never overwrite a file that finalize may have accepted.
     const relative = `sessions/${id}/${randomUUID()}.jpg`;
     const directory = join(dataDir, 'media', 'sessions', id);
@@ -104,16 +106,10 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     let previous: { path: string } | undefined;
     try {
       await mkdir(directory, { recursive: true, mode: 0o700 });
-      let received = false;
-      for await (const part of request.parts({ limits: { files: 1, fields: 0, parts: 1, fileSize: MAX_PHOTO_BYTES } })) {
-        if (part.type !== 'file' || part.fieldname !== 'file' || part.mimetype !== 'image/jpeg') throw new HttpError(400, 'INVALID_PHOTO', 'Передайте один JPEG в поле file');
-        await pipeline(part.file, createWriteStream(path, { flags: 'wx', mode: 0o600 }));
-        if (part.file.truncated) throw new HttpError(413, 'PHOTO_TOO_LARGE', 'JPEG превышает 20 MiB');
-        received = true;
-      }
-      if (!received) throw new HttpError(400, 'INVALID_PHOTO', 'Не получен JPEG');
+      await write(path);
       const { width, height } = await inspectPhoto(path);
       const { size } = await stat(path);
+      if (size > MAX_PHOTO_BYTES) throw new HttpError(413, 'PHOTO_TOO_LARGE', 'JPEG превышает 20 MiB');
       previous = db.transaction(() => {
         requireCapturing(db, id, poseIndex);
         const old = db.prepare('SELECT path FROM capture_photos WHERE session_id=? AND pose_index=?').get(id, poseIndex) as { path: string } | undefined;
@@ -124,6 +120,21 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     } catch (error) { await rm(path, { force: true }); throw error; }
     if (previous) await rm(join(dataDir, 'media', previous.path), { force: true }).catch(() => app.log.warn({ code: 'PHOTO_CLEANUP_FAILED' }, 'Не удалён заменённый снимок'));
     return captureStatus(db, id);
+  }
+  app.put('/api/capture/sessions/:id/photos/:poseIndex', { preHandler: access.requireInstallation }, async request => {
+    const { id, poseIndex } = photoParams.parse(request.params);
+    requireCapturing(db, id, poseIndex);
+    if (!request.isMultipart()) throw new HttpError(415, 'INVALID_PHOTO', 'Передайте JPEG в multipart-поле file');
+    return storePhoto(id, poseIndex, async path => {
+      let received = false;
+      for await (const part of request.parts({ limits: { files: 1, fields: 0, parts: 1, fileSize: MAX_PHOTO_BYTES } })) {
+        if (part.type !== 'file' || part.fieldname !== 'file' || part.mimetype !== 'image/jpeg') throw new HttpError(400, 'INVALID_PHOTO', 'Передайте один JPEG в поле file');
+        await pipeline(part.file, createWriteStream(path, { flags: 'wx', mode: 0o600 }));
+        if (part.file.truncated) throw new HttpError(413, 'PHOTO_TOO_LARGE', 'JPEG превышает 20 MiB');
+        received = true;
+      }
+      if (!received) throw new HttpError(400, 'INVALID_PHOTO', 'Не получен JPEG');
+    });
   });
   const finalize = db.transaction((sessionId: string) => {
     const status = captureStatus(db, sessionId);
@@ -134,5 +145,42 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
   app.post('/api/capture/sessions/:id/finalize', { preHandler: access.requireInstallation }, request => {
     const { id } = sessionParams.parse(request.params);
     return finalize.immediate(id);
+  });
+  const preparingTests = new Set<string>();
+  const testBody = z.object({ startRequestId: z.string().uuid() }).strict();
+  app.post('/api/admin/slots/:id/test-generations', { preHandler: [access.requireAdmin, access.requireOrigin] }, async (request, reply) => {
+    const { id: slotId } = sessionParams.parse(request.params);
+    const { startRequestId } = testBody.parse(request.body);
+    const started = start.immediate(startRequestId, slotId, true);
+    const id = started.value.sessionId;
+    if (preparingTests.has(id)) throw new HttpError(409, 'TEST_IN_PROGRESS', 'Тестовые фотографии ещё подготавливаются. Повторите запрос.');
+    if (started.value.state !== 'capturing') return captureStatus(db, id);
+    preparingTests.add(id);
+    try {
+      const session = readSession(db, id);
+      const media = readTestPhoto(db, session.snapshot.testPhotoId!);
+      const bytes = await readFile(join(dataDir, 'media', media.path));
+      const accepted = captureStatus(db, id).acceptedPoseIndices;
+      for (let pose = 0; pose < session.snapshot.expectedPhotos; pose++) {
+        if (!accepted.includes(pose)) await storePhoto(id, pose, path => writeFile(path, bytes, { flag: 'wx', mode: 0o600 }));
+      }
+      const status = finalize.immediate(id);
+      return reply.code(started.created ? 201 : 200).send(status);
+    } catch {
+      // No paths or decoder details in a public test result. Never queue partial input.
+      db.transaction(() => {
+        if (db.prepare("UPDATE capture_sessions SET state='failed' WHERE id=? AND state='capturing'").run(id).changes) {
+          db.prepare(`INSERT INTO generation_jobs(session_id,error_code,error_message) VALUES (?,'TEST_PREPARATION_FAILED',?)
+            ON CONFLICT(session_id) DO UPDATE SET error_code=excluded.error_code,error_message=excluded.error_message`)
+            .run(id, 'Не удалось подготовить тестовую фотографию. Сохраните JPEG и запустите новый тест.');
+        }
+      })();
+      return captureStatus(db, id);
+    } finally { preparingTests.delete(id); }
+  });
+  app.get('/api/admin/slots/:id/sessions/:sessionId', { preHandler: access.requireAdmin }, request => {
+    const { id, sessionId } = z.object({ id: z.string().uuid(), sessionId: z.string().uuid() }).parse(request.params);
+    if (readSession(db, sessionId).slot_id !== id) throw new HttpError(404, 'NOT_FOUND', 'Сессия этого сюжета не найдена');
+    return captureStatus(db, sessionId);
   });
 }

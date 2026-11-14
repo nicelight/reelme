@@ -22,10 +22,11 @@ import { createFalDelete, createFalTransport } from './sessions/fal.js';
 import { createGenerationWorker, type GenerationOptions } from './sessions/generation.js';
 import { registerReceive, publishReady } from './sessions/receive.js';
 import { registerEvents } from './sessions/events.js';
+import { registerSlotResults } from './sessions/slot-results.js';
 import { registerDisplay } from './sessions/display.js';
 import { createEmailWorker, createSmtpTransport, recoverEmail, type EmailOptions } from './sessions/email.js';
 
-export async function createApp(config: Config, options: { now?: () => number; logger?: boolean; generation?: GenerationOptions; email?: EmailOptions; cleanup?: CleanupOptions } = {}) {
+export async function createApp(config: Config, options: { now?: () => number; logger?: boolean; generation?: GenerationOptions | false; email?: EmailOptions; cleanup?: CleanupOptions } = {}) {
   const app = Fastify({ logger: options.logger ? { redact: ['req.url', 'req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'] } : false, bodyLimit: 64 * 1024 });
   const db = openDatabase(config.dataDir);
   app.addHook('onClose', async () => { db.close(); });
@@ -47,6 +48,7 @@ export async function createApp(config: Config, options: { now?: () => number; l
   const access = await createAccess(app, db, config, options.now ?? Date.now);
   registerScenarios(app, db, config.dataDir, access);
   registerSessions(app, db, config.dataDir, access, options.now ?? Date.now);
+  registerSlotResults(app, db, config.dataDir, access);
   registerProviderMedia(app, db, config.dataDir);
   registerDisplay(app, db, config.dataDir, config.origin, access, options.now ?? Date.now);
   const deleteOutput = options.cleanup?.deleteOutput ?? (config.falKey ? createFalDelete(config.falKey) : undefined);
@@ -55,16 +57,16 @@ export async function createApp(config: Config, options: { now?: () => number; l
   app.addHook('onReady', async () => { await cleanup.runOnce(); cleanup.start(); });
   app.addHook('onClose', async () => { await cleanup.stop(); });
   registerReceive(app, db, config.dataDir, config.clientDir, options.now ?? Date.now);
-  const publish = (id: string) => publishReady(db, config.dataDir, id);
+  const publish = (id: string) => publishReady(db, config.dataDir, id, options.now);
   app.addHook('onReady', async () => {
     // A serving client entrypoint is part of ready, also when fal is disabled.
     await readFile(join(config.clientDir, 'index.html'));
     const rows = db.prepare("SELECT s.id FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id WHERE s.state='preparing' AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.deleting=0) AND g.video_path IS NOT NULL").all() as { id: string }[];
     for (const row of rows) await publish(row.id);
   });
-  const generation = options.generation ?? (config.falKey ? { client: createFalTransport(config.falKey), secret: config.falKey } : undefined);
-  if (generation) {
-    const worker = createGenerationWorker(db, config.dataDir, config.origin, app.log, { ...generation, publishReady: publish, deleteOutput });
+  const generation = options.generation ?? (config.falKey ? { client: createFalTransport(config.falKey), secret: config.falKey } : {});
+  if (generation !== false) {
+    const worker = createGenerationWorker(db, config.dataDir, config.origin, app.log, { ...generation, now: options.now ?? generation.now, publishReady: publish, deleteOutput });
     app.addHook('onReady', async () => { worker.start(); });
     app.addHook('onClose', async () => { await worker.stop(); });
   }

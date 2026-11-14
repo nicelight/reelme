@@ -1,0 +1,12 @@
+{
+  "pass": true,
+  "session": "session-20261114T124739-5bbc1249",
+  "serverPid": 669029,
+  "polls": 91,
+  "ffmpegPid": 673213,
+  "pollingSeconds": 20.21,
+  "aliveBeforeIdle": true,
+  "idleMessageConfirmed": true,
+  "encoderErrors": false,
+  "childrenAfterIdle": []
+}

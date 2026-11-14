@@ -198,3 +198,43 @@ test('Chromium operator journey: stages, QR, paging, email retry, durable deadli
     await writeFile(join(artifacts, 'display-observations.json'), JSON.stringify({ browser: 'Chromium', stages: [1, 2, 3, 4, 5, 6], filledSegmentsMatchStage: true, capturingNotGeneration: true, generationFailureNoSuccess: true, currentStageColorAcrossFilledBar: true, qrDecodedFromRenderedCard: true, noOpenedFromDisplayOrMedia: true, pagingMilliseconds: 10000, wraps: true, unauthenticatedQrForm: true, email: 'real worker / injected local transport / failed then sent', firstConfirmationSurvivesRetryRestartReload: true, visibleAtSeconds: 179, hiddenAtSeconds: 180, hiddenWithoutSuccessfulPoll: true, fullEmailAbsent: true, mobileWidth: 375, theme: ['light', 'dark'], filesAndLinksPreservedAfterHideAndDayChange: true, archiveUi: 'deferred to FT-005', pageErrors: errors, externalFalOrSmtp: false }, null, 2) + '\n');
   } finally { await visitor.close(); await stop(); db.close(); await rm(root, { recursive: true, force: true }); }
 });
+
+test('Chromium simulation: actual no-key worker shows honest success and safe preparation failure without QR or real stages', async ({ page }) => {
+  const root = await mkdtemp(join(tmpdir(), 'reelme-simulation-ui-'));
+  const infoPath = join(root, 'fixture.json'); const origin = 'http://127.0.0.1:3197';
+  const artifacts = process.env.REELME_BROWSER_ARTIFACTS ?? '.tasks/TASK-013-T3-FT-006-W10';
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  const child = spawn(process.execPath, ['--import', 'tsx', 'tests/simulation-browser-server.ts'], { env: { ...process.env, FIXTURE_INFO: infoPath }, stdio: 'ignore' });
+  let db: ReturnType<typeof openDatabase> | undefined;
+  try {
+    for (let i = 0; i < 100; i++) {
+      if (child.exitCode !== null) throw new Error('Simulation fixture exited');
+      try { const info = JSON.parse(await readFile(infoPath, 'utf8')); db = openDatabase(info.dataDir); break; } catch {}
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    if (!db) throw new Error('Simulation fixture did not start');
+    await page.setViewportSize({ width: 1440, height: 900 }); await page.goto(origin);
+    await page.getByLabel('Логин').fill('operator'); await page.getByLabel('Пароль', { exact: true }).fill('test-password');
+    await page.getByRole('button', { name: 'Войти', exact: true }).click();
+    const success = page.locator('[data-session="1"]'); const failed = page.locator('[data-session="2"]');
+    await expect(success).toContainText('Эмуляция успешна, но fal не отвечает');
+    await expect(success).toContainText('Тестовый режим: fal не вызывался');
+    await expect(failed).toContainText('Эмуляция не завершена');
+    await expect(failed).toContainText('Не удалось подготовить фотографии или материалы сюжета. Обратитесь к сотруднику.');
+    await expect(page.locator('.result-card .stage-bar, .result-card .result-qr, .result-card video')).toHaveCount(0);
+    await expect(page.getByText('Фото и QR появятся здесь', { exact: false })).toHaveCount(0);
+    expect(db.prepare('SELECT 1 FROM session_delivery LIMIT 1').get()).toBeUndefined();
+    await mkdir(artifacts, { recursive: true });
+    await page.screenshot({ path: join(artifacts, 'display-simulation-desktop.png'), fullPage: true });
+    await page.reload(); await expect(success).toContainText('Эмуляция успешна, но fal не отвечает');
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expect(success).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: join(artifacts, 'display-simulation-mobile.png'), fullPage: true });
+    expect(errors).toEqual([]);
+  } finally {
+    db?.close();
+    if (child.exitCode === null) { const exited = new Promise<void>(resolve => child.once('exit', () => resolve())); child.kill('SIGTERM'); await exited; }
+    await rm(root, { recursive: true, force: true });
+  }
+});

@@ -1,0 +1,136 @@
+{
+  "id": "TASK-015-T2-FT-006-W12",
+  "title": "Показывать последнее реальное видео слота и время его получения",
+  "status": "done",
+  "wave": "W12",
+  "feature": "FT-006",
+  "reqs": [
+    "REQ-021",
+    "REQ-018"
+  ],
+  "depends_on": [
+    "TASK-014-T2-FT-006-W11",
+    "TASK-008-T3-FT-003-W5",
+    "TASK-011-T2-FT-005-W8"
+  ],
+  "touched_files": [
+    "src/shared/scenarios.ts",
+    "src/shared/capture.ts",
+    "src/server/scenarios/",
+    "src/server/sessions/",
+    "src/server/app.ts",
+    "src/client/cloud/",
+    "tests/",
+    "README.md",
+    "src/server/db.ts"
+  ],
+  "tier": "T2",
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "api-regressions",
+      "command": "npm test",
+      "required": true
+    },
+    {
+      "name": "browser-outcome",
+      "command": "REELME_BROWSER_ARTIFACTS=.tasks/TASK-015-T2-FT-006-W12 npm run test:ui -- tests/editor.spec.ts",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-14",
+      "stage": "implementation",
+      "result": "PASS",
+      "summary": "Additive idempotent migration добавляет nullable submitted_at/ready_at. Submit time фиксируется перед реальной попыткой и обновляется только retry без ID; первый ready time записывается атомарно с ready/delivery после проверки файла. Admin-only latest-video выбирает retained real ready своего slot_id по completion/fallback order; стабильный session URL поддерживает Range и не меняет delivery. Плеер/Novosibirsk время/elapsed находятся ниже тестовой кнопки, обновляются одним последовательным polling flow; неизвестные времена явно Нет данных.",
+      "checks": [
+        "npm run check: PASS, 0 errors / 0 warnings; npm run build: PASS.",
+        "Финальный npm test без параллельного browser run: PASS, 77/77 (54 top-level), api-tests-final.log. Новые slot-results.test.ts: 3/3.",
+        "Управляемые часы: первый submit=base, retry=base+5000, restart/poll сохраняют его; ready после queue/download=base+30000, elapsed=25000ms; повтор publishReady не сдвигает ready_at. Simulation timestamps=NULL и transport calls=0.",
+        "Два слота, несколько реальных jobs: более ранний start с более поздним completion выбирается последним; чужой слот, newer failed/pending/simulated не вытесняют успех. Deleting сразу скрывает результат; event delete выбирает следующий retained result, затем video=null.",
+        "Админские routes: anonymous401/operator+installation403, wrong slot/non-ready/missing file404; полный MP4 и несколько Range206 совпали по байтам, invalid range416. receive opened_at осталсяNULL.",
+        "Legacy DB с удалёнными новыми колонками и user_version6: migration/reopen сохраняет все прежние job fields и MP4 bytes, оба времени NULL; startup не заполняет их для уже ready.",
+        "Chromium editor: 2/2 PASS. Actual playback (currentTime>0.1), стабильный URL после failed/simulated, Novosibirsk/GMT+7 и duration labels; legacy показывает два Нет данных с тем же MP4. Screenshot review desktop/mobile выполнен.",
+        "git diff --check: PASS."
+      ],
+      "evidence": [
+        ".tasks/TASK-015-T2-FT-006-W12/check.log",
+        ".tasks/TASK-015-T2-FT-006-W12/build.log",
+        ".tasks/TASK-015-T2-FT-006-W12/slot-results.log",
+        ".tasks/TASK-015-T2-FT-006-W12/api-tests-final.log",
+        ".tasks/TASK-015-T2-FT-006-W12/browser.log",
+        ".tasks/TASK-015-T2-FT-006-W12/slot-test-browser-observations.json",
+        ".tasks/TASK-015-T2-FT-006-W12/slot-test-real-ready.png",
+        ".tasks/TASK-015-T2-FT-006-W12/slot-last-video-legacy.png"
+      ],
+      "limitations": [
+        "Только isolated temporary SQLite/media, controlled provider clocks/transport; реальные fal/SMTP и аппаратная камера не вызывались. Commit/push/deploy не выполнялись.",
+        "Первый full run: старый redaction assertion ложно нашёл 422 внутри случайного UUID; исправлен только тест (числовой status проверяется в error). Второй full run: timing flake существующего camera abort mock (13 вместо12 requests), сохранён api-tests.log; код/тест камеры не менялись. Финальный обычный npm test 77/77 PASS без browser-нагрузки.",
+        "После integrated read-only review продуктовый source не менялся; delta ограничен redaction-test исправлением и evidence."
+      ],
+      "handoff": "Результат принят владельцем по функциональным проверкам и независимому read-only review FT-006; после review продуктовый код не менялся. TASK-013–015 завершены."
+    }
+  ],
+  "docs": [
+    ".memory-bank/features/FT-006-slot-testing.md"
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-006-slot-testing.md#FT-006-AC-004"
+  ],
+  "normative_inputs": [
+    ".memory-bank/constitution.md",
+    ".memory-bank/prd.md#постоянные-инструменты-тестирования-слота",
+    ".memory-bank/contracts/http-api.md#тестирование-слота",
+    ".memory-bank/contracts/access.md",
+    ".memory-bank/contracts/boundary-map.md",
+    ".memory-bank/domains/core-domain.md#тестовые-настройки-и-времена-генерации",
+    ".memory-bank/states/lifecycle-map.md#эмуляция-и-ручной-тест",
+    ".memory-bank/contracts/integrations.md#эмуляция-подготовки-без-fal"
+  ],
+  "purpose": "Замыкать тестирование слота просмотром последнего успешного результата и измеренным ожиданием.",
+  "success_outcome": "Внизу редактора доступен собственный последний ready MP4 слота с временем отправки в fal и elapsed до локальной готовности; pending/error/simulation его не скрывают.",
+  "constraints": [
+    "Владеет AC-004 целиком. Additive idempotent schema migration добавляет nullable generation_jobs.submitted_at/ready_at, не изменяет старые результаты и не выдумывает их времена.",
+    "submitted_at фиксируется непосредственно перед фактическим submit; новая попытка без подтверждённого ID обновляет его. После ID polling/restart/download время не меняют. ready_at фиксируется атомарно при первом ready. Simulation не заполняет ни одно из этих полей.",
+    "GET /api/admin/slots/:id/latest-video выбирает ready по COALESCE(ready_at,created_at), затем created_at/id, только неудаляемые ещё хранимые session данного slot_id. Pending/failed/simulated не вытесняют успех. Старым временамNULL соответствует «Нет данных».",
+    "GET /api/admin/slots/:id/results/:sessionId/video проверяет admin, slot ownership, ready/deletion и существование файла, поддерживает Range. Используется session-owned файл и стабильный URL, без новой копии или receive opened.",
+    "Плеер находится ниже тестовой кнопки. Дата/время имеют явный Novosibirsk timezone, elapsed подписан «До готового видео» и включает очередь/скачивание. Пустой результат/ошибка API явно показаны. Состояние обновляется при выборе слота и во время теста, без перезапуска генерации."
+  ],
+  "invariants": [
+    "Последний результат принадлежит выбранному slot_id; разные Range-запросы воспроизводят один session-owned файл.",
+    "Просмотр результата не меняет generation/delivery, не открывает форму и не продлевает хранение.",
+    "Удалённое мероприятие/видео не возвращается через новый admin route."
+  ],
+  "verification_targets": [
+    "Два слота и несколько accepted real jobs с управляемыми now: отправка, retry безID, restart послеID, ready; проверить точные submitted/ready/elapsed и выбор последнего completion.",
+    "После успеха создать pending,failed,simulated — старое видео остаётся; старый ready безвремён отображается сNULL. Удалить последний event — выбрать следующий retained ready либо пустое состояние.",
+    "API role/ownership/Range assertions и Chromium воспроизведение внизу редактора с правильными временными подписями; receive opened не изменён."
+  ],
+  "evidence_required": [
+    "Точные времена на управляемых часах и snapshot старых строк после миграции; empty/legacy/multiple-results/cleanup assertions.",
+    "Browser реального воспроизведения локального MP4 и подписей; API negative permissions/slot isolation/Range."
+  ],
+  "anti_goals": [
+    "Постоянная копия последнего ролика вне retention, новая история/аналитическая подсистема, измерение чистого model compute time.",
+    "Фейковый ролик для simulation или внешние платные fal-запуски ради проверки."
+  ],
+  "runtime_context": {
+    "forbidden_scope": [
+      "linux_digiCamControl/",
+      "Деплой, commit/push, production-данные, реальные платные fal-вызовы и SMTP-отправки"
+    ],
+    "stop_conditions": [
+      "Необходимость изменить согласованные product semantics или выполнять внешние платные/необратимые действия: вернуть вопрос владельцу."
+    ]
+  }
+}

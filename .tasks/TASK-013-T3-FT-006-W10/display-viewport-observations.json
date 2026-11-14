@@ -1,0 +1,558 @@
+[
+  {
+    "width": 1280,
+    "height": 720,
+    "phase": "initial",
+    "bounds": [
+      {
+        "kind": "card",
+        "top": 255.921875,
+        "right": 426.65625,
+        "bottom": 638.515625,
+        "left": 40,
+        "width": 386.65625,
+        "height": 382.59375
+      },
+      {
+        "kind": "qr",
+        "top": 473.515625,
+        "right": 211,
+        "bottom": 627.515625,
+        "left": 57,
+        "width": 154,
+        "height": 154
+      },
+      {
+        "kind": "card",
+        "top": 255.921875,
+        "right": 833.328125,
+        "bottom": 638.515625,
+        "left": 446.65625,
+        "width": 386.671875,
+        "height": 382.59375
+      },
+      {
+        "kind": "card",
+        "top": 255.921875,
+        "right": 1239.984375,
+        "bottom": 638.515625,
+        "left": 853.328125,
+        "width": 386.65625,
+        "height": 382.59375
+      }
+    ]
+  },
+  {
+    "width": 1280,
+    "height": 720,
+    "phase": "next",
+    "bounds": [
+      {
+        "kind": "card",
+        "top": 255.921875,
+        "right": 426.65625,
+        "bottom": 638.515625,
+        "left": 40,
+        "width": 386.65625,
+        "height": 382.59375
+      },
+      {
+        "kind": "qr",
+        "top": 473.515625,
+        "right": 211,
+        "bottom": 627.515625,
+        "left": 57,
+        "width": 154,
+        "height": 154
+      },
+      {
+        "kind": "card",
+        "top": 255.921875,
+        "right": 833.328125,
+        "bottom": 638.515625,
+        "left": 446.65625,
+        "width": 386.671875,
+        "height": 382.59375
+      },
+      {
+        "kind": "qr",
+        "top": 473.515625,
+        "right": 617.65625,
+        "bottom": 627.515625,
+        "left": 463.65625,
+        "width": 154,
+        "height": 154
+      },
+      {
+        "kind": "card",
+        "top": 255.921875,
+        "right": 1239.984375,
+        "bottom": 638.515625,
+        "left": 853.328125,
+        "width": 386.65625,
+        "height": 382.59375
+      },
+      {
+        "kind": "qr",
+        "top": 473.515625,
+        "right": 1024.328125,
+        "bottom": 627.515625,
+        "left": 870.328125,
+        "width": 154,
+        "height": 154
+      }
+    ]
+  },
+  {
+    "width": 1366,
+    "height": 768,
+    "phase": "initial",
+    "bounds": [
+      {
+        "kind": "card",
+        "top": 255.921875,
+        "right": 455.328125,
+        "bottom": 678.515625,
+        "left": 40,
+        "width": 415.328125,
+        "height": 422.59375
+      },
+      {
+        "kind": "qr",
+        "top": 513.515625,
+        "right": 211,
+        "bottom": 667.515625,
+        "left": 57,
+        "width": 154,
+        "height": 154
+      },
+      {
+        "kind": "card",
+        "top": 255.921875,
+        "right": 890.65625,
+        "bottom": 678.515625,
+        "left": 475.328125,
+        "width": 415.328125,
+        "height": 422.59375
+      },
+      {
+        "kind": "card",
+        "top": 255.921875,
+        "right": 1326,
+        "bottom": 678.515625,
+        "left": 910.65625,
+        "width": 415.34375,
+        "height": 422.59375
+      }
+    ]
+  },
+  {
+    "width": 1366,
+    "height": 768,
+    "phase": "next",
+    "bounds": [
+      {
+        "kind": "card",
+        "top": 255.921875,
+        "right": 455.328125,
+        "bottom": 678.515625,
+        "left": 40,
+        "width": 415.328125,
+        "height": 422.59375
+      },
+      {
+        "kind": "qr",
+        "top": 513.515625,
+        "right": 211,
+        "bottom": 667.515625,
+        "left": 57,
+        "width": 154,
+        "height": 154
+      },
+      {
+        "kind": "card",
+        "top": 255.921875,
+        "right": 890.65625,
+        "bottom": 678.515625,
+        "left": 475.328125,
+        "width": 415.328125,
+        "height": 422.59375
+      },
+      {
+        "kind": "qr",
+        "top": 513.515625,
+        "right": 646.328125,
+        "bottom": 667.515625,
+        "left": 492.328125,
+        "width": 154,
+        "height": 154
+      },
+      {
+        "kind": "card",
+        "top": 255.921875,
+        "right": 1326,
+        "bottom": 678.515625,
+        "left": 910.65625,
+        "width": 415.34375,
+        "height": 422.59375
+      },
+      {
+        "kind": "qr",
+        "top": 513.515625,
+        "right": 1081.65625,
+        "bottom": 667.515625,
+        "left": 927.65625,
+        "width": 154,
+        "height": 154
+      }
+    ]
+  },
+  {
+    "width": 1440,
+    "height": 900,
+    "phase": "initial",
+    "bounds": [
+      {
+        "kind": "card",
+        "top": 329,
+        "right": 480,
+        "bottom": 861.59375,
+        "left": 40,
+        "width": 440,
+        "height": 532.59375
+      },
+      {
+        "kind": "qr",
+        "top": 690.59375,
+        "right": 211,
+        "bottom": 844.59375,
+        "left": 57,
+        "width": 154,
+        "height": 154
+      },
+      {
+        "kind": "card",
+        "top": 329,
+        "right": 940,
+        "bottom": 861.59375,
+        "left": 500,
+        "width": 440,
+        "height": 532.59375
+      },
+      {
+        "kind": "card",
+        "top": 329,
+        "right": 1400,
+        "bottom": 861.59375,
+        "left": 960,
+        "width": 440,
+        "height": 532.59375
+      }
+    ]
+  },
+  {
+    "width": 1440,
+    "height": 900,
+    "phase": "next",
+    "bounds": [
+      {
+        "kind": "card",
+        "top": 329,
+        "right": 480,
+        "bottom": 861.59375,
+        "left": 40,
+        "width": 440,
+        "height": 532.59375
+      },
+      {
+        "kind": "qr",
+        "top": 690.59375,
+        "right": 211,
+        "bottom": 844.59375,
+        "left": 57,
+        "width": 154,
+        "height": 154
+      },
+      {
+        "kind": "card",
+        "top": 329,
+        "right": 940,
+        "bottom": 861.59375,
+        "left": 500,
+        "width": 440,
+        "height": 532.59375
+      },
+      {
+        "kind": "qr",
+        "top": 690.59375,
+        "right": 671,
+        "bottom": 844.59375,
+        "left": 517,
+        "width": 154,
+        "height": 154
+      },
+      {
+        "kind": "card",
+        "top": 329,
+        "right": 1400,
+        "bottom": 861.59375,
+        "left": 960,
+        "width": 440,
+        "height": 532.59375
+      },
+      {
+        "kind": "qr",
+        "top": 690.59375,
+        "right": 1131,
+        "bottom": 844.59375,
+        "left": 977,
+        "width": 154,
+        "height": 154
+      }
+    ]
+  },
+  {
+    "width": 1920,
+    "height": 1080,
+    "phase": "initial",
+    "bounds": [
+      {
+        "kind": "card",
+        "top": 333.03125,
+        "right": 660,
+        "bottom": 865.625,
+        "left": 100,
+        "width": 560,
+        "height": 532.59375
+      },
+      {
+        "kind": "qr",
+        "top": 694.625,
+        "right": 271,
+        "bottom": 848.625,
+        "left": 117,
+        "width": 154,
+        "height": 154
+      },
+      {
+        "kind": "card",
+        "top": 333.03125,
+        "right": 1240,
+        "bottom": 865.625,
+        "left": 680,
+        "width": 560,
+        "height": 532.59375
+      },
+      {
+        "kind": "card",
+        "top": 333.03125,
+        "right": 1820,
+        "bottom": 865.625,
+        "left": 1260,
+        "width": 560,
+        "height": 532.59375
+      }
+    ]
+  },
+  {
+    "width": 1920,
+    "height": 1080,
+    "phase": "next",
+    "bounds": [
+      {
+        "kind": "card",
+        "top": 333.03125,
+        "right": 660,
+        "bottom": 865.625,
+        "left": 100,
+        "width": 560,
+        "height": 532.59375
+      },
+      {
+        "kind": "qr",
+        "top": 694.625,
+        "right": 271,
+        "bottom": 848.625,
+        "left": 117,
+        "width": 154,
+        "height": 154
+      },
+      {
+        "kind": "card",
+        "top": 333.03125,
+        "right": 1240,
+        "bottom": 865.625,
+        "left": 680,
+        "width": 560,
+        "height": 532.59375
+      },
+      {
+        "kind": "qr",
+        "top": 694.625,
+        "right": 851,
+        "bottom": 848.625,
+        "left": 697,
+        "width": 154,
+        "height": 154
+      },
+      {
+        "kind": "card",
+        "top": 333.03125,
+        "right": 1820,
+        "bottom": 865.625,
+        "left": 1260,
+        "width": 560,
+        "height": 532.59375
+      },
+      {
+        "kind": "qr",
+        "top": 694.625,
+        "right": 1431,
+        "bottom": 848.625,
+        "left": 1277,
+        "width": 154,
+        "height": 154
+      }
+    ]
+  },
+  {
+    "width": 1920,
+    "height": 1300,
+    "phase": "initial",
+    "bounds": [
+      {
+        "kind": "card",
+        "top": 333.03125,
+        "right": 660,
+        "bottom": 788.625,
+        "left": 100,
+        "width": 560,
+        "height": 455.59375
+      },
+      {
+        "kind": "qr",
+        "top": 614.625,
+        "right": 245,
+        "bottom": 742.625,
+        "left": 117,
+        "width": 128,
+        "height": 128
+      },
+      {
+        "kind": "card",
+        "top": 333.03125,
+        "right": 1240,
+        "bottom": 788.625,
+        "left": 680,
+        "width": 560,
+        "height": 455.59375
+      },
+      {
+        "kind": "card",
+        "top": 333.03125,
+        "right": 1820,
+        "bottom": 788.625,
+        "left": 1260,
+        "width": 560,
+        "height": 455.59375
+      },
+      {
+        "kind": "card",
+        "top": 808.625,
+        "right": 660,
+        "bottom": 1229.21875,
+        "left": 100,
+        "width": 560,
+        "height": 420.59375
+      },
+      {
+        "kind": "qr",
+        "top": 1090.21875,
+        "right": 245,
+        "bottom": 1218.21875,
+        "left": 117,
+        "width": 128,
+        "height": 128
+      },
+      {
+        "kind": "card",
+        "top": 808.625,
+        "right": 1240,
+        "bottom": 1229.21875,
+        "left": 680,
+        "width": 560,
+        "height": 420.59375
+      },
+      {
+        "kind": "qr",
+        "top": 1090.21875,
+        "right": 825,
+        "bottom": 1218.21875,
+        "left": 697,
+        "width": 128,
+        "height": 128
+      },
+      {
+        "kind": "card",
+        "top": 808.625,
+        "right": 1820,
+        "bottom": 1229.21875,
+        "left": 1260,
+        "width": 560,
+        "height": 420.59375
+      },
+      {
+        "kind": "qr",
+        "top": 1090.21875,
+        "right": 1405,
+        "bottom": 1218.21875,
+        "left": 1277,
+        "width": 128,
+        "height": 128
+      }
+    ]
+  },
+  {
+    "width": 1920,
+    "height": 1300,
+    "phase": "next",
+    "bounds": [
+      {
+        "kind": "card",
+        "top": 333.03125,
+        "right": 660,
+        "bottom": 753.625,
+        "left": 100,
+        "width": 560,
+        "height": 420.59375
+      },
+      {
+        "kind": "qr",
+        "top": 614.625,
+        "right": 245,
+        "bottom": 742.625,
+        "left": 117,
+        "width": 128,
+        "height": 128
+      },
+      {
+        "kind": "card",
+        "top": 333.03125,
+        "right": 1240,
+        "bottom": 753.625,
+        "left": 680,
+        "width": 560,
+        "height": 420.59375
+      },
+      {
+        "kind": "qr",
+        "top": 614.625,
+        "right": 825,
+        "bottom": 742.625,
+        "left": 697,
+        "width": 128,
+        "height": 128
+      }
+    ]
+  }
+]

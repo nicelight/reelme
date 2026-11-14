@@ -1,0 +1,13 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/editor.spec.ts tests/display.spec.ts --grep Chromium simulation|admin saves
+
+
+Running 2 tests using 1 worker
+
+(node:711082) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/display.spec.ts:202:1 › Chromium simulation: actual no-key worker shows honest success and safe preparation failure without QR or real stages (2.2s)
+  ✓  2 tests/editor.spec.ts:20:1 › admin saves both modes, reopens after restart, model rules, access and local capture (6.0s)
+
+  2 passed (10.0s)

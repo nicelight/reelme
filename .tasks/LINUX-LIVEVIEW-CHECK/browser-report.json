@@ -1,0 +1,18 @@
+{
+  "errors": [],
+  "previews": 6,
+  "photos": [
+    {
+      "width": 1280,
+      "height": 720,
+      "bytes": 179167
+    },
+    {
+      "width": 1280,
+      "height": 720,
+      "bytes": 178683
+    }
+  ],
+  "screenshotsSaved": false,
+  "pass": true
+}

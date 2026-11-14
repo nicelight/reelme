@@ -1,0 +1,11 @@
+{
+  "errors": [],
+  "pass": true,
+  "errorState": {
+    "hidden": true,
+    "display": "none",
+    "startEnabled": true,
+    "error": "Injected preview unavailable"
+  },
+  "recovered": true
+}

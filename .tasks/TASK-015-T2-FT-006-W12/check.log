@@ -1,0 +1,8 @@
+
+> reelme@0.1.0 check
+> svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.server.json --noEmit
+
+Loading svelte-check in workspace: /home/serg/Projects/reelme
+Getting Svelte diagnostics...
+
+svelte-check found 0 errors and 0 warnings

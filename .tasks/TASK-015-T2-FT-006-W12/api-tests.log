@@ -1,0 +1,499 @@
+
+> reelme@0.1.0 test
+> tsx --test tests/*.test.ts
+
+TAP version 13
+# Subtest: roles, origin, fixed admin expiry, persistent operator and logout revocation
+ok 1 - roles, origin, fixed admin expiry, persistent operator and logout revocation
+  ---
+  duration_ms: 1132.071605
+  type: 'test'
+  ...
+# Subtest: capture loader imports current manifest assets and permits localhost module CORS
+ok 2 - capture loader imports current manifest assets and permits localhost module CORS
+  ---
+  duration_ms: 307.478496
+  type: 'test'
+  ...
+# Subtest: all eleven models save; invalid model settings and wrong media are rejected
+    # Subtest: minimax/h3-max/recast
+    ok 1 - minimax/h3-max/recast
+      ---
+      duration_ms: 28.420049
+      type: 'test'
+      ...
+    # Subtest: fal-ai/kling-video/o1/video-to-video/edit
+    ok 2 - fal-ai/kling-video/o1/video-to-video/edit
+      ---
+      duration_ms: 15.81752
+      type: 'test'
+      ...
+    # Subtest: fal-ai/kling-video/o3/pro/video-to-video/edit
+    ok 3 - fal-ai/kling-video/o3/pro/video-to-video/edit
+      ---
+      duration_ms: 11.77364
+      type: 'test'
+      ...
+    # Subtest: kling/v4/video-to-video/edit
+    ok 4 - kling/v4/video-to-video/edit
+      ---
+      duration_ms: 11.352027
+      type: 'test'
+      ...
+    # Subtest: kling/v4/flash/video-to-video
+    ok 5 - kling/v4/flash/video-to-video
+      ---
+      duration_ms: 26.903109
+      type: 'test'
+      ...
+    # Subtest: kling/v4/reference-to-video
+    ok 6 - kling/v4/reference-to-video
+      ---
+      duration_ms: 18.596028
+      type: 'test'
+      ...
+    # Subtest: fal-ai/kling-video/o3/pro/reference-to-video
+    ok 7 - fal-ai/kling-video/o3/pro/reference-to-video
+      ---
+      duration_ms: 21.102579
+      type: 'test'
+      ...
+    # Subtest: kling/v4/flash/reference-to-video
+    ok 8 - kling/v4/flash/reference-to-video
+      ---
+      duration_ms: 11.764616
+      type: 'test'
+      ...
+    # Subtest: minimax/h3-max/reference-to-video
+    ok 9 - minimax/h3-max/reference-to-video
+      ---
+      duration_ms: 11.90249
+      type: 'test'
+      ...
+    # Subtest: fal-ai/vidu/q4/reference-to-video
+    ok 10 - fal-ai/vidu/q4/reference-to-video
+      ---
+      duration_ms: 10.618005
+      type: 'test'
+      ...
+    # Subtest: google/gemini-omni-flash/v1.2/reference-to-video
+    ok 11 - google/gemini-omni-flash/v1.2/reference-to-video
+      ---
+      duration_ms: 13.020525
+      type: 'test'
+      ...
+    1..11
+ok 3 - all eleven models save; invalid model settings and wrong media are rejected
+  ---
+  duration_ms: 1110.112469
+  type: 'test'
+  ...
+# Subtest: real file validation, immutable replacement and restart preserve old media
+ok 4 - real file validation, immutable replacement and restart preserve old media
+  ---
+  duration_ms: 629.86146
+  type: 'test'
+  ...
+# Subtest: archive: totals, snapshots, own media, permissions and read-only state after public hide
+ok 5 - archive: totals, snapshots, own media, permissions and read-only state after public hide
+  ---
+  duration_ms: 2443.140384
+  type: 'test'
+  ...
+# Subtest: archive calendar uses saved start identity when photo arrives after Novosibirsk midnight
+ok 6 - archive calendar uses saved start identity when photo arrives after Novosibirsk midnight
+  ---
+  duration_ms: 797.980229
+  type: 'test'
+  ...
+# Subtest: new JPEG waits for file-list difference; preserves original bytes across two sessions and shutter modes
+ok 7 - new JPEG waits for file-list difference; preserves original bytes across two sessions and shutter modes
+  ---
+  duration_ms: 300.818405
+  type: 'test'
+  ...
+# Subtest: retry recovers list/download errors at current pose and never replaces earlier Blobs
+ok 8 - retry recovers list/download errors at current pose and never replaces earlier Blobs
+  ---
+  duration_ms: 78.99594
+  type: 'test'
+  ...
+# Subtest: timeout or lost shutter response resumes the pending exposure; overlapping commands are refused
+ok 9 - timeout or lost shutter response resumes the pending exposure; overlapping commands are refused
+  ---
+  duration_ms: 135.054902
+  type: 'test'
+  ...
+# Subtest: invalid JPEG can be downloaded again without another exposure; abort stops polling
+not ok 10 - invalid JPEG can be downloaded again without another exposure; abort stops polling
+  ---
+  duration_ms: 111.576924
+  type: 'test'
+  location: '/home/serg/Projects/reelme/tests/camera.test.ts:92:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    13 !== 12
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 12
+  actual: 13
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/serg/Projects/reelme/tests/camera.test.ts:103:65)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: installation catalog paginates 13 visible slots and protects current preview media
+ok 11 - installation catalog paginates 13 visible slots and protects current preview media
+  ---
+  duration_ms: 1366.000626
+  type: 'test'
+  ...
+# Subtest: starts are idempotent, numbered per Novosibirsk date, and reject unavailable or invalid requests
+ok 12 - starts are idempotent, numbered per Novosibirsk date, and reject unavailable or invalid requests
+  ---
+  duration_ms: 904.376067
+  type: 'test'
+  ...
+# Subtest: session snapshots preserve replaced settings and bytes across restart; P2V demo stays outside generation
+ok 13 - session snapshots preserve replaced settings and bytes across restart; P2V demo stays outside generation
+  ---
+  duration_ms: 1033.361537
+  type: 'test'
+  ...
+# Subtest: cleanup manual: permissions, owned files/capabilities gone, other-day snapshot and current-slot materials survive
+ok 14 - cleanup manual: permissions, owned files/capabilities gone, other-day snapshot and current-slot materials survive
+  ---
+  duration_ms: 2194.061843
+  type: 'test'
+  ...
+# isolated DB/media fixture: /tmp/reelme-test-JKYk1J
+# Subtest: retention: exactly 14 calendar days survive until Novosibirsk midnight; startup resumes saved deletion
+ok 15 - retention: exactly 14 calendar days survive until Novosibirsk midnight; startup resumes saved deletion
+  ---
+  duration_ms: 1775.690956
+  type: 'test'
+  ...
+# isolated DB/media fixture: /tmp/reelme-test-OsxpfH
+# Subtest: deleting marker immediately closes every new operation, late generation publication and email fallback
+ok 16 - deleting marker immediately closes every new operation, late generation publication and email fallback
+  ---
+  duration_ms: 1748.058572
+  type: 'test'
+  ...
+# isolated DB/media fixture: /tmp/reelme-test-fOQKJx
+# Subtest: fal delete contract: known URL only, bounded POST, remote failure logged and local cleanup completes
+ok 17 - fal delete contract: known URL only, bounded POST, remote failure logged and local cleanup completes
+  ---
+  duration_ms: 1307.395711
+  type: 'test'
+  ...
+# isolated DB/media fixture: /tmp/reelme-test-Tzbi0E
+# Subtest: operator display: six stages, explicit errors, stable order, private media, masked payload and matching QR
+ok 18 - operator display: six stages, explicit errors, stable order, private media, masked payload and matching QR
+  ---
+  duration_ms: 2537.953973
+  type: 'test'
+  ...
+# Subtest: first-confirmation deadline survives retry/restart; today is Novosibirsk; hidden data and links remain
+ok 19 - first-confirmation deadline survives retry/restart; today is Novosibirsk; hidden data and links remain
+  ---
+  duration_ms: 1278.224978
+  type: 'test'
+  ...
+# Subtest: real Nodemailer SMTP: pending/sending/sent, one atomic handler, byte-identical MP4 and no resubmission
+ok 20 - real Nodemailer SMTP: pending/sending/sent, one atomic handler, byte-identical MP4 and no resubmission
+  ---
+  duration_ms: 1271.19637
+  type: 'test'
+  ...
+# Subtest: size/type refusals send exactly one link fallback for the same result; generic DATA errors do not
+    # Subtest: 552 5.3.4 Message size exceeds limit
+    ok 1 - 552 5.3.4 Message size exceeds limit
+      ---
+      duration_ms: 853.008904
+      type: 'test'
+      ...
+    # Subtest: 554 5.7.1 Attachment type not allowed
+    ok 2 - 554 5.7.1 Attachment type not allowed
+      ---
+      duration_ms: 812.916642
+      type: 'test'
+      ...
+    # Subtest: 552 Message size exceeds limit
+    ok 3 - 552 Message size exceeds limit
+      ---
+      duration_ms: 813.360087
+      type: 'test'
+      ...
+    # Subtest: 552 5.2.2 Mailbox full
+    ok 4 - 552 5.2.2 Mailbox full
+      ---
+      duration_ms: 786.004596
+      type: 'test'
+      ...
+    # Subtest: 552 5.2.2 Mailbox size limit exceeded
+    ok 5 - 552 5.2.2 Mailbox size limit exceeded
+      ---
+      duration_ms: 617.087696
+      type: 'test'
+      ...
+    # Subtest: 552 Mailbox size limit exceeded
+    ok 6 - 552 Mailbox size limit exceeded
+      ---
+      duration_ms: 714.911596
+      type: 'test'
+      ...
+    # Subtest: 552 Requested mail action aborted: mailbox size limit exceeded
+    ok 7 - 552 Requested mail action aborted: mailbox size limit exceeded
+      ---
+      duration_ms: 607.248339
+      type: 'test'
+      ...
+    # Subtest: 552 5.2.2 Message too large for mailbox quota
+    ok 8 - 552 5.2.2 Message too large for mailbox quota
+      ---
+      duration_ms: 655.926039
+      type: 'test'
+      ...
+    # Subtest: 554 5.7.1 Policy rejected
+    ok 9 - 554 5.7.1 Policy rejected
+      ---
+      duration_ms: 569.055386
+      type: 'test'
+      ...
+    1..9
+ok 21 - size/type refusals send exactly one link fallback for the same result; generic DATA errors do not
+  ---
+  duration_ms: 6434.552328
+  type: 'test'
+  ...
+# Subtest: file stream failure falls back; failure of both variants allows corrected manual retry without changing first confirmation
+ok 22 - file stream failure falls back; failure of both variants allows corrected manual retry without changing first confirmation
+  ---
+  duration_ms: 791.600436
+  type: 'test'
+  ...
+# Subtest: authentication, connection and lost DATA acknowledgement never trigger fallback or automatic retry
+    # Subtest: auth
+    ok 1 - auth
+      ---
+      duration_ms: 423.652828
+      type: 'test'
+      ...
+    # Subtest: connection
+    ok 2 - connection
+      ---
+      duration_ms: 434.918489
+      type: 'test'
+      ...
+    # Subtest: lost
+    ok 3 - lost
+      ---
+      duration_ms: 398.564007
+      type: 'test'
+      ...
+    1..3
+ok 23 - authentication, connection and lost DATA acknowledgement never trigger fallback or automatic retry
+  ---
+  duration_ms: 1258.066017
+  type: 'test'
+  ...
+# Subtest: restart processes saved pending, quarantines sending, and preserves confirmed time/files/ready
+ok 24 - restart processes saved pending, quarantines sending, and preserves confirmed time/files/ready
+  ---
+  duration_ms: 627.747774
+  type: 'test'
+  ...
+# Subtest: SMTP configuration requires complete credentials, TLS transport refuses plaintext-only SMTP
+ok 25 - SMTP configuration requires complete credentials, TLS transport refuses plaintext-only SMTP
+  ---
+  duration_ms: 9.041253
+  type: 'test'
+  ...
+# Subtest: saved A/B snapshots, stable scoped provider URLs and verified files survive restart without resubmit/redownload
+ok 26 - saved A/B snapshots, stable scoped provider URLs and verified files survive restart without resubmit/redownload
+  ---
+  duration_ms: 3369.320215
+  type: 'test'
+  ...
+# Subtest: missing submit acknowledgement retries, confirmed ID resumes after restart and transient polling only polls
+ok 27 - missing submit acknowledgement retries, confirmed ID resumes after restart and transient polling only polls
+  ---
+  duration_ms: 794.528632
+  type: 'test'
+  ...
+# Subtest: explicit submit refusals and terminal COMPLETED errors never resubmit or erase photos
+ok 28 - explicit submit refusals and terminal COMPLETED errors never resubmit or erase photos
+  ---
+  duration_ms: 725.691003
+  type: 'test'
+  ...
+# Subtest: download retry and preparing restart reuse saved result; empty/corrupt video never becomes ready
+ok 29 - download retry and preparing restart reuse saved result; empty/corrupt video never becomes ready
+  ---
+  duration_ms: 1329.365097
+  type: 'test'
+  ...
+# Subtest: fal SDK sends the accepted headers and model payload without CDN uploads; status/result target confirmed ID
+ok 30 - fal SDK sends the accepted headers and model payload without CDN uploads; status/result target confirmed ID
+  ---
+  duration_ms: 15.328901
+  type: 'test'
+  ...
+# Subtest: background fal submission does not hold capture HTTP and startup consumes persisted pending sessions
+ok 31 - background fal submission does not hold capture HTTP and startup consumes persisted pending sessions
+  ---
+  duration_ms: 663.044212
+  type: 'test'
+  ...
+# Subtest: provider failure details stay server-side with credentials and capability URLs redacted
+ok 32 - provider failure details stay server-side with credentials and capability URLs redacted
+  ---
+  duration_ms: 526.434698
+  type: 'test'
+  ...
+# Subtest: ten model inputs, snapshot isolation and reusable P2V URLs yield decoded session-owned results
+ok 33 - ten model inputs, snapshot isolation and reusable P2V URLs yield decoded session-owned results
+  ---
+  duration_ms: 9258.580693
+  type: 'test'
+  ...
+# Subtest: model prompt limits reject oversized saved settings and incomplete photo sets
+ok 34 - model prompt limits reject oversized saved settings and incomplete photo sets
+  ---
+  duration_ms: 4.178253
+  type: 'test'
+  ...
+# Subtest: ready capabilities survive restart, isolate two sessions and serve the original photo/verified video
+ok 35 - ready capabilities survive restart, isolate two sessions and serve the original photo/verified video
+  ---
+  duration_ms: 2305.998444
+  type: 'test'
+  ...
+# Subtest: email acceptance is atomic, first confirmation is fixed and only failed permits manual retry
+ok 36 - email acceptance is atomic, first confirmation is fixed and only failed permits manual retry
+  ---
+  duration_ms: 1768.832291
+  type: 'test'
+  ...
+# Subtest: missing or corrupt persisted video/frame cannot publish ready
+ok 37 - missing or corrupt persisted video/frame cannot publish ready
+  ---
+  duration_ms: 1390.984977
+  type: 'test'
+  ...
+# Subtest: application generation callback publishes newly prepared results without email or another submit
+ok 38 - application generation callback publishes newly prepared results without email or another submit
+  ---
+  duration_ms: 1193.243253
+  type: 'test'
+  ...
+# Subtest: video limits include boundary values and provider file size limits
+ok 39 - video limits include boundary values and provider file size limits
+  ---
+  duration_ms: 6.756759
+  type: 'test'
+  ...
+# Subtest: P2V permits optional demo and fractional H3 duration, rejects unexpected provider settings
+ok 40 - P2V permits optional demo and fractional H3 duration, rejects unexpected provider settings
+  ---
+  duration_ms: 32.717335
+  type: 'test'
+  ...
+# Subtest: simulation default, admin-only persistence, catalog privacy and immutable old/new snapshots; real positive control
+ok 41 - simulation default, admin-only persistence, catalog privacy and immutable old/new snapshots; real positive control
+  ---
+  duration_ms: 1915.313203
+  type: 'test'
+  ...
+# Subtest: one/four-photo simulations survive pending and terminal restart with zero provider calls, no delivery, ordinary archive/retention
+ok 42 - one/four-photo simulations survive pending and terminal restart with zero provider calls, no delivery, ordinary archive/retention
+  ---
+  duration_ms: 1192.643375
+  type: 'test'
+  ...
+# Subtest: incomplete/order/missing-file/model-input failures never simulate success or call fal, including restart
+ok 43 - incomplete/order/missing-file/model-input failures never simulate success or call fal, including restart
+  ---
+  duration_ms: 1213.02123
+  type: 'test'
+  ...
+# Subtest: the application worker consumes pending simulation without FAL_KEY; real mode reports FAL_NOT_CONFIGURED
+ok 44 - the application worker consumes pending simulation without FAL_KEY; real mode reports FAL_NOT_CONFIGURED
+  ---
+  duration_ms: 753.32816
+  type: 'test'
+  ...
+# Subtest: submitted/ready times follow actual retry, confirmed-ID restart, queue/download and first publication; simulation leaves nulls
+ok 45 - submitted/ready times follow actual retry, confirmed-ID restart, queue/download and first publication; simulation leaves nulls
+  ---
+  duration_ms: 1898.689446
+  type: 'test'
+  ...
+# Subtest: last real completion wins within its slot; failures/pending, Range, permissions, deletion and missing files preserve isolation
+ok 46 - last real completion wins within its slot; failures/pending, Range, permissions, deletion and missing files preserve isolation
+  ---
+  duration_ms: 2543.089093
+  type: 'test'
+  ...
+# Subtest: additive legacy migration keeps ready data/files and null timestamps; reopen is idempotent
+ok 47 - additive legacy migration keeps ready data/files and null timestamps; reopen is idempotent
+  ---
+  duration_ms: 1124.0566
+  type: 'test'
+  ...
+# Subtest: manual hidden-slot tests own 1/4 photos, snapshot-only fixture and idempotent real/simulated processing; camera stays separate
+ok 48 - manual hidden-slot tests own 1/4 photos, snapshot-only fixture and idempotent real/simulated processing; camera stays separate
+  ---
+  duration_ms: 1719.094733
+  type: 'test'
+  ...
+# Subtest: manual request retry, concurrent preparation and partial restart retain the original fixture; preparation failure is terminal
+ok 49 - manual request retry, concurrent preparation and partial restart retain the original fixture; preparation failure is terminal
+  ---
+  duration_ms: 886.152793
+  type: 'test'
+  ...
+# Subtest: test settings and routes validate JPEG/size, saved slot/body, account/origin and matching session
+ok 50 - test settings and routes validate JPEG/size, saved slot/body, account/origin and matching session
+  ---
+  duration_ms: 495.9367
+  type: 'test'
+  ...
+# Subtest: event cleanup removes owned test copies while preserving current fixture and another day snapshot source
+ok 51 - event cleanup removes owned test copies while preserving current fixture and another day snapshot source
+  ---
+  duration_ms: 492.394064
+  type: 'test'
+  ...
+# Subtest: complete sets persist across restart; retry replaces only one pose; finalize transitions once and releases next session
+ok 52 - complete sets persist across restart; retry replaces only one pose; finalize transitions once and releases next session
+  ---
+  duration_ms: 1293.967841
+  type: 'test'
+  ...
+# Subtest: capture endpoints enforce installation key/CORS and reject malformed images, positions and oversized uploads
+ok 53 - capture endpoints enforce installation key/CORS and reject malformed images, positions and oversized uploads
+  ---
+  duration_ms: 769.083509
+  type: 'test'
+  ...
+# Subtest: an upload already in flight cannot change a finalized photo or hold a DB transaction while streaming
+ok 54 - an upload already in flight cannot change a finalized photo or hold a DB transaction while streaming
+  ---
+  duration_ms: 564.085826
+  type: 'test'
+  ...
+1..54
+# tests 77
+# suites 0
+# pass 76
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 12556.087126

@@ -1,0 +1,62 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/editor.spec.ts tests/display.spec.ts
+
+
+Running 3 tests using 1 worker
+
+(node:702233) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+  ✓  1 tests/display.spec.ts:11:1 › Chromium operator journey: stages, QR, paging, email retry, durable deadline and preserved links (20.3s)
+  ✘  2 tests/display.spec.ts:202:1 › Chromium simulation: actual no-key worker shows honest success and safe preparation failure without QR or real stages (953ms)
+(node:709559) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  3 tests/editor.spec.ts:20:1 › admin saves both modes, reopens after restart, model rules, access and local capture (11.1s)
+
+
+  1) tests/display.spec.ts:202:1 › Chromium simulation: actual no-key worker shows honest success and safe preparation failure without QR or real stages 
+
+    TypeError: Cannot read properties of undefined (reading 'exports')
+
+      201 |
+      202 | test('Chromium simulation: actual no-key worker shows honest success and safe preparation failure without QR or real stages', async ({ page }) => {
+    > 203 |   const { fixture, imageBytes, multipart } = await import('./helpers.js');
+          |                                              ^
+      204 |   const { createApp } = await import('../src/server/app.js');
+      205 |   const { randomUUID } = await import('node:crypto');
+      206 |   const { resolve } = await import('node:path');
+        at Object.<anonymous> (/home/serg/Projects/reelme/node_modules/@fastify/static/index.js:12:20)
+        at /home/serg/Projects/reelme/tests/display.spec.ts:203:46
+
+    Error Context: .tasks/TASK-013-T3-FT-006-W10/browser-results/display-Chromium-simulatio-c9551-e-without-QR-or-real-stages/error-context.md
+
+  2) tests/editor.spec.ts:20:1 › admin saves both modes, reopens after restart, model rules, access and local capture 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: 'Нужна настройка установки' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('heading', { name: 'Нужна настройка установки' }) with timeout 5000ms
+      - waiting for getByRole('heading', { name: 'Нужна настройка установки' })
+
+
+      119 |   page.on('response', response => { if (response.url().startsWith(app.origin + '/assets/')) assets.push(response.url()); });
+      120 |   await page.goto(app.captureOrigin + '/reelme.html');
+    > 121 |   await expect(page.getByRole('heading', { name: 'Нужна настройка установки' })).toBeVisible();
+          |                                                                                  ^
+      122 |   expect(new URL(page.url()).origin).toBe(app.captureOrigin);
+      123 |   expect(assets.some(url => url.endsWith('.js'))).toBe(true);
+      124 |   expect(assets.some(url => url.endsWith('.css'))).toBe(true);
+        at /home/serg/Projects/reelme/tests/editor.spec.ts:121:82
+
+    Error Context: .tasks/TASK-013-T3-FT-006-W10/browser-results/editor-admin-saves-both-mo-01a79-es-access-and-local-capture/error-context.md
+
+  2 failed
+    tests/display.spec.ts:202:1 › Chromium simulation: actual no-key worker shows honest success and safe preparation failure without QR or real stages 
+    tests/editor.spec.ts:20:1 › admin saves both modes, reopens after restart, model rules, access and local capture 
+  1 passed (36.5s)

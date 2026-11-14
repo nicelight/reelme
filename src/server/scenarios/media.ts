@@ -16,12 +16,20 @@ import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
 import type { Media } from '../../shared/scenarios.js';
 import { HttpError } from '../errors.js';
+import { MAX_PHOTO_BYTES } from '../../shared/capture.js';
 const run = promisify(execFile);
 interface StoredMedia extends Media { path: string }
 export function readMedia(db: DB, id: string): StoredMedia {
   const row = db.prepare("SELECT id,path,kind,mime,size,duration,width,height FROM slot_media WHERE id=? AND owner='scenarios'").get(id) as StoredMedia | undefined;
   if (!row) throw new HttpError(400, 'INVALID_MEDIA', 'Материал не найден');
   return row;
+}
+export function readTestPhoto(db: DB, id: string): StoredMedia {
+  const media = readMedia(db, id);
+  if (media.kind !== 'image' || media.mime !== 'image/jpeg' || media.size > MAX_PHOTO_BYTES || media.width * media.height > 40_000_000) {
+    throw new HttpError(400, 'INVALID_PHOTO', 'Тестовая фотография: JPEG до 20 MiB и 40 мегапикселей');
+  }
+  return media;
 }
 export function mediaInfo(row: StoredMedia): Media {
   return { id: row.id, kind: row.kind, mime: row.mime, size: row.size, ...(row.duration == null ? {} : { duration: row.duration }), width: row.width, height: row.height };

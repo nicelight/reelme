@@ -1,0 +1,11 @@
+{
+  "errors": [],
+  "pass": false,
+  "errorState": {
+    "hidden": true,
+    "display": "block",
+    "startEnabled": true,
+    "error": "Injected preview unavailable"
+  },
+  "failure": "AssertionError [ERR_ASSERTION]: preview must be visually hidden after 503\n\ntrue !== false\n"
+}

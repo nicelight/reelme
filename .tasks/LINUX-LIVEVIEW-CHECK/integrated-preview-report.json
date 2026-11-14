@@ -1,0 +1,465 @@
+{
+  "errors": [],
+  "runs": [
+    {
+      "injectedPreviewFailure": false,
+      "commands": [
+        "LiveView_Capture",
+        "LiveView_Capture",
+        "LiveView_Capture"
+      ],
+      "photos": [
+        {
+          "width": 1280,
+          "height": 720,
+          "bytes": 172676,
+          "sha256": "243b352698a4e9fb71b2122af54e4b111da83d9e2c587cae3ff3cce519b7cdea"
+        },
+        {
+          "width": 1280,
+          "height": 720,
+          "bytes": 176547,
+          "sha256": "ae3d85b5d4dd62277384294e5853278fda870a9ffba273fc295bca7ab5ab4d49"
+        },
+        {
+          "width": 1280,
+          "height": 720,
+          "bytes": 169035,
+          "sha256": "7ea25e98cc55fc04a4721db89c468592f8e7cb3628d4877d2d3ea16963a86832"
+        }
+      ],
+      "liveHidden": true,
+      "liveSrc": null,
+      "activeBlobUrls": 3,
+      "previewStatus": "Превью остановлено."
+    },
+    {
+      "injectedPreviewFailure": false,
+      "commands": [
+        "LiveView_Capture",
+        "LiveView_Capture",
+        "LiveView_Capture"
+      ],
+      "photos": [
+        {
+          "width": 1280,
+          "height": 720,
+          "bytes": 177038,
+          "sha256": "37bc6140bd19696546e600d5ef09fbd535ea9f56b7fdb9a16d4892ec07cd0408"
+        },
+        {
+          "width": 1280,
+          "height": 720,
+          "bytes": 178207,
+          "sha256": "7603b48b3f5392935c8a12842f452a58f557e7f6c57171c5c15b910853651852"
+        },
+        {
+          "width": 1280,
+          "height": 720,
+          "bytes": 172354,
+          "sha256": "669db7569591b31e068a2d029d9fe96ec46f8f3f6e5008c318260552b50bba0f"
+        }
+      ],
+      "liveHidden": true,
+      "liveSrc": null,
+      "activeBlobUrls": 3,
+      "previewStatus": "Превью остановлено."
+    },
+    {
+      "injectedPreviewFailure": true,
+      "commands": [
+        "LiveView_Capture",
+        "Capture",
+        "Capture"
+      ],
+      "photos": [
+        {
+          "width": 1280,
+          "height": 720,
+          "bytes": 172634,
+          "sha256": "91624ebd7bb2b30a2e15c99f69de8fc5caba49a62256879b8b18eff92017e173"
+        },
+        {
+          "width": 1280,
+          "height": 720,
+          "bytes": 178858,
+          "sha256": "13779b4436907461ef0e07ed20857d701023f6cecbe826a3b8853bc10241a8de"
+        },
+        {
+          "width": 1280,
+          "height": 720,
+          "bytes": 188390,
+          "sha256": "2820226271e658b76f59f02f81ad8cf26caa21bd4864d8e7dc59faf0f249e313"
+        }
+      ],
+      "liveHidden": true,
+      "liveSrc": null,
+      "activeBlobUrls": 3,
+      "previewStatus": "Превью недоступно. Продолжаем без него: Live View: HTTP 503"
+    }
+  ],
+  "screenshotsSaved": false,
+  "pass": true,
+  "observations": {
+    "photos": [
+      {
+        "start": 1728.2000000029802,
+        "src": "blob:http://localhost:5513/9936f2ba-7b16-4e6d-9175-94efd79ff784",
+        "width": 1280,
+        "height": 720,
+        "durationMs": 512.7999999970198
+      },
+      {
+        "start": 5613.60000000149,
+        "src": "blob:http://localhost:5513/6d7b0ce2-779c-422c-b62d-544d11a0df00",
+        "width": 1280,
+        "height": 720,
+        "durationMs": 508.69999999552965
+      },
+      {
+        "start": 9494.29999999702,
+        "src": "blob:http://localhost:5513/f7af6dc7-3cfb-446a-8c09-3178605b0d57",
+        "width": 1280,
+        "height": 720,
+        "durationMs": 511.1000000014901
+      },
+      {
+        "start": 13893.10000000149,
+        "src": "blob:http://localhost:5513/c6c29278-c7a6-466f-9c40-7202e8e3f04f",
+        "width": 1280,
+        "height": 720,
+        "durationMs": 512.2999999970198
+      },
+      {
+        "start": 17785.70000000298,
+        "src": "blob:http://localhost:5513/3891c55c-6916-4f57-b97e-c827a6d5e523",
+        "width": 1280,
+        "height": 720,
+        "durationMs": 502.3999999985099
+      },
+      {
+        "start": 21678,
+        "src": "blob:http://localhost:5513/a13e30f7-7ec8-4adc-a513-083b9afd4cba",
+        "width": 1280,
+        "height": 720,
+        "durationMs": 510.29999999701977
+      },
+      {
+        "start": 26054.70000000298,
+        "src": "blob:http://localhost:5513/fe69d68b-1a45-436a-8a79-86437c98a193",
+        "width": 1280,
+        "height": 720,
+        "durationMs": 516.5
+      },
+      {
+        "start": 32243.20000000298,
+        "src": "blob:http://localhost:5513/caf27ced-7b10-4ba2-af74-80eb1f3683a9",
+        "width": 1280,
+        "height": 720,
+        "durationMs": 511.19999999552965
+      },
+      {
+        "start": 37214.70000000298,
+        "src": "blob:http://localhost:5513/1c2158d7-08c8-4133-a63a-16b33f7e062f",
+        "width": 1280,
+        "height": 720,
+        "durationMs": 506.3999999985099
+      }
+    ],
+    "countdownFrames": [
+      {
+        "at": 2457.10000000149,
+        "text": "Снимок через 3",
+        "width": 1280
+      },
+      {
+        "at": 2669.2000000029802,
+        "text": "Снимок через 3",
+        "width": 1280
+      },
+      {
+        "at": 2879.89999999851,
+        "text": "Снимок через 3",
+        "width": 1280
+      },
+      {
+        "at": 3090.60000000149,
+        "text": "Снимок через 3",
+        "width": 1280
+      },
+      {
+        "at": 3303.5,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 3513.39999999851,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 3726.5,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 3937.7000000029802,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 4151.39999999851,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 4361.39999999851,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 4571.79999999702,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 4782.29999999702,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 4993.29999999702,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 5204.29999999702,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 6274.5,
+        "text": "Снимок через 3",
+        "width": 1280
+      },
+      {
+        "at": 6502.20000000298,
+        "text": "Снимок через 3",
+        "width": 1280
+      },
+      {
+        "at": 6712.79999999702,
+        "text": "Снимок через 3",
+        "width": 1280
+      },
+      {
+        "at": 6923.5,
+        "text": "Снимок через 3",
+        "width": 1280
+      },
+      {
+        "at": 7133.20000000298,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 7346.20000000298,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 7556.10000000149,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 7766.10000000149,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 7975.89999999851,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 8185.70000000298,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 8395.79999999702,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 8606.29999999702,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 8816.60000000149,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 9028.29999999702,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 14574,
+        "text": "Снимок через 3",
+        "width": 1280
+      },
+      {
+        "at": 14784.89999999851,
+        "text": "Снимок через 3",
+        "width": 1280
+      },
+      {
+        "at": 14995.20000000298,
+        "text": "Снимок через 3",
+        "width": 1280
+      },
+      {
+        "at": 15206.89999999851,
+        "text": "Снимок через 3",
+        "width": 1280
+      },
+      {
+        "at": 15419.5,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 15631.29999999702,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 15841.10000000149,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 16050.89999999851,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 16261.39999999851,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 16472.39999999851,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 16682.39999999851,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 16893.5,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 17107.20000000298,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 17336,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 18386.10000000149,
+        "text": "Снимок через 3",
+        "width": 1280
+      },
+      {
+        "at": 18596.10000000149,
+        "text": "Снимок через 3",
+        "width": 1280
+      },
+      {
+        "at": 18805.70000000298,
+        "text": "Снимок через 3",
+        "width": 1280
+      },
+      {
+        "at": 19016,
+        "text": "Снимок через 3",
+        "width": 1280
+      },
+      {
+        "at": 19225.70000000298,
+        "text": "Снимок через 3",
+        "width": 1280
+      },
+      {
+        "at": 19436.89999999851,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 19647.39999999851,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 19857.20000000298,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 20068.10000000149,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 20279.5,
+        "text": "Снимок через 2",
+        "width": 1280
+      },
+      {
+        "at": 20490,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 20700.10000000149,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 20921.10000000149,
+        "text": "Снимок через 1",
+        "width": 1280
+      },
+      {
+        "at": 21131.5,
+        "text": "Снимок через 1",
+        "width": 1280
+      }
+    ],
+    "previewOverPhoto": false,
+    "originalChanged": false
+  },
+  "commands": [
+    "LiveView_Capture",
+    "LiveView_Capture",
+    "LiveView_Capture",
+    "LiveView_Capture",
+    "LiveView_Capture",
+    "LiveView_Capture",
+    "LiveView_Capture",
+    "Capture",
+    "Capture"
+  ]
+}

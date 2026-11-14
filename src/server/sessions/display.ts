@@ -2,7 +2,8 @@
  * their private media. First email confirmation owns the persisted hide deadline;
  * neither polling, QR rendering nor media requests mark a form opened or delete
  * records. Receive capability is encoded only into the QR; full email and provider
- * data never leave this module. See contracts/access.md and states/lifecycle-map.md. */
+ * data never leave this module. Simulation is a separate safe projection with no
+ * ready card or completed real stages. See contracts/access.md and states/lifecycle-map.md. */
 import QRCode from 'qrcode';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
@@ -14,11 +15,11 @@ import { sendMedia } from '../scenarios/media.js';
 import { stageLabels, type DisplaySession, type TodayDisplay } from '../../shared/display.js';
 
 interface Row {
-  id: string; number: number; state: string; email: string | null;
+  id: string; number: number; state: string; snapshot: string; error_code: string | null; email: string | null;
   email_state: string | null; opened_at: number | null; email_confirmed_at: number | null;
 }
-const selection = `SELECT s.id,s.number,s.state,d.email,d.email_state,d.opened_at,d.email_confirmed_at
-  FROM capture_sessions s LEFT JOIN session_delivery d ON d.session_id=s.id
+const selection = `SELECT s.id,s.number,s.state,s.snapshot,g.error_code,d.email,d.email_state,d.opened_at,d.email_confirmed_at
+  FROM capture_sessions s LEFT JOIN session_delivery d ON d.session_id=s.id LEFT JOIN generation_jobs g ON g.session_id=s.id
   WHERE s.event_date=? AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.deleting=0) AND (d.email_confirmed_at IS NULL OR d.email_confirmed_at+180000>?)`;
 // Match the PRD's local-prefix***@***.suffix presentation, bounding long names.
 export function maskEmail(email: string) {
@@ -29,9 +30,17 @@ export function maskEmail(email: string) {
 function projection(row: Row): DisplaySession {
   const stage = row.state === 'ready' ? (row.email_state === 'sent' ? 6 : row.opened_at !== null ? 5 : 4)
     : ({ submit_pending: 1, observing: 2, preparing: 3 }[row.state] ?? 0);
-  return { id: row.id, number: row.number, stage,
+  const failure = row.error_code === 'TEST_PREPARATION_FAILED' ? 'Не удалось подготовить тестовую фотографию. Сохраните JPEG и запустите новый тест.'
+    : row.error_code === 'INPUT_PREPARATION_FAILED' ? 'Не удалось подготовить фотографии или материалы сюжета. Обратитесь к сотруднику.'
+    : row.error_code === 'FAL_NOT_CONFIGURED' ? 'Сервис генерации не настроен. Обратитесь к сотруднику.'
+    : 'Не удалось создать видео. Обратитесь к сотруднику.';
+  const simulation: DisplaySession['simulation'] = JSON.parse(row.snapshot).generation?.simulateGeneration === true && row.state !== 'capturing'
+    ? { status: row.state === 'simulated' ? 'passed' : row.state === 'failed' ? 'failed' : 'pending',
+      message: row.state === 'simulated' ? 'Эмуляция успешна, но fal не отвечает' : row.state === 'failed' ? 'Эмуляция не завершена' : 'Подготовка тестовой генерации',
+      detail: row.state === 'failed' ? failure : 'Тестовый режим: fal не вызывался' } : null;
+  return { id: row.id, number: row.number, stage, simulation,
     label: stage === 6 ? `Видео отправлено на ${maskEmail(row.email ?? '')}` : row.state === 'failed' ? 'Генерация не завершена' : stageLabels[stage as 0 | 1 | 2 | 3 | 4 | 5],
-    error: row.state === 'failed' ? 'Не удалось создать видео. Обратитесь к сотруднику.'
+    error: row.state === 'failed' ? failure
       : row.email_state === 'failed' ? 'Письмо не подтверждено. Откройте форму и повторите отправку.' : null,
     hideAt: row.email_confirmed_at === null ? null : row.email_confirmed_at + 180_000,
     card: row.state === 'ready' ? { photoUrl: `/api/display/${row.id}/photo`, frameUrl: `/api/display/${row.id}/frame`, qrUrl: `/api/display/${row.id}/qr` } : null };

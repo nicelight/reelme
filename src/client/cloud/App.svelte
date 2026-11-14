@@ -1,7 +1,8 @@
 <script lang="ts">
   /** Module contract: account entry, shared archive, operator display and admin-only scenario editor. Model
    * changes remove incompatible fields; API remains the authority for access,
-   * validation and persistence. No generation or capture behavior belongs here. */
+   * validation and persistence. Manual tests call Sessions; camera and generation
+   * processing remain outside this editor. */
   import { onMount } from 'svelte';
   import { models, recastId, blankSlot, slotSchema, titleFrom, videoProblem } from '../../shared/scenarios';
   import type { Media, Mode, Slot, SlotInput } from '../../shared/scenarios';
@@ -9,6 +10,7 @@
   import Archive from './Archive.svelte';
   import Display from './Display.svelte';
   import MediaField from './MediaField.svelte';
+  import SlotTest from './SlotTest.svelte';
 
   let archive = $state(false);
   let ready = $state(false);
@@ -21,6 +23,7 @@
   let notice = $state('');
   let slots = $state<Slot[]>([]);
   let selectedId = $state<string | null>(null);
+  let slotSelection = $state(0);
   let draft = $state<SlotInput>(blankSlot());
   let baseline = $state(JSON.stringify(blankSlot()));
   let videoMedia = $state<Media | undefined>();
@@ -75,7 +78,7 @@
     try {
       const { id: slotId, ...config } = await api<Slot>(`/admin/slots/${id}`);
       const metadata = config.videoId ? await api<Media>(`/admin/slot-media/${config.videoId}/info`) : undefined;
-      selectedId = slotId; draft = config; videoMedia = metadata; baseline = JSON.stringify(config);
+      selectedId = slotId; slotSelection++; draft = config; videoMedia = metadata; baseline = JSON.stringify(config);
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
@@ -90,7 +93,7 @@
     error = ''; notice = '';
   }
   function changeMode(mode: Mode) {
-    const common = { description: draft.description, thumbnailId: draft.thumbnailId, visible: draft.visible };
+    const common = { description: draft.description, thumbnailId: draft.thumbnailId, visible: draft.visible, simulateGeneration: draft.simulateGeneration, testPhotoId: draft.testPhotoId };
     draft = { ...blankSlot(mode), ...common }; videoMedia = undefined; error = ''; notice = '';
   }
   async function save(event: SubmitEvent) {
@@ -216,6 +219,13 @@
               {#if currentModel.resolutions.length}<div><label for="resolution">Разрешение</label><select id="resolution" bind:value={draft.resolution}>{#each currentModel.resolutions as resolution}<option value={resolution}>{resolution}</option>{/each}</select></div>{:else}<p class="hint resolution-note">Разрешение задаёт модель.</p>{/if}
               {#if draft.mode === 'P2V'}<div><label for="duration">Длительность, с</label><input id="duration" type="number" bind:value={draft.duration} min={currentModel.minSeconds} max={currentModel.maxSeconds} step={currentModel.id === 'minimax/h3-max/reference-to-video' ? '0.01' : '1'} /><p class="hint">От {currentModel.minSeconds} до {currentModel.maxSeconds} секунд</p></div>{/if}
             </div>
+          </section>
+          <section class="form-section">
+            <div class="section-heading"><span>03</span><h3>Тестирование</h3></div>
+            <label class="checkbox-label"><input type="checkbox" bind:checked={draft.simulateGeneration} />Отправлять на фейковую генерацию</label>
+            <p class="hint">Проверяет фотографии и подготовку запроса без обращения к fal. Видео не создаётся.</p>
+            <MediaField label="Тестовая фотография (JPEG)" kind="image" jpegOnly id={draft.testPhotoId} optional hint="До 20 MiB и 40 мегапикселей. Используется только для ручного теста; съёмка продолжает работать с камерой." onUploaded={media => draft.testPhotoId = media.id} onRemove={() => draft.testPhotoId = undefined} onError={fail} onBusy={uploadBusy} />
+            {#key `${selectedId}:${slotSelection}`}<SlotTest slotId={selectedId} hasPhoto={!!draft.testPhotoId} {dirty} disabled={formDisabled} onError={fail} />{/key}
           </section>
         </fieldset>
         <div class="editor-footer">

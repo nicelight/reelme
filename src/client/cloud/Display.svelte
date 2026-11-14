@@ -1,7 +1,7 @@
 <script lang="ts">
   /** Module contract: read-only operator screen. The server clock/deadline controls
    * both progress and QR visibility, including while offline. Paging never opens
-   * receive forms. Polls refresh stages without reordering the server's list. */
+   * receive forms. Simulation has its own result text and no real progress/QR. Polls refresh stages without reordering the server's list. */
   import { onMount } from 'svelte';
   import { api, ApiError } from './api';
   import type { TodayDisplay } from '../../shared/display';
@@ -68,6 +68,13 @@
     <div class="display-grid">
       {#each visible as session (session.id)}
         <article class="result-card" aria-label={`История № ${session.number}`} data-session={session.number}>
+          {#if session.simulation}
+            <div class="result-progress">
+              <div class="result-topline"><span class="eyebrow">ТЕСТОВАЯ ИСТОРИЯ</span><span class="stage-count">{session.simulation.status === 'passed' ? 'Проверка завершена' : session.simulation.status === 'failed' ? 'Нужна помощь' : 'Проверяем входные данные'}</span></div>
+              <div class="result-title"><h2>№ {session.number}</h2><p>{session.simulation.message}</p></div>
+              <p class:error={session.simulation.status === 'failed'}>{session.simulation.detail}</p>
+            </div>
+          {:else}
           <div class="result-progress" data-stage={session.stage}>
             <div class="result-topline"><span class="eyebrow">ВАША ИСТОРИЯ</span><span class="stage-count">{session.stage ? `Этап ${session.stage} из 6` : session.error ? 'Нужна помощь' : 'Идёт съёмка'}</span></div>
             <div class="result-title"><h2>№ {session.number}</h2><p>{session.label}</p></div>
@@ -76,6 +83,7 @@
             </div>
             {#if session.error}<p class="error result-error">{session.error}</p>{/if}
           </div>
+          {/if}
           {#if session.card}
             <div class="result-images">
               <figure><img src={session.card.photoUrl} alt={`Исходное фото посетителя № ${session.number}`} /><figcaption>Ваше фото</figcaption></figure>
@@ -85,6 +93,8 @@
               <img class="result-qr" src={session.card.qrUrl} alt={`QR формы получения видео № ${session.number}`} />
               <div><span class="qr-number">№ {session.number}</span><p>Получите видео<br />по email</p><span class="qr-hint">Наведите камеру на QR</span></div>
             </div>
+          {:else if session.simulation}
+            <div class="result-waiting"><span aria-hidden="true">{session.simulation.status === 'failed' ? '!' : '↗'}</span><p>{session.simulation.status === 'failed' ? 'Сотрудник поможет вам' : 'Проверка без создания видео'}</p><small>В этом режиме видео и QR не создаются.</small></div>
           {:else}
             <div class="result-waiting"><span aria-hidden="true">{session.error ? '!' : '↗'}</span><p>{session.error ? 'Сотрудник поможет вам' : 'У каждой истории свой ритм'}</p><small>{session.error ? 'Покажите ему свой номер.' : 'Фото и QR появятся здесь, когда видео будет готово.'}</small></div>
           {/if}

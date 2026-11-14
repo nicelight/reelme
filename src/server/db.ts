@@ -2,7 +2,8 @@
  * sessions/photos and generation state. Metadata stays in SQLite; media bytes stay outside the build. Repeated
  * setup/start preserves rows. Session number and start-request uniqueness are DB
  * invariants. One accepted photo belongs to one session/pose. Generation records
- * preserve confirmed fal identity and verified files. Session issuance owns scoped
+ * preserve confirmed fal identity and verified files. Nullable submit/ready times
+ * preserve unknown history; migrations never invent historical timestamps. Session issuance owns scoped
  * capabilities, first-open/confirmation times and the independent email state.
  * Events retain a deletion marker until restartable local cleanup finishes. */
 import Database from 'better-sqlite3';
@@ -70,10 +71,14 @@ export function openDatabase(dataDir: string) {
         CHECK(email_state IN ('not_requested','pending','sending','sent','failed')),
       email_error TEXT, sent_at INTEGER
     );
-    PRAGMA user_version = 6;
+    PRAGMA user_version = 7;
   `);
   if (!(db.prepare('PRAGMA table_info(events)').all() as { name: string }[]).some(column => column.name === 'deleting')) {
     db.exec('ALTER TABLE events ADD COLUMN deleting INTEGER NOT NULL DEFAULT 0 CHECK(deleting IN (0,1))');
+  }
+  const jobColumns = new Set((db.prepare('PRAGMA table_info(generation_jobs)').all() as { name: string }[]).map(column => column.name));
+  for (const column of ['submitted_at', 'ready_at']) {
+    if (!jobColumns.has(column)) db.exec(`ALTER TABLE generation_jobs ADD COLUMN ${column} INTEGER`);
   }
   return db;
 }

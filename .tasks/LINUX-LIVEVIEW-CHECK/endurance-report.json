@@ -1,0 +1,48 @@
+{
+  "serverPid": 669029,
+  "camera": "v4l2:/dev/video0",
+  "session": "session-20261114T124739-5bbc1249",
+  "previewCount": 541,
+  "maxConsecutiveSameHash": 0,
+  "captures": [
+    {
+      "atSeconds": 10.2,
+      "name": "reelme-20261114T124848-1c058ccdf4de.jpg",
+      "bytes": 175177
+    },
+    {
+      "atSeconds": 30.14,
+      "name": "reelme-20261114T124908-7940fe62b832.jpg",
+      "bytes": 174938
+    },
+    {
+      "atSeconds": 50.18,
+      "name": "reelme-20261114T124928-e4801a123df4.jpg",
+      "bytes": 175147
+    },
+    {
+      "atSeconds": 70.16,
+      "name": "reelme-20261114T124948-61c2ceb9f406.jpg",
+      "bytes": 174765
+    },
+    {
+      "atSeconds": 90.13,
+      "name": "reelme-20261114T125008-0bb74a71cc67.jpg",
+      "bytes": 175707
+    },
+    {
+      "atSeconds": 110.1,
+      "name": "reelme-20261114T125028-f194f189b83a.jpg",
+      "bytes": 162339
+    }
+  ],
+  "pass": false,
+  "ffmpegPid": 669766,
+  "pollingSeconds": 120.16,
+  "aliveAfterPolling": true,
+  "childrenAfterIdle": [],
+  "failure": "Idle phase inconclusive: another browser continued polling then sent LiveViewWnd_Hide at 17:50:55.208; no idle event occurred.",
+  "endurancePass": true,
+  "idleVerified": false,
+  "failureDetails": "endurance.log"
+}

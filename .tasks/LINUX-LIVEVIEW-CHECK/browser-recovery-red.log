@@ -1,0 +1,18 @@
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: preview must be visually hidden after 503
+
+true !== false
+
+    at file:///home/serg/Projects/reelme/.tasks/LINUX-LIVEVIEW-CHECK/browser-recovery-check.mjs:18:10 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: true,
+  expected: false,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.22.1

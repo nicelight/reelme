@@ -1,0 +1,138 @@
+{
+  "id": "TASK-014-T2-FT-006-W11",
+  "title": "Запускать сохранённый слот по тестовому JPEG без камеры",
+  "status": "done",
+  "wave": "W11",
+  "feature": "FT-006",
+  "reqs": [
+    "REQ-020",
+    "REQ-018"
+  ],
+  "depends_on": [
+    "TASK-013-T3-FT-006-W10",
+    "TASK-004-T2-FT-002-W3",
+    "TASK-012-T3-FT-005-W9"
+  ],
+  "touched_files": [
+    "src/shared/scenarios.ts",
+    "src/shared/capture.ts",
+    "src/server/scenarios/",
+    "src/server/sessions/",
+    "src/server/app.ts",
+    "src/client/cloud/",
+    "tests/",
+    "README.md"
+  ],
+  "tier": "T2",
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "api-regressions",
+      "command": "npm test",
+      "required": true
+    },
+    {
+      "name": "browser-outcome",
+      "command": "REELME_BROWSER_ARTIFACTS=.tasks/TASK-014-T2-FT-006-W11 npm run test:ui -- tests/editor.spec.ts",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-14",
+      "stage": "implementation",
+      "result": "PASS",
+      "summary": "Admin сохраняет testPhotoId (JPEG ≤20 MiB/40 MP) и вручную запускает сохранённый, включая скрытый, слот. Единственный Sessions start/intake/finalize создаёт собственные 1/4 JPEG; source ID закреплён отдельно в manual snapshot. Обычная camera session fixture не читает. Кнопка блокирует dirty/upload/post, сохраняет uncertain request ID в sessionStorage и показывает polling status/error. Material cleanup учитывает fixture слота/снимков.",
+      "checks": [
+        "npm run check: PASS, 0 errors / 0 warnings; npm run build: PASS.",
+        "npm test: PASS, 74/74 (51 top-level). Новые slot-test.test.ts: 4/4.",
+        "API/worker: hidden P2V4 + Recast1; independent paths и byte equality, complete/finalized, fixture вне generation; simulated transport calls=0. Real positive control submit/status/result/download=1, ready; повтор POST не увеличивает submit/session count.",
+        "Same-ID concurrency: 201/409 TEST_IN_PROGRESS; partial capturing после рестарта сохраняет принятую позицию и оригинальную fixture/режим, новый ключ даёт новый номер. Missing/corrupt source → failed/TEST_PREPARATION_FAILED без queue/fallback. Camera upload сохраняет собственные байты; смешение camera/manual startRequestId →409.",
+        "Admin/origin/same-slot authorization, unknown body fields, no fixture/unknown slot, PNG/MIME/corrupt JPEG и >20MiB metadata rejection: PASS. Catalog не раскрывает fixture; чужая роль не читает status.",
+        "Cleanup двух дней: собственные копии удалены, старый fixture удерживается другим snapshot; после его удаления остаётся current fixture. fal delete=0.",
+        "Chromium editor: 2/2 PASS, включая JPEG→save→hidden test, сохранение/restart, отсутствие автостарта, потерянный ответ+reload+same-ID retry, следующий новый ID, simulated/real-ready/безопасная ошибка, mobile. Screenshot review выполнен.",
+        "git diff --check: PASS."
+      ],
+      "evidence": [
+        ".tasks/TASK-014-T2-FT-006-W11/check.log",
+        ".tasks/TASK-014-T2-FT-006-W11/build.log",
+        ".tasks/TASK-014-T2-FT-006-W11/api-tests.log",
+        ".tasks/TASK-014-T2-FT-006-W11/slot-test.log",
+        ".tasks/TASK-014-T2-FT-006-W11/browser.log",
+        ".tasks/TASK-014-T2-FT-006-W11/slot-test-browser-observations.json",
+        ".tasks/TASK-014-T2-FT-006-W11/slot-test-simulated.png",
+        ".tasks/TASK-014-T2-FT-006-W11/slot-test-real-ready.png",
+        ".tasks/TASK-014-T2-FT-006-W11/slot-test-failed-mobile.png"
+      ],
+      "corrections": [
+        "Сопутствующий дефект TASK-013: changeMode сбрасывал simulateGeneration. Теперь смена V2V/P2V сохраняет simulateGeneration/testPhotoId; browser regression это проверяет."
+      ],
+      "limitations": [
+        "Все проверки на isolated temporary SQLite/media и injected transports. Реальные fal/SMTP, аппаратная камера, deploy/commit/push не выполнялись. Работающий порт5513 не использован. TASK-015 не реализован."
+      ],
+      "handoff": "Результат принят владельцем по записанным проверкам; TASK-015 разблокирована."
+    }
+  ],
+  "docs": [
+    ".memory-bank/features/FT-006-slot-testing.md"
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-006-slot-testing.md#FT-006-AC-003"
+  ],
+  "normative_inputs": [
+    ".memory-bank/constitution.md",
+    ".memory-bank/prd.md#постоянные-инструменты-тестирования-слота",
+    ".memory-bank/contracts/http-api.md#тестирование-слота",
+    ".memory-bank/contracts/access.md",
+    ".memory-bank/contracts/boundary-map.md",
+    ".memory-bank/domains/core-domain.md#тестовые-настройки-и-времена-генерации",
+    ".memory-bank/states/lifecycle-map.md#эмуляция-и-ручной-тест",
+    ".memory-bank/contracts/integrations.md#эмуляция-подготовки-без-fal"
+  ],
+  "purpose": "Дать администратору воспроизводимый ручной тест слота без съёмочного оборудования.",
+  "success_outcome": "Внизу сохранённого слота admin загружает JPEG и вручную запускает одну session с1/4 фото. Тест использует snapshot-режим, показывает состояние/ошибку и сохраняет текущий production pipeline.",
+  "constraints": [
+    "Владеет AC-003 целиком, включая fixture persistence, routes, кнопку/обратную связь и cleanup. testPhotoId — existing immutable slot_media JPEG, ≤20MiB/40MP; поле редактора явно ограничивает выбор JPEG, без конвертации.",
+    "Fixture используется только test-button. Обычная camera session не заменяет её байты. Ручная test snapshot сохраняет testPhotoId отдельно от generation; копии принадлежат Sessions, одна для Recast либо четыре одинаковых JPEG в упорядоченных позициях.",
+    "POST /api/admin/slots/:id/test-generations принимает только startRequestId и сохранённый слот. Допускается hidden slot; UI требует сохранения draft и блокирует кнопку во время собственного POST/upload. Admin+origin проверяются сервером; installation права существующих endpoints не расширяются.",
+    "Переиспользовать start/date/number/intake/finalize через небольшие внутренние функции Sessions, без HTTP-вызова к самому себе/второй pipeline. Повтор ключа возвращает ту же session, не повторяет finalize/submit; конкурентная подготовка —409. Capturing retry продолжает исходную fixture и принятые позиции, после finalize копирование запрещено. Ошибка подготовки после session creation сохраняется failed/TEST_PREPARATION_FAILED.",
+    "GET /api/admin/slots/:id/sessions/:sessionId показывает только состояние/безопасную ошибку своей session. UI сохраняет startRequestId при потере ответа; новый ручной запуск создаёт новый. Status polling не запускает job.",
+    "Обновить учёт ссылок материалов: testPhotoId текущего слота/снимка удерживает fixture; event cleanup удаляет session copies и сохраняет используемые материалы. Зафиксированные фото не меняются после замены fixture."
+  ],
+  "invariants": [
+    "Ни media-path, ни URL, ни произвольные model settings не принимаются test route из body.",
+    "Одна успешная кнопка → одна session/job; потерянный HTTP-ответ не становится новым платным запросом.",
+    "Fixture admin-only в каталоге, а реальные copied session photos идут по прежнему provider-media контракту."
+  ],
+  "verification_targets": [
+    "API/UI: сохранить fixture, запустить hidden/visible слот в simulation и real injected mode; Recast1/другая модель4, порядок/идентичность байтов/полный finalize.",
+    "Повтор одного ключа, конкуренция двух запросов и retry принятой capturing session не дают duplicate job. Новый ручной запуск имеет новый ID/номер. Фото camera session не подменены.",
+    "Неверный JPEG/неподходящий MIME/неполный слот/права дают понятный отказ. Замена fixture и cleanup тестового прошедшего дня сохраняют другие сессии и активный fixture."
+  ],
+  "evidence_required": [
+    "Browser путь «JPEG → сохранить → тест» и status/error; API assertions session count/submit count,1/4 prepared photos, byte equality, права и snapshot fixture.",
+    "Изолированный cleanup fixture: удалены только own session copies, сохранены current/referenced slot media."
+  ],
+  "anti_goals": [
+    "Автозапуск по сохранению/загрузке фото, замена реальной камеры при обычной съёмке, самостоятельный тестовый worker.",
+    "Новая система exactly-once для неопределённого fal submit; сохраняется прежний принятый retry-компромисс."
+  ],
+  "runtime_context": {
+    "forbidden_scope": [
+      "linux_digiCamControl/",
+      "Деплой, commit/push, production-данные, реальные платные fal-вызовы и SMTP-отправки"
+    ],
+    "stop_conditions": [
+      "Необходимость изменить согласованные product semantics или выполнять внешние платные/необратимые действия: вернуть вопрос владельцу."
+    ]
+  }
+}

@@ -221,5 +221,7 @@ test('provider failure details stay server-side with credentials and capability 
   await w.runOnce();
   const logged = JSON.stringify(logs); assert.match(logged, /safe-request-id/); assert.match(logged, /422/);
   assert.doesNotMatch(logged, /test-private-fal-key|private-capability|private-token/);
-  const publicStatus = JSON.stringify(await state(f, id)); assert.doesNotMatch(publicStatus, /safe-request-id|private|422|Cannot fetch/);
+  const publicStatus = await state(f, id);
+  assert.doesNotMatch(JSON.stringify(publicStatus), /safe-request-id|private|Cannot fetch/);
+  assert.doesNotMatch(JSON.stringify(publicStatus.error), /422/); // UUIDs may legitimately contain these digits.
 });

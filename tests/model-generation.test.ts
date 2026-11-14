@@ -79,7 +79,7 @@ test('ten model inputs, snapshot isolation and reusable P2V URLs yield decoded s
   }
   for (const endpoint of endpoints) {
     const model = models.find(model => model.id === endpoint)!;
-    const input: SlotInput = { description: model.name, visible: true, thumbnailId: referenceIds[0], mode: model.mode, model: endpoint,
+    const input: SlotInput = { description: model.name, visible: true, simulateGeneration: false, thumbnailId: referenceIds[0], mode: model.mode, model: endpoint,
       referenceIds: model.mode === 'P2V' ? referenceIds : [], prompt: promptFor(endpoint),
       ...(model.resolutions.length ? { resolution: model.resolutions.at(-1) } : {}),
       ...(model.mode === 'P2V' ? { duration: 10, demoId: videoId } : { videoId }),
@@ -167,7 +167,7 @@ test('ten model inputs, snapshot isolation and reusable P2V URLs yield decoded s
 test('model prompt limits reject oversized saved settings and incomplete photo sets', () => {
   for (const endpoint of endpoints) {
     const model = models.find(m => m.id === endpoint)!;
-    const input = { description: 'test', visible: true, thumbnailId: randomUUID(), mode: model.mode, model: endpoint, referenceIds: [], prompt: 'valid',
+    const input = { description: 'test', visible: true, simulateGeneration: false, thumbnailId: randomUUID(), mode: model.mode, model: endpoint, referenceIds: [], prompt: 'valid',
       ...(model.resolutions.length ? { resolution: model.defaultResolution } : {}),
       ...(model.mode === 'P2V' ? { duration: 10 } : { videoId: randomUUID() }),
       ...(endpoint.startsWith('minimax/') ? { promptExpansionMode: 'disabled' as const } : {}),

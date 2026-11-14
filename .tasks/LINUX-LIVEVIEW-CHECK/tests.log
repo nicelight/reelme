@@ -1,0 +1,57 @@
+test_disconnected_stream_never_serves_cached_frame_or_publishes_capture (test_live_view.LiveViewTests.test_disconnected_stream_never_serves_cached_frame_or_publishes_capture) ... Live View: поток FFmpeg завершился; проверьте камеру.
+CAPTURE failed job=6c7e134ec2f04a17be87c4120430b53e
+Traceback (most recent call last):
+  File "/home/serg/Projects/reelme/linux_digiCamControl/linux_digicamcontrol.py", line 129, in _capture
+    source = self.backend.capture(work, job_id)
+  File "/home/serg/Projects/reelme/linux_digiCamControl/cameras.py", line 429, in capture
+    raise CaptureError(self.live_error)
+cameras.CaptureError: Live View: поток FFmpeg завершился; проверьте камеру.
+ok
+test_idle_releases_camera_and_explicit_start_recovers (test_live_view.LiveViewTests.test_idle_releases_camera_and_explicit_start_recovers) ... ok
+test_routes_fresh_capture_during_preview_and_stop (test_live_view.LiveViewTests.test_routes_fresh_capture_during_preview_and_stop) ... ok
+test_stalled_stream_cannot_reuse_previous_frame_and_close_joins_worker (test_live_view.LiveViewTests.test_stalled_stream_cannot_reuse_previous_frame_and_close_joins_worker) ... Live View: камера перестала передавать кадры.
+ok
+test_busy_rejected_and_polling_stays_responsive (test_server.HTTPTests.test_busy_rejected_and_polling_stays_responsive) ... ok
+test_cancel_no_published_file (test_server.HTTPTests.test_cancel_no_published_file) ... CAPTURE failed job=940c808fa1c3467a93c2406ba32cfb07
+Traceback (most recent call last):
+  File "/home/serg/Projects/reelme/linux_digiCamControl/linux_digicamcontrol.py", line 129, in _capture
+    source = self.backend.capture(work, job_id)
+  File "/home/serg/Projects/reelme/linux_digiCamControl/cameras.py", line 453, in capture
+    raise CaptureError("DEMO: съёмка отменена.")
+cameras.CaptureError: DEMO: съёмка отменена.
+ok
+test_capture_and_download (test_server.HTTPTests.test_capture_and_download) ... ok
+test_error_and_recovery (test_server.HTTPTests.test_error_and_recovery) ... CAPTURE failed job=7a28aae9d993471c9e763bfa575783bf
+Traceback (most recent call last):
+  File "/home/serg/Projects/reelme/linux_digiCamControl/linux_digicamcontrol.py", line 129, in _capture
+    source = self.backend.capture(work, job_id)
+  File "/home/serg/Projects/reelme/linux_digiCamControl/tests/test_server.py", line 214, in broken
+    def broken(*args): raise CaptureError('test: disconnected camera')
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+cameras.CaptureError: test: disconnected camera
+ok
+test_head_never_triggers_capture (test_server.HTTPTests.test_head_never_triggers_capture) ... ok
+test_local_upload (test_server.HTTPTests.test_local_upload) ... ok
+test_no_silent_liveview_emulation (test_server.HTTPTests.test_no_silent_liveview_emulation) ... ok
+test_path_traversal_blocked (test_server.HTTPTests.test_path_traversal_blocked) ... ok
+test_security (test_server.HTTPTests.test_security) ... ok
+test_slc_capture (test_server.HTTPTests.test_slc_capture) ... ok
+test_static_health (test_server.HTTPTests.test_static_health) ... ok
+test_three_manually_requested_runs (test_server.HTTPTests.test_three_manually_requested_runs) ... ok
+test_upload_size_and_invalid_body (test_server.HTTPTests.test_upload_size_and_invalid_body) ... ok
+test_bad_multipart (test_server.UtilityTests.test_bad_multipart) ... ok
+test_direct_identifiers (test_server.UtilityTests.test_direct_identifiers) ... ok
+test_gphoto_backend_preserves_raw_and_uses_keep (test_server.UtilityTests.test_gphoto_backend_preserves_raw_and_uses_keep) ... ok
+test_gphoto_discovery (test_server.UtilityTests.test_gphoto_discovery) ... ok
+test_jpeg_parser (test_server.UtilityTests.test_jpeg_parser) ... ok
+test_multipart_roundtrip (test_server.UtilityTests.test_multipart_roundtrip) ... ok
+test_runner_cancellation (test_server.UtilityTests.test_runner_cancellation) ... ok
+test_runner_timeout (test_server.UtilityTests.test_runner_timeout) ... ok
+test_v4l_metadata_not_a_camera (test_server.UtilityTests.test_v4l_metadata_not_a_camera) ... ok
+test_webcam_command (test_server.UtilityTests.test_webcam_command) ... ok
+test_webcam_encoding_with_ffmpeg_synthetic_input (test_server.UtilityTests.test_webcam_encoding_with_ffmpeg_synthetic_input) ... ok
+
+----------------------------------------------------------------------
+Ran 28 tests in 6.469s
+
+OK

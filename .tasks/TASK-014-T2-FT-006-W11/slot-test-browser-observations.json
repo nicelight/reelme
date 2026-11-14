@@ -1,0 +1,15 @@
+{
+  "hiddenSlot": true,
+  "noAutomaticSessionFromUploadOrSave": true,
+  "lostResponseSameRequestAfterReload": true,
+  "sessionCount": 4,
+  "photos": 4,
+  "fixtureBytesEqual": true,
+  "simulated": true,
+  "realReady": true,
+  "safeFailure": true,
+  "modeChangePreservesTestSettings": true,
+  "cameraCalls": 0,
+  "externalCalls": 0,
+  "pageErrors": []
+}

@@ -1,0 +1,137 @@
+{
+  "id": "TASK-013-T3-FT-006-W10",
+  "title": "Добавить сохраняемый режим эмуляции от настройки слота до карточки результата",
+  "status": "done",
+  "wave": "W10",
+  "feature": "FT-006",
+  "reqs": [
+    "REQ-019",
+    "REQ-018",
+    "REQ-009",
+    "REQ-011"
+  ],
+  "depends_on": [
+    "TASK-007-T2-FT-003-W5",
+    "TASK-010-T2-FT-004-W7"
+  ],
+  "touched_files": [
+    "src/shared/scenarios.ts",
+    "src/shared/capture.ts",
+    "src/server/scenarios/",
+    "src/server/sessions/",
+    "src/server/app.ts",
+    "src/client/cloud/",
+    "tests/",
+    "README.md",
+    "src/shared/display.ts"
+  ],
+  "tier": "T3",
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "api-regressions",
+      "command": "npm test",
+      "required": true
+    },
+    {
+      "name": "browser-outcome",
+      "command": "REELME_BROWSER_ARTIFACTS=.tasks/TASK-013-T3-FT-006-W10 npm run test:ui -- tests/editor.spec.ts tests/display.spec.ts",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-14",
+      "stage": "implementation",
+      "result": "PASS",
+      "summary": "Сохраняемый admin-only simulateGeneration=false по умолчанию; старые config/snapshot остаются real, начатые сессии не меняют режим. Единственный worker проверяет полный порядок фото и читаемость входов общим model-input путём, затем завершает simulated до транспорта. Без FAL_KEY simulation работает, real получает FAL_NOT_CONFIGURED. Display показывает точные подписи/безопасную ошибку без real-шкалы, MP4, QR или delivery.",
+      "checks": [
+        "npm run check: PASS, 0 errors / 0 warnings; npm run build: PASS.",
+        "npm test: PASS, 70/70 (47 top-level), включая 4 новых integration tests simulation.",
+        "Simulation 1/4 фото, pending/terminal restart и ошибки подготовки: submit/status/result/download/delete = 0; исходные JPEG сохранены, generation result fields NULL, session_delivery отсутствует. Positive control real: по одному submit/status/result/download, ready, проверенные байты видео и delivery.",
+        "Legacy defaults, сохранение/reload, toggle между start/finalize, admin-only writes и приватность catalog: PASS. Incomplete/faulted positions, отсутствующие photo/material files, invalid model input: failed / INPUT_PREPARATION_FAILED без fallback.",
+        "Сегодняшние simulated остаются до смены дня, archive без videoUrl и retention удаляют собственные файлы/записи без fal delete: PASS.",
+        "Chromium: обычный display regression PASS (1/1) в browser.log; после исправления UI fixtures финальный targeted run simulation + editor PASS (2/2) в browser-final.log. Точные подписи, безопасная ошибка, отсутствие QR/player/stage bar, checkbox persistence после рестарта, desktop/mobile; screenshot review выполнен.",
+        "git diff --check: PASS."
+      ],
+      "evidence": [
+        ".tasks/TASK-013-T3-FT-006-W10/check.log",
+        ".tasks/TASK-013-T3-FT-006-W10/build.log",
+        ".tasks/TASK-013-T3-FT-006-W10/api-tests.log",
+        ".tasks/TASK-013-T3-FT-006-W10/browser.log",
+        ".tasks/TASK-013-T3-FT-006-W10/browser-final.log",
+        ".tasks/TASK-013-T3-FT-006-W10/editor-simulation-saved.png",
+        ".tasks/TASK-013-T3-FT-006-W10/display-simulation-desktop.png",
+        ".tasks/TASK-013-T3-FT-006-W10/display-simulation-mobile.png"
+      ],
+      "limitations": [
+        "Реальные fal/SMTP-вызовы не выполнялись по указанию оператора. Все API/worker/UI сценарии используют изолированные temporary SQLite/media; проверка эмуляции не доказывает внешнюю доступность provider URLs.",
+        "Первый npm test требовал обновления старых snapshot expectations новым полем default false; финальный прогон 70/70. Первые UI failures относились к test runner import и CORS ephemeral origin; исправлены отдельным Node fixture и test-only CORS. Production CORS не изменён.",
+        "Камера localhost:5513 и Linux-материалы не затронуты; editor capture-loader проверен на свободном порту. TASK-014/015 не реализованы."
+      ],
+      "handoff": "Результат принят владельцем по записанным проверкам; TASK-014 разблокирована."
+    }
+  ],
+  "docs": [
+    ".memory-bank/features/FT-006-slot-testing.md"
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-006-slot-testing.md#FT-006-AC-001",
+    ".memory-bank/features/FT-006-slot-testing.md#FT-006-AC-002"
+  ],
+  "normative_inputs": [
+    ".memory-bank/constitution.md",
+    ".memory-bank/prd.md#постоянные-инструменты-тестирования-слота",
+    ".memory-bank/contracts/http-api.md#тестирование-слота",
+    ".memory-bank/contracts/access.md",
+    ".memory-bank/contracts/boundary-map.md",
+    ".memory-bank/domains/core-domain.md#тестовые-настройки-и-времена-генерации",
+    ".memory-bank/states/lifecycle-map.md#эмуляция-и-ручной-тест",
+    ".memory-bank/contracts/integrations.md#эмуляция-подготовки-без-fal"
+  ],
+  "purpose": "Проверять реальную подготовку входов без обращения к платному fal и без ложной готовности видео.",
+  "success_outcome": "Admin сохраняет режим, новые сессии фиксируют его в snapshot; simulated проходит общий build input и показывает честную карточку. При выключенном режиме сохраняется реальная генерация.",
+  "constraints": [
+    "Владеет FT-006 AC-001/002 целиком, включая editor и display. Поле simulateGeneration имеет default false для нового/старого SlotInput и отсутствующего поля в старом SlotSnapshot. Текущий слот не читается worker вместо snapshot.",
+    "Использовать единственный существующий Sessions worker и model-input builder. Подготовка проверяет полный порядок/количество принятых фото и наличие читаемых входных файлов. Симуляция завершается simulated до любого transport call; ошибки безопасно отображаются как failed, никогда не вызывают fallback на fal.",
+    "Worker должен обрабатывать simulation без FAL_KEY. Реальная ветвь без транспорта даёт FAL_NOT_CONFIGURED, не зависает бесконечно и не имитирует успех. Существующие confirmed request_id/retry/download/ready/retention правила сохраняются.",
+    "Промоэкран показывает simulation projection и точные две подписи PRD, при ошибке — понятную безопасную причину. Не создавать MP4, delivery, QR, email и не показывать завершённую реальную шкалу. Failed/simulated остаются сегодняшними карточками до смены даты, затем обычная retention.",
+    "Проверки включают управляемый fal-транспорт, отдельную SQLite/media и UI. Подтвердить отсутствие любых fal calls в simulation, включая restart и ошибки. Старые успешные тесты не подменяют новое доказательство; реальные провайдеры не вызывать."
+  ],
+  "invariants": [
+    "Только admin меняет настройку; catalog не раскрывает test configuration.",
+    "Начатые сессии сохраняют выбранный режим при последующей правке слота.",
+    "ready по-прежнему означает проверенное собственное видео и выдачу; simulated не ready."
+  ],
+  "verification_targets": [
+    "Сохранить/reload checkbox, проверить старые config/snapshot без поля и flag toggle между start/finalize. Прямые write запросы operator/installation/anonymous отвергаются.",
+    "Для 1/4 входов проверить simulated без всех transport calls, понятные failure cases подготовки и restart terminal/pending simulation. Исходные фото остаются целыми, не появляется delivery.",
+    "Реальная ветвь через injected transport даёт прежний model payload, confirmed ID и ready; без конфигурации — явная ошибка. UI обеих ветвей отличим, simulation без QR/плеера."
+  ],
+  "evidence_required": [
+    "Счётчик submit/status/result/download = 0 у simulation, включая error/restart; positive control real submit >0 и проверенное видео.",
+    "API assertions default/snapshot/access и browser evidence сохранённого checkbox/симуляционной карточки/безопасной ошибки; отсутствие fabricated ready."
+  ],
+  "anti_goals": [
+    "Новый worker/очередь, fake MP4/QR/email, env-only режим, изменение всех моделей или новой доставки.",
+    "Реальные платные fal/SMTP-прогоны, изменения Linux-камеры."
+  ],
+  "runtime_context": {
+    "forbidden_scope": [
+      "linux_digiCamControl/",
+      "Деплой, commit/push, production-данные, реальные платные fal-вызовы и SMTP-отправки"
+    ],
+    "stop_conditions": [
+      "Необходимость изменить согласованные product semantics или выполнять внешние платные/необратимые действия: вернуть вопрос владельцу."
+    ]
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "camera": "v4l2:/dev/video0",
+  "session": "session-20261114T120230-d18dedef",
+  "frames": [
+    {
+      "session": "live-one",
+      "pose": 1,
+      "width": 1280,
+      "height": 720,
+      "elapsedMs": 560
+    },
+    {
+      "session": "live-four",
+      "pose": 1,
+      "width": 1280,
+      "height": 720,
+      "elapsedMs": 522
+    },
+    {
+      "session": "live-four",
+      "pose": 2,
+      "width": 1280,
+      "height": 720,
+      "elapsedMs": 529
+    },
+    {
+      "session": "live-four",
+      "pose": 3,
+      "width": 1280,
+      "height": 720,
+      "elapsedMs": 520
+    },
+    {
+      "session": "live-four",
+      "pose": 4,
+      "width": 1280,
+      "height": 720,
+      "elapsedMs": 521
+    }
+  ],
+  "previewCount": 12,
+  "errors": [],
+  "normalCaptureAfterStop": true,
+  "pass": true
+}

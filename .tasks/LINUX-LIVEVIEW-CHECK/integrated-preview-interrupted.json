@@ -1,0 +1,72 @@
+{
+  "errors": [],
+  "runs": [
+    {
+      "injectedPreviewFailure": false,
+      "commands": [
+        "LiveView_Capture",
+        "LiveView_Capture",
+        "LiveView_Capture"
+      ],
+      "photos": [
+        {
+          "width": 1280,
+          "height": 720,
+          "bytes": 189865,
+          "sha256": "02d23b97e8c7c88f2fea1821fb7e85139b40de78f3a20f3570b389117eb97f94"
+        },
+        {
+          "width": 1280,
+          "height": 720,
+          "bytes": 188764,
+          "sha256": "0cf909f366f2b35ebbca6a164e835f9a7b69eb5bfb55335e7487809a55d19b74"
+        },
+        {
+          "width": 1280,
+          "height": 720,
+          "bytes": 188875,
+          "sha256": "8a560b82cf0c40ca46e770414cde8a74c47c07c9be1ae3d79d9423d8959fabd9"
+        }
+      ],
+      "liveHidden": true,
+      "liveSrc": null,
+      "activeBlobUrls": 3,
+      "previewStatus": "Превью остановлено."
+    },
+    {
+      "injectedPreviewFailure": false,
+      "commands": [
+        "LiveView_Capture",
+        "LiveView_Capture",
+        "LiveView_Capture"
+      ],
+      "photos": [
+        {
+          "width": 1280,
+          "height": 720,
+          "bytes": 187261,
+          "sha256": "6fa30387006e8ef0e6d756c950265b486be042d39e6cf1bd0efb1071ffa4de68"
+        },
+        {
+          "width": 1280,
+          "height": 720,
+          "bytes": 186731,
+          "sha256": "373a456bc0229976a1d9d808c4284b48d3732aa14813b3897be3fa9e1ef0aa5f"
+        },
+        {
+          "width": 1280,
+          "height": 720,
+          "bytes": 184826,
+          "sha256": "0adc5ec397488b68a084c4be4b121e3f8500e9e178d35c0a6d5167be7ebb91d2"
+        }
+      ],
+      "liveHidden": true,
+      "liveSrc": null,
+      "activeBlobUrls": 3,
+      "previewStatus": "Превью остановлено."
+    }
+  ],
+  "screenshotsSaved": false,
+  "pass": false,
+  "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n5 !== 3\n"
+}

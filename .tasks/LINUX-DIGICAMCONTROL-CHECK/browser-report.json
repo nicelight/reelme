@@ -1,0 +1,83 @@
+{
+  "mode": "mock",
+  "physicalCamera": false,
+  "errors": [],
+  "uploads": [
+    200,
+    200,
+    200
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "fileCount": 3,
+      "rendered": [
+        {
+          "complete": true,
+          "width": 960,
+          "height": 640
+        },
+        {
+          "complete": true,
+          "width": 960,
+          "height": 640
+        },
+        {
+          "complete": true,
+          "width": 960,
+          "height": 640
+        }
+      ],
+      "result": "DEMO: камера не проверялась. 3 JPEG получены и отправлены локально без изменения байтов.",
+      "buttonEnabled": true
+    },
+    {
+      "run": 2,
+      "fileCount": 6,
+      "rendered": [
+        {
+          "complete": true,
+          "width": 960,
+          "height": 640
+        },
+        {
+          "complete": true,
+          "width": 960,
+          "height": 640
+        },
+        {
+          "complete": true,
+          "width": 960,
+          "height": 640
+        }
+      ],
+      "result": "DEMO: камера не проверялась. 3 JPEG получены и отправлены локально без изменения байтов.",
+      "buttonEnabled": true
+    },
+    {
+      "run": 3,
+      "fileCount": 9,
+      "rendered": [
+        {
+          "complete": true,
+          "width": 960,
+          "height": 640
+        },
+        {
+          "complete": true,
+          "width": 960,
+          "height": 640
+        },
+        {
+          "complete": true,
+          "width": 960,
+          "height": 640
+        }
+      ],
+      "result": "DEMO: камера не проверялась. 3 JPEG получены и отправлены локально без изменения байтов.",
+      "buttonEnabled": true
+    }
+  ],
+  "failureText": "Ошибка. Скачайте логи и отправьте Сергею. /filelist.json: HTTP 503",
+  "pass": true
+}

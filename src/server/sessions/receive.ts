@@ -1,5 +1,5 @@
 /** Module contract: Sessions publishes a verified local result and its two distinct
- * capabilities atomically. Receive grants only its own form/photo/frame; download
+ * capabilities and its first ready timestamp atomically. Receive grants only its own form/photo/frame; download
  * grants only its video. Email acceptance owns first confirmation and pending,
  * never SMTP or sent. Neither opening nor retry changes the first confirmation.
  * Deleting events issue no capabilities or ready publication. Ready cards are internal projections for the authenticated display/archive. */
@@ -46,7 +46,7 @@ export function readyCard(db: DB, origin: string, sessionId: string): ReadyCard 
 /** Rechecks persisted files before publication, including recovery after restart.
  * Ordinary generation already decoded them; the recheck closes the saved-file
  * boundary before issuing permanent capabilities. No remote access or SQL awaits. */
-export async function publishReady(db: DB, dataDir: string, sessionId: string) {
+export async function publishReady(db: DB, dataDir: string, sessionId: string, now: () => number = Date.now) {
   const row = db.prepare(`SELECT g.* FROM generation_jobs g JOIN capture_sessions s ON s.id=g.session_id WHERE s.id=? AND s.state='preparing' AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.deleting=0) AND g.video_path IS NOT NULL`).get(sessionId) as { video_path: string; frame_path: string; video_size: number; frame_size: number } | undefined;
   if (!row) return;
   try {
@@ -59,9 +59,9 @@ export async function publishReady(db: DB, dataDir: string, sessionId: string) {
     await sharp(join(dataDir, 'media', photo.path), { failOn: 'warning' }).stats();
     db.transaction(() => {
       if (!sessionAvailable(db, sessionId)) return;
+      if (!db.prepare("UPDATE capture_sessions SET state='ready' WHERE id=? AND state='preparing'").run(sessionId).changes) return;
       db.prepare('INSERT INTO session_delivery(session_id,receive_token,download_token) VALUES (?,?,?) ON CONFLICT(session_id) DO NOTHING').run(sessionId, randomBytes(32).toString('base64url'), randomBytes(32).toString('base64url'));
-      db.prepare("UPDATE capture_sessions SET state='ready' WHERE id=? AND state='preparing'").run(sessionId);
-      db.prepare('UPDATE generation_jobs SET error_code=NULL,error_message=NULL WHERE session_id=?').run(sessionId);
+      db.prepare('UPDATE generation_jobs SET ready_at=COALESCE(ready_at,?),error_code=NULL,error_message=NULL WHERE session_id=?').run(now(), sessionId);
     }).immediate();
   } catch {
     db.transaction(() => {

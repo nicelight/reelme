@@ -1,0 +1,17 @@
+{
+  "pass": true,
+  "runs": 3,
+  "photoHoldMs": [
+    513,
+    509,
+    511,
+    512,
+    502,
+    510,
+    517,
+    511,
+    506
+  ],
+  "countdownFrames": 56,
+  "errors": []
+}

@@ -9,7 +9,7 @@ import type { SlotSnapshot } from '../../shared/capture.js';
 import type { Slot } from '../../shared/scenarios.js';
 export function materialIds(value: Slot | SlotSnapshot): string[] {
   const generation = 'generation' in value ? value.generation : value;
-  return [value.thumbnailId, value.demoId, generation.videoId, ...(generation.referenceIds ?? [])].filter((id): id is string => !!id);
+  return [value.thumbnailId, value.demoId, value.testPhotoId, generation.videoId, ...(generation.referenceIds ?? [])].filter((id): id is string => !!id);
 }
 export function removeUnusedMaterials(db: DB, dataDir: string, candidates: string[], deletingDate: string) {
   const used = new Set<string>();

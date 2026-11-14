@@ -7,6 +7,7 @@ export interface DisplaySession {
   label: string;
   error: string | null;
   hideAt: number | null;
+  simulation: { status: 'pending' | 'passed' | 'failed'; message: string; detail: string | null } | null;
   card: { photoUrl: string; frameUrl: string; qrUrl: string } | null;
 }
 export interface TodayDisplay { date: string; serverNow: number; sessions: DisplaySession[] }

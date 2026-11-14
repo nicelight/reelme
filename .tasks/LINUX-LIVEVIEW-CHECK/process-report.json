@@ -1,0 +1,14 @@
+{
+  "pass": false,
+  "status": "superseded: invalid idle conclusion",
+  "observations": {
+    "singleProcess": true,
+    "repeatedStartSamePid": true,
+    "processAbsentAfterSeconds": 16,
+    "remainingFfmpegChildren": []
+  },
+  "idleReleaseConfirmed": false,
+  "reason": "The process exited after about 6 seconds due to Invalid pts (183) <= last (183), before the 15-second idle threshold. Absence at 16 seconds did not prove idle cleanup.",
+  "source": "linux_digiCamControl/data/session-20261114T120230-d18dedef/server.log (2026-11-14 17:05:37 local)",
+  "replacement": "endurance-report.json"
+}

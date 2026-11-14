@@ -1,0 +1,55 @@
+{
+  "mode": "physical-v4l2",
+  "camera": {
+    "id": "v4l2:/dev/video0",
+    "kind": "v4l2",
+    "label": "Веб-камера /dev/video0",
+    "device": "/dev/video0",
+    "note": ""
+  },
+  "errors": [],
+  "screenshotsSaved": false,
+  "result": "УСПЕШНО: 3 JPEG получены и отправлены локально без изменения байтов.",
+  "rendered": [
+    {
+      "complete": true,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "complete": true,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "complete": true,
+      "width": 1280,
+      "height": 720
+    }
+  ],
+  "uploadStatus": 200,
+  "files": [
+    {
+      "name": "/home/serg/Projects/reelme/linux_digiCamControl/data/session-20261114T115157-a17ea0be/reelme-20261114T115328-c7f5f115b506.jpg",
+      "width": 1280,
+      "height": 720,
+      "sha256": "c79139e048cf4f292065fa4c995eedf6b9418723299b418131c17dff0f6d3ed4",
+      "size": 160338
+    },
+    {
+      "name": "/home/serg/Projects/reelme/linux_digiCamControl/data/session-20261114T115157-a17ea0be/reelme-20261114T115333-fdad8e8db38f.jpg",
+      "width": 1280,
+      "height": 720,
+      "sha256": "f75bf10af3953df7ba5f755e49fd3e9a18fed92c2645d40a226e1d07dfac2f7d",
+      "size": 162199
+    },
+    {
+      "name": "/home/serg/Projects/reelme/linux_digiCamControl/data/session-20261114T115157-a17ea0be/reelme-20261114T115338-c9ec1e99d510.jpg",
+      "width": 1280,
+      "height": 720,
+      "sha256": "c38b806230634c9d9fd85322d7878cedc3e3e5416403beb74445dcade7286226",
+      "size": 160559
+    }
+  ],
+  "pass": true
+}

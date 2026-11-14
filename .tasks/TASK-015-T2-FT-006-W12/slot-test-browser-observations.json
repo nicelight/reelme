@@ -1,0 +1,19 @@
+{
+  "hiddenSlot": true,
+  "noAutomaticSessionFromUploadOrSave": true,
+  "lostResponseSameRequestAfterReload": true,
+  "sessionCount": 5,
+  "photos": 4,
+  "fixtureBytesEqual": true,
+  "simulated": true,
+  "realReady": true,
+  "actualPlayback": true,
+  "safeFailureKeepsVideo": true,
+  "simulationKeepsVideo": true,
+  "legacyTimesExplicit": true,
+  "receiveNotOpened": true,
+  "modeChangePreservesTestSettings": true,
+  "cameraCalls": 0,
+  "externalCalls": 0,
+  "pageErrors": []
+}

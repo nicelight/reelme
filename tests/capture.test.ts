@@ -18,7 +18,7 @@ async function setup(f: Fixture) {
   const video = await videoBytes(f.root);
   const thumbnail = await f.upload(cookie, image);
   const clip = await f.upload(cookie, video, 'video/mp4', 'clip.mp4');
-  const recast: SlotInput = { description: 'Первый сюжет для посетителя', visible: true, thumbnailId: thumbnail.id, mode: 'V2V', model: 'minimax/h3-max/recast', referenceIds: [], videoId: clip.id, resolution: '768P', recastShotsConfirmed: true };
+  const recast: SlotInput = { description: 'Первый сюжет для посетителя', visible: true, simulateGeneration: false, thumbnailId: thumbnail.id, mode: 'V2V', model: 'minimax/h3-max/recast', referenceIds: [], videoId: clip.id, resolution: '768P', recastShotsConfirmed: true };
   async function save(input: SlotInput, id?: string) {
     const response = await f.app.inject({ method: id ? 'PUT' : 'POST', url: `/api/admin/slots${id ? `/${id}` : ''}`, headers: { cookie, origin: f.config.origin }, payload: input });
     assert.equal(response.statusCode, id ? 200 : 201, response.body);
@@ -116,11 +116,11 @@ test('session snapshots preserve replaced settings and bytes across restart; P2V
   const slotId = await s.save(s.recast);
   const a = await start(f, slotId);
   const old = snapshot(f, a.sessionId);
-  assert.deepEqual(old, { slotId, description: s.recast.description, thumbnailId: s.thumbnail.id, expectedPhotos: 1, generation: { mode: 'V2V', model: s.recast.model, referenceIds: [], videoId: s.clip.id, resolution: '768P', recastShotsConfirmed: true } });
+  assert.deepEqual(old, { slotId, description: s.recast.description, thumbnailId: s.thumbnail.id, expectedPhotos: 1, generation: { simulateGeneration: false, mode: 'V2V', model: s.recast.model, referenceIds: [], videoId: s.clip.id, resolution: '768P', recastShotsConfirmed: true } });
   const newThumbnail = await f.upload(s.cookie, s.image);
   const reference = await f.upload(s.cookie, s.image);
   const demo = await f.upload(s.cookie, s.video, 'video/mp4', 'demo.mp4');
-  const p2v: SlotInput = { description: 'Новый сюжет и модель', visible: true, thumbnailId: newThumbnail.id, mode: 'P2V', model: 'kling/v4/reference-to-video', referenceIds: [reference.id], demoId: demo.id, prompt: 'Посетитель @Element1 в новом сюжете', resolution: '1080p', duration: 7 };
+  const p2v: SlotInput = { description: 'Новый сюжет и модель', visible: true, simulateGeneration: false, thumbnailId: newThumbnail.id, mode: 'P2V', model: 'kling/v4/reference-to-video', referenceIds: [reference.id], demoId: demo.id, prompt: 'Посетитель @Element1 в новом сюжете', resolution: '1080p', duration: 7 };
   await s.save(p2v, slotId);
   const b = await start(f, slotId);
   assert.equal(b.posePlan.length, 4);
@@ -128,7 +128,7 @@ test('session snapshots preserve replaced settings and bytes across restart; P2V
   assert.equal(new Set(b.posePlan.map(p => p.key)).size, 4);
   assert.ok(b.posePlan.every(p => p.instruction.length > 0));
   const fresh = snapshot(f, b.sessionId);
-  assert.deepEqual(fresh, { slotId, description: p2v.description, thumbnailId: newThumbnail.id, demoId: demo.id, expectedPhotos: 4, generation: { mode: p2v.mode, model: p2v.model, referenceIds: [reference.id], prompt: p2v.prompt, resolution: '1080p', duration: 7 } });
+  assert.deepEqual(fresh, { slotId, description: p2v.description, thumbnailId: newThumbnail.id, demoId: demo.id, expectedPhotos: 4, generation: { simulateGeneration: false, mode: p2v.mode, model: p2v.model, referenceIds: [reference.id], prompt: p2v.prompt, resolution: '1080p', duration: 7 } });
   const detail = await f.app.inject({ url: `/api/catalog/${slotId}`, headers: installation });
   assert.equal(detail.json().previewId, demo.id);
   for (const id of [reference.id, s.clip.id, s.thumbnail.id, randomUUID()]) assert.equal((await f.app.inject({ url: `/api/catalog/${slotId}/media/${id}`, headers: installation })).statusCode, 404);

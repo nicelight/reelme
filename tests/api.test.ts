@@ -97,7 +97,7 @@ test('all eleven models save; invalid model settings and wrong media are rejecte
   for (const [model, mode, resolution, max] of cases) {
     await t.test(model, async () => {
       const recast = model === 'minimax/h3-max/recast';
-      const input: SlotInput = { description: 'Первые три слова описания сюжета', visible: true, thumbnailId: image.id, model, mode, referenceIds: [], ...(resolution ? { resolution } : {}), ...(recast ? { recastShotsConfirmed: true } : { prompt: 'Transform the visitor' }), ...(mode === 'V2V' ? { videoId: video.id } : { duration: max }), ...(model === 'minimax/h3-max/reference-to-video' ? { promptExpansionMode: 'disabled' } : {}) };
+      const input: SlotInput = { description: 'Первые три слова описания сюжета', visible: true, simulateGeneration: false, thumbnailId: image.id, model, mode, referenceIds: [], ...(resolution ? { resolution } : {}), ...(recast ? { recastShotsConfirmed: true } : { prompt: 'Transform the visitor' }), ...(mode === 'V2V' ? { videoId: video.id } : { duration: max }), ...(model === 'minimax/h3-max/reference-to-video' ? { promptExpansionMode: 'disabled' } : {}) };
       const saved = (await save(input, 201)).json<Slot>();
       const read = await f.app.inject({ url: `/api/admin/slots/${saved.id}`, headers });
       assert.equal(read.statusCode, 200); assert.deepEqual(read.json(), saved);
@@ -133,7 +133,7 @@ test('real file validation, immutable replacement and restart preserve old media
   }
   const old = await f.upload(cookie, bytes); const replacement = await f.upload(cookie, bytes);
   assert.notEqual(old.id, replacement.id);
-  const input = { description: 'Сохранённый сюжет после перезапуска', visible: true, thumbnailId: old.id, mode: 'P2V', model: 'kling/v4/reference-to-video', referenceIds: [old.id], prompt: 'A visitor', duration: 10, resolution: '720p' };
+  const input = { description: 'Сохранённый сюжет после перезапуска', visible: true, simulateGeneration: false, thumbnailId: old.id, mode: 'P2V', model: 'kling/v4/reference-to-video', referenceIds: [old.id], prompt: 'A visitor', duration: 10, resolution: '720p' };
   const created = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers, payload: input });
   assert.equal(created.statusCode, 201, created.body);
   const id = created.json().id;

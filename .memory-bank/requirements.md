@@ -26,6 +26,9 @@ status: active
 | REQ-016 | Облачные экраны и локальный HTTP HTML с загружаемыми скриптами; принятые домен, VPS и Caddy | [Размещение](prd.md#принятая-схема-размещения) |
 | REQ-017 | Canon/digiCamControl на Windows, облачные обновления, сохранение существующего процесса DSLR Remote Pro | [Установка](prd.md#принятая-схема-размещения) |
 | REQ-018 | Два аккаунта: оператор показывает результаты и читает архив, администратор управляет слотами и удалением; отдельный ключ установки; QR без входа; email на экране замаскирован | [Роли](prd.md#поверхности-и-роли), [Email](prd.md#получение-по-email) |
+| REQ-019 | Сохраняемый режим эмуляции слота: подготовка входов без fal, честный результат/ошибка на общем экране | [Тестирование слота](prd.md#постоянные-инструменты-тестирования-слота) |
+| REQ-020 | Сохраняемый тестовый JPEG и ручной запуск без камеры только из админки | [Тестирование слота](prd.md#постоянные-инструменты-тестирования-слота) |
+| REQ-021 | Последнее реально готовое видео слота, время отправки в fal и длительность до локальной готовности | [Тестирование слота](prd.md#постоянные-инструменты-тестирования-слота) |
 
 ## Трассировка
 
@@ -56,6 +59,9 @@ status: active
 | REQ-016 | EP-001 | FT-001, FT-002, FT-004, FT-005 | [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004) | [done_for_prod](tasks/TASK-005-T3-FT-002-W4.task.json) |
 | REQ-017 | EP-001 | FT-002 | [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004) | [done_for_prod](tasks/TASK-005-T3-FT-002-W4.task.json) |
 | REQ-018 | EP-001 | FT-001, FT-002, FT-004, FT-005 | [FT-001-AC-004](features/FT-001-scenarios.md#ft-001-ac-004), [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004), [FT-004-AC-001](features/FT-004-public-delivery.md#ft-004-ac-001), [FT-004-AC-003](features/FT-004-public-delivery.md#ft-004-ac-003), [FT-005-AC-002](features/FT-005-event-archive.md#ft-005-ac-002), [FT-005-AC-003](features/FT-005-event-archive.md#ft-005-ac-003) | [done_for_prod](tasks/TASK-005-T3-FT-002-W4.task.json) |
+| REQ-019 | EP-001 | FT-006 | [FT-006-AC-001](features/FT-006-slot-testing.md#ft-006-ac-001), [FT-006-AC-002](features/FT-006-slot-testing.md#ft-006-ac-002) | [done](tasks/TASK-013-T3-FT-006-W10.task.json) |
+| REQ-020 | EP-001 | FT-006 | [FT-006-AC-003](features/FT-006-slot-testing.md#ft-006-ac-003) | [done](tasks/TASK-014-T2-FT-006-W11.task.json) |
+| REQ-021 | EP-001 | FT-006 | [FT-006-AC-004](features/FT-006-slot-testing.md#ft-006-ac-004) | [done](tasks/TASK-015-T2-FT-006-W12.task.json) |
 
 Исключения — [за пределами первой версии](prd.md#за-пределами-первой-версии).
 Их изменение возвращается в PRD; художественная оценка AI-видео не является критерием приёмки.

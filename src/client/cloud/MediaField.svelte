@@ -2,9 +2,10 @@
   /** Module contract: uploads a new immutable material and previews protected
    * media. Replacing/removing a selection never deletes an existing file. */
   import { api, mediaUrl } from './api';
+  import { MAX_PHOTO_BYTES } from '../../shared/capture';
   import type { Media } from '../../shared/scenarios';
-  let { label, kind, id, hint = '', optional = false, onUploaded, onRemove, onError, onBusy }: {
-    label: string; kind: 'image' | 'video'; id?: string; hint?: string; optional?: boolean;
+  let { label, kind, id, hint = '', optional = false, jpegOnly = false, onUploaded, onRemove, onError, onBusy }: {
+    label: string; kind: 'image' | 'video'; id?: string; hint?: string; optional?: boolean; jpegOnly?: boolean;
     onUploaded: (media: Media) => void; onRemove?: () => void;
     onError: (error: unknown) => void; onBusy: (busy: boolean) => void;
   } = $props();
@@ -16,6 +17,7 @@
     if (!file) return;
     uploading = true; onBusy(true);
     try {
+      if (jpegOnly && (file.type !== 'image/jpeg' || file.size > MAX_PHOTO_BYTES)) throw new Error('Выберите JPEG до 20 MiB.');
       const body = new FormData(); body.append('file', file);
       const media = await api<Media>('/admin/slot-media', { method: 'POST', body });
       if (media.kind !== kind) throw new Error(kind === 'image' ? 'Выберите изображение.' : 'Выберите видео.');
@@ -38,7 +40,7 @@
     </div>
   {/if}
   <div class="upload-row">
-    <input id={inputId} type="file" accept={kind === 'image' ? 'image/jpeg,image/png,image/webp' : 'video/mp4,video/quicktime,.mov'} disabled={uploading} onchange={upload} aria-describedby={hint ? `${inputId}-hint` : undefined} aria-label={id ? `Заменить: ${label}` : label} />
+    <input id={inputId} type="file" accept={jpegOnly ? 'image/jpeg,.jpg,.jpeg' : kind === 'image' ? 'image/jpeg,image/png,image/webp' : 'video/mp4,video/quicktime,.mov'} disabled={uploading} onchange={upload} aria-describedby={hint ? `${inputId}-hint` : undefined} aria-label={id ? `Заменить: ${label}` : label} />
     {#if id && onRemove}<button type="button" class="quiet small" onclick={onRemove} disabled={uploading}>Убрать</button>{/if}
   </div>
   {#if uploading}<p class="hint" role="status">Загружаем и проверяем файл…</p>{/if}

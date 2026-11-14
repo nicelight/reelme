@@ -19,11 +19,11 @@ export async function fixture() {
   db.prepare('INSERT INTO installation_keys(token_hash) VALUES (?)').run(digest('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'));
   db.close();
   let now = Date.UTC(2026, 0, 1);
-  let app = await createApp(config, { now: () => now, logger: false });
+  let app = await createApp(config, { now: () => now, logger: false, generation: false });
   return {
     config, root, get app() { return app; },
     advance(ms: number) { now += ms; },
-    async restart() { await app.close(); const db = openDatabase(config.dataDir); db.close(); app = await createApp(config, { now: () => now, logger: false }); },
+    async restart() { await app.close(); const db = openDatabase(config.dataDir); db.close(); app = await createApp(config, { now: () => now, logger: false, generation: false }); },
     async close() { await app.close(); await rm(root, { recursive: true, force: true }); },
     async login(role = 'admin') {
       const response = await app.inject({ method: 'POST', url: '/api/auth/login', headers: { origin: config.origin }, payload: { username: role, password: 'test-password' } });

@@ -36,7 +36,7 @@ export interface StartReceipt {
   state: SessionState;
   posePlan: Pose[];
 }
-export type SessionState = 'capturing' | 'submit_pending' | 'observing' | 'preparing' | 'ready' | 'failed';
+export type SessionState = 'capturing' | 'submit_pending' | 'observing' | 'preparing' | 'ready' | 'failed' | 'simulated';
 /** complete means every position is stored; finalized additionally confirms
  * handoff for processing. Only finalized permits displaying the visitor number. */
 export interface CaptureStatus extends StartReceipt {
@@ -47,11 +47,14 @@ export interface CaptureStatus extends StartReceipt {
 }
 /** The saved description/thumbnail/demo are display material. Only generation
  * contains future model inputs; a P2V demo is never a generation input. */
+export const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
 export interface SlotSnapshot {
+  /** Only manual tests retain their immutable source for retry; never a model input. */
+  testPhotoId?: string;
   slotId: string;
   description: string;
   thumbnailId: string;
   demoId?: string;
   expectedPhotos: 1 | 4;
-  generation: Omit<SlotInput, 'description' | 'thumbnailId' | 'visible' | 'demoId'>;
+  generation: Omit<SlotInput, 'description' | 'thumbnailId' | 'visible' | 'demoId' | 'testPhotoId'>;
 }
