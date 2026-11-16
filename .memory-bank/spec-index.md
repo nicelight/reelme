@@ -1,7 +1,7 @@
 ---
 description: Pure SDD spec registry and planned-spec index.
 status: active
-last_updated: 2026-11-14
+last_updated: 2026-11-16
 source_of_truth:
   - .memory-bank/spec-index.md
 ---
