@@ -21,12 +21,9 @@ services:
       - /srv/reelme-data:/data:Z
     read_only: true
     tmpfs:
-      - /tmp:size=64m,mode=1777
+      - /tmp:mode=1777
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    mem_limit: 1g
-    memswap_limit: 1g
-    pids_limit: 256
     stop_grace_period: 150s
     logging:
       driver: local

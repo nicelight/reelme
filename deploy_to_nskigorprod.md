@@ -1,6 +1,6 @@
 # Развёртывание ReelMe на igornskprod
 
-Состояние подготовки: 14 ноября 2026. SSH alias — **`igornskprod`** (порядок букв отличается от имени этого файла). Приложение на сервере **не развёрнуто**. DNS настраивает оператор.
+Состояние подготовки: 14 ноября 2026; наблюдение и настройки ресурсов обновлены 16 ноября 2026. SSH alias — **`igornskprod`** (порядок букв отличается от имени этого файла). Приложение на сервере **не развёрнуто**. DNS настраивает оператор.
 
 Принято: собирать Docker-образ на локальном компьютере для `linux/amd64`, переносить готовый архив на VPS. На VPS не выполнять `docker build`, `npm ci`, TypeScript/Vite-сборку. Node.js, FFmpeg и нативные зависимости находятся внутри образа; ОС контейнера не обязана совпадать с AlmaLinux хоста. Существующий Caddy остаётся системным сервисом.
 
@@ -57,9 +57,64 @@
 - [deploy/compose.yaml](deploy/compose.yaml): только `image`, без `build`, `pull_policy: never`, порт `127.0.0.1:3000`, непривилегированный UID, read-only rootfs, отдельный writable `/data`, SELinux `:Z`, tmpfs `/tmp`, ротация логов, healthcheck.
 - [deploy/app.env.example](deploy/app.env.example): шаблон server-only credentials. Compose читает значения буквально (`format: raw`): без shell-кавычек, по одной строке на значение.
 
-Начальный предел **1 GiB на весь контейнер**, включая Node, FFmpeg, tmpfs и учитываемую cgroup память. Swap для контейнера отключён (`memswap_limit` равен `mem_limit`). Остальная память нужна ОС, Docker, Caddy и FRP. Тяжёлая генерация моделей выполняется в fal; локально остаются загрузки, изображения, проверка и декодирование видео. Этот лимит требует проверки реальными материалами: большой upload и декодирование могут привести к OOM. Не повышать лимит вслепую на этом VPS. При нехватке — увеличить RAM сервера либо отдельно оптимизировать обработку медиа.
+По указанию оператора от 16 ноября **дополнительные ограничения ресурсов контейнера не задаются**: удалены `mem_limit`, `memswap_limit`, `pids_limit` и явный размер tmpfs `/tmp`; CPU quota не устанавливается. Действуют обычные пределы хоста/ядра (в том числе стандартный размер tmpfs), swap доступен по политике ОС. Изоляция, непривилегированный UID и read-only rootfs сохранены. Исторический smoke выше проводился с прежним лимитом 1 GiB; текущая конфигурация его не содержит. Для оценки фактического потребления включён сбор ниже.
 
 20 GB диска также не подтверждены как достаточные для 14 дней хранения. Учитывать фотографии, видео, образы и резервные копии; оставлять минимум несколько GB свободными. Healthcheck проверяет HTTP, не fal/SMTP и не всю бизнес-функциональность. Docker restart policy перезапускает завершившийся процесс, но сам по себе статус unhealthy перезапуска не вызывает.
+
+## Сбор памяти и активности (16 ноября 2026)
+
+На VPS включён отдельный host-сервис `reelme-observe.service`. Это небольшой Python-процесс, не контейнер; он не запускает/останавливает приложение и не устанавливает ему ограничения. Исходники: [deploy/observe.py](deploy/observe.py), [systemd unit](deploy/reelme-observe.service). На сервере скрипт находится в `/usr/local/lib/reelme/observe.py`.
+
+Проверено 16 ноября: Python compile, systemd unit verify и Compose validation успешны; сервис active/enabled, записи создаются. Временный тестовый контейнер выделил и освободил 32 MiB до опроса: лог сохранил текущие 1 908 736 байт и kernel peak 36 122 624 байта, а также CPU, I/O и сеть. После удаления теста корректно записан пустой список. Тест использовал отдельные labels и `/tmp/reelme-observe-check`, рабочий лог не загрязнён. Контейнер ReelMe не запускался; контрольные суммы конфигураций Caddy/FRP остались прежними.
+
+**Место хранения:** `/var/log/reelme/resources.jsonl`, затем `.1` … `.14`. JSONL — одна запись JSON на строку, время UTC. Опрос примерно раз в 10 секунд плюс время чтения Docker. Ротация встроенная: 10 MiB на файл, до 14 архивов (около 150 MiB суммарно); самые старые записи вытесняются. Каталог 0700, файлы 0600, доступ root. Перед длительным анализом выгружать все файлы, пока нужный период не вытеснен.
+
+Сборщик выбирает контейнеры по Compose labels `project=reelme`, `service=app`, исключая одноразовый setup. После пересоздания автоматически обнаруживает новый ID. Пока ReelMe не развёрнут, пишет `containers: []` и показатели хоста — это ожидаемый режим ожидания, не измерение приложения.
+
+| Поле | Что записывается |
+|---|---|
+| `container_id`, `started_at`, `status`, `health` | Контейнер, начало запуска, состояние и статус healthcheck |
+| `memory_current_bytes` | Полная память cgroup: процессы Node/FFmpeg, учитываемые кеши и tmpfs; это не только JS heap и не RSS одного процесса |
+| `memory_kernel_peak_bytes` | `memory.peak` ядра: максимум с создания текущей cgroup, включая короткие всплески между опросами |
+| `memory_sampled_peak_bytes` | Максимум увиденных текущих значений за этот запуск контейнера и непрерывную работу сборщика; после рестарта сборщика начинается заново |
+| `memory_swap_bytes`, `memory_events` | Использованный swap, счётчики событий памяти, включая `oom`/`oom_kill` |
+| `cpu_usage_usec`, `cpu_percent`, `pids` | Накопленное CPU-время, средняя загрузка между соседними записями (100% = одно ядро), число задач cgroup |
+| `network.rx_bytes`, `network.tx_bytes` | Накопленный сетевой обмен без loopback; включает внешние интеграции и health/служебный трафик через интерфейс |
+| `io` | Накопленные дисковые байты/операции cgroup (`rbytes`, `wbytes`, `rios`, `wios` и доступные ядру другие счётчики) |
+| `restart_count`, `oom_killed`, `exit_code` | Docker restart count, признак OOM последнего состояния и exit code |
+| `host_memory_bytes` | Доступная RAM хоста, свободный и общий swap в байтах |
+| `error` | Тип ошибки опроса; отсутствие измерения не выдаётся за нулевое потребление |
+
+Накопленные счётчики анализировать по разностям внутри одного `container_id`/`started_at`; не складывать их между строками. `cpu_percent` в первой записи — null. Если ядро не предоставляет `memory.peak`, поле — null, остаётся только максимум выборок. Пик cgroup включает файловый кеш и потому может отличаться от `docker stats`.
+
+При завершении/пересоздании cgroup её kernel peak сбрасывается. Записанные пики сохраняются в файлах независимо от контейнера. Всплеск, после которого контейнер успел завершиться до следующего опроса, может остаться незаписанным; опрос также не является полным журналом кратковременных переходов состояний. На выключенном сервере или при остановленном сборщике записи не создаются.
+
+**Активность приложения:** stdout/stderr уже собирает Docker (`local`, 3 × 10 MB), просмотр через `docker compose logs --timestamps`. Fastify пишет входящие/завершённые запросы, request ID, HTTP status и длительность; фоновые ошибки — по логике приложения. Эти логи помогают сопоставить время нагрузки с работой сайта, но не являются аудитом действий пользователя. URL, Authorization и cookies скрываются существующим redaction; сборщик ресурсов не читает env, фото, видео или тела запросов. Docker-логи относятся к конкретному контейнеру: выгружать их **до** его удаления/пересоздания.
+
+Проверка и выгрузка (на VPS):
+
+```bash
+systemctl status reelme-observe --no-pager
+tail -n 3 /var/log/reelme/resources.jsonl
+journalctl -u reelme-observe --since today --no-pager
+# После развёртывания приложения:
+cd /srv/reelme
+docker compose logs --timestamps --since 24h > /root/reelme-application.log
+```
+
+Выгрузка метрик локально (содержимое архива включает текущий файл и ротации):
+
+```bash
+ssh igornskprod 'tar -C /var/log/reelme -czf - .' > /tmp/reelme-resource-logs.tar.gz
+scp igornskprod:/root/reelme-application.log /tmp/
+```
+
+Установка/обновление сборщика при восстановлении сервера, из корня локального проекта:
+
+```bash
+scp deploy/observe.py deploy/reelme-observe.service igornskprod:/tmp/
+ssh igornskprod 'install -d -m 0755 /usr/local/lib/reelme && install -m 0755 /tmp/observe.py /usr/local/lib/reelme/observe.py && install -m 0644 /tmp/reelme-observe.service /etc/systemd/system/reelme-observe.service && systemctl daemon-reload && systemctl enable reelme-observe && systemctl restart reelme-observe'
+```
 
 ## Будущее развёртывание: только после отдельной команды оператора
 
@@ -163,7 +218,7 @@ journalctl -u caddy --since '5 minutes ago' --no-pager
 - Выполнить одну полноценную генерацию через fal, получение видео, QR и отправку email. Эти действия могут расходовать баланс fal/SMTP.
 - Проверить, что порт 3000 недоступен снаружи, а сайт доступен по HTTPS.
 - Проверить перезапуск контейнера и сохранность аккаунтов/материалов.
-- Во время upload и обработки видео наблюдать `docker stats`, `free -h`, `df -h /`. Проверить `docker inspect "$(docker compose ps -q app)" --format '{{.State.OOMKilled}} {{.RestartCount}}'` и сообщения OOM в kernel journal.
+- Во время upload и обработки видео собирать `/var/log/reelme/resources.jsonl`, дополнительно наблюдать `docker stats`, `free -h`, `df -h /`. Проверить `docker inspect "$(docker compose ps -q app)" --format '{{.State.OOMKilled}} {{.RestartCount}}'` и сообщения OOM в kernel journal.
 - После загрузки реальных материалов оценить хранение на 14 дней и резервную копию. Настоящие показатели нагрузки в ходе подготовки не измерялись.
 
 ## Обновление, резервная копия, откат
@@ -199,3 +254,5 @@ curl --fail http://127.0.0.1:3000/ -o /dev/null
 - [Docker: firewall и forwarding](https://docs.docker.com/engine/network/packet-filtering-firewalls/).
 - [Caddy: validate, envfile и reload](https://caddyserver.com/docs/command-line).
 - [README приложения](README.md), [.env.example](.env.example).
+
+- [Linux cgroup v2: memory.current и memory.peak](https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html).
