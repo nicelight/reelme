@@ -1,0 +1,23 @@
+{
+  "task": "TASK-018-T2-FT-001-W15",
+  "result": "Implemented; awaiting root closure",
+  "checks": {
+    "npm run check": "PASS: Svelte 0 errors / 0 warnings; server TypeScript PASS",
+    "npm run build": "PASS",
+    "npm test": "PASS: 91/91",
+    "materials API": "PASS: 3/3 dedicated tests (included in npm test)",
+    "editor browser": "3 prior scenarios PASS; new scenario first failed due relative test request URL, corrected to app.origin; targeted rerun PASS (1/1)",
+    "git diff --check": "PASS"
+  },
+  "verified": [
+    "Stable draft UUID survives first save; missing file saves not-ready draft; arbitrary new upload and cross-slot/orientation source rejected; preexisting source remains usable",
+    "Actual source playback and immutable replacement; Range bytes match saved provider source; replacing preparation file leaves prior snapshots unchanged",
+    "Five admin assignments, image validation, admin/installation isolation, snapshot-bound guide route, new-session replacement and missing-guide fallback",
+    "Cleanup retains current guide and references from another day, reclaims stale guide after final referencing day removed; guides/demo excluded from fal payload",
+    "Desktop/mobile guide page reviewed from screenshots; 375px has no horizontal overflow; sequential editor prompt and test-cache regressions pass"
+  ],
+  "not_run": [
+    "Actual template videos absent; only isolated synthetic MP4/JPEG fixtures used",
+    "Real camera and paid fal/SMTP not run; capture display/countdown belongs TASK-019"
+  ]
+}

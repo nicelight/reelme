@@ -1,0 +1,12 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/editor.spec.ts -g draft source binding
+
+
+Running 1 test using 1 worker
+
+(node:1826558) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/editor.spec.ts:244:1 › draft source binding and five-guide page show actual immutable media on desktop and mobile (4.8s)
+
+  1 passed (6.5s)

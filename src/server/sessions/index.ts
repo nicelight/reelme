@@ -20,7 +20,7 @@ import { z } from 'zod';
 import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
 import { snapshotSlot } from '../scenarios/store.js';
-import { readTestPhoto } from '../scenarios/media.js';
+import { readMedia, readTestPhoto, sendMedia } from '../scenarios/media.js';
 import { MAX_PHOTO_BYTES, snapshotPosePlan, type StartReceipt, type SlotSnapshot, type SessionState, type CaptureStatus } from '../../shared/capture.js';
 import { HttpError } from '../errors.js';
 
@@ -94,6 +94,13 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     const { startRequestId, slotId } = startSchema.parse(request.body);
     const result = start.immediate(startRequestId, slotId);
     return reply.code(result.created ? 201 : 200).send(result.value);
+  });
+  app.get('/api/capture/sessions/:id/guides/:number', { preHandler: access.requireInstallation }, async (request, reply) => {
+    const { id, number } = sessionParams.extend({ number: z.coerce.number().int().min(1).max(5) }).parse(request.params);
+    const session = readSession(db, id);
+    const guide = session.snapshot.posePlan?.find(pose => pose.guideNumber === number && pose.guideMediaId);
+    if (!guide?.guideMediaId) throw new HttpError(404, 'NOT_FOUND', 'Образец ракурса не задан для этой сессии');
+    return sendMedia(dataDir, readMedia(db, guide.guideMediaId), request, reply);
   });
   app.get('/api/capture/sessions/:id', { preHandler: access.requireInstallation }, request => {
     const { id } = sessionParams.parse(request.params);

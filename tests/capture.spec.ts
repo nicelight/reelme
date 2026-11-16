@@ -1,3 +1,5 @@
+/** Module contract: capture/browser evidence for docs/slot-setup/matrix.md; isolated local fixtures only. */
+import { randomUUID } from 'node:crypto';
 import { test, expect } from './browser-fixture';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { request as apiRequest } from '@playwright/test';
@@ -18,8 +20,10 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   const slots: { id: string; description: string }[] = [];
   for (let i = 0; i < 14; i++) {
     const description = `История номер ${i + 1} — полное описание выбранного сюжета`;
-    const data = { description, visible: i < 13, thumbnailId, referenceIds: [], ...(i === 0
-      ? { mode: 'V2V', model: 'minimax/h3-max/recast', videoId, resolution: '768P', recastShotsConfirmed: true }
+    const id = randomUUID(); let sourceId: string | undefined;
+    if (i === 0) { await app.prepareTemplate(id); const imported = await admin.post(`/api/admin/slots/${id}/template-video`, { data: { orientation: 'landscape', model: 'minimax/h3-max/recast' } }); expect(imported.status()).toBe(201); sourceId = (await imported.json()).id; }
+    const data = { id, participants: 1, photosPerParticipant: i === 0 ? 1 : 4, orientation: 'landscape', ...(i === 0 ? {} : { aspectRatio: '16:9' }), description, visible: i < 13, thumbnailId, referenceIds: [], ...(i === 0
+      ? { mode: 'V2V', model: 'minimax/h3-max/recast', videoId: sourceId, resolution: '768P', recastShotsConfirmed: true }
       : { mode: 'P2V', model: 'kling/v4/reference-to-video', resolution: '720p', duration: 5, prompt: 'Visitor @Element1', ...(i === 1 ? { demoId: videoId } : {}) }) };
     const response = await admin.post('/api/admin/slots', { data });
     expect(response.status()).toBe(201); slots.push(await response.json());

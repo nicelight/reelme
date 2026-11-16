@@ -1,0 +1,96 @@
+/** Independent camera lifecycle UI smoke, controlled local camera and actual isolated
+ * HTTP/SQLite. Source: docs/slot-setup/matrix.md. No production or paid provider. */
+import { test, expect } from '../../../tests/browser-fixture';
+import { request as apiRequest } from '@playwright/test';
+import { readFile, writeFile } from 'node:fs/promises';
+import sharp from 'sharp';
+const out = '.tasks/TASK-019-T2-FT-002-W16/ui-smoke';
+test.use({ capturePort: 0 });
+test('independent two-person capture, controls, explicit finish and transfer retry', async ({ page, app }) => {
+  const admin = await apiRequest.newContext({ baseURL: app.origin, extraHTTPHeaders: { Origin: app.origin } });
+  expect((await admin.post('/api/auth/login', { data: { username: 'admin', password: app.password } })).status()).toBe(200);
+  const upload = await admin.post('/api/admin/slot-media', { multipart: { file: { name: 'guide.png', mimeType: 'image/png', buffer: await readFile(app.image) } } });
+  expect(upload.status()).toBe(201); const mediaId = (await upload.json()).id;
+  expect((await admin.put('/api/admin/capture-guides/1', { data: { mediaId } })).status()).toBe(200);
+  const saved = await admin.post('/api/admin/slots', { data: { description: 'Независимая съёмка двух людей', visible: true, thumbnailId: mediaId, referenceIds: [], mode: 'P2V', model: 'minimax/h3-max/reference-to-video', participants: 2, photosPerParticipant: 1, orientation: 'landscape', aspectRatio: '16:9', resolution: '768P', duration: 5, prompt: 'Two people', promptExpansionMode: 'disabled' } });
+  expect(saved.status()).toBe(201);
+  const frames = await Promise.all(Array.from({ length: 8 }, (_, i) => sharp({ create: { width: 640, height: 480, channels: 3, background: { r: 30 + i * 20, g: 120, b: 200 - i * 15 } } }).jpeg().toBuffer()));
+  const pageErrors: string[] = []; page.on('pageerror', e => pageErrors.push(e.message));
+  let shutters = 0; const writes: string[] = []; let failUpload = true;
+  page.on('request', request => { if (request.url().startsWith(app.origin) && /\/photos\/|\/finalize$/.test(request.url()) && ['PUT','POST'].includes(request.method())) writes.push(request.url()); });
+  await page.route(app.captureOrigin + '/**', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/reelme.html') return route.continue();
+    expect(route.request().headers().authorization).toBeUndefined();
+    if (url.pathname === '/liveview.html') return route.fulfill({ body: 'ok' });
+    if (url.pathname === '/liveview.jpg') return route.fulfill({ contentType: 'image/jpeg', body: frames[0] });
+    if (url.pathname === '/' && url.searchParams.has('CMD')) { shutters++; return route.fulfill({ body: 'ok' }); }
+    if (url.pathname === '/filelist.json') return route.fulfill({ json: Array.from({ length: shutters + 1 }, (_, i) => ({ FileName: `frame-${i}.jpg`, Original: `/image/frame-${i}.jpg` })) });
+    if (url.pathname.startsWith('/image/')) return route.fulfill({ contentType: 'image/jpeg', body: frames[Number(url.pathname.match(/frame-(\d+)/)![1])] });
+    return route.fulfill({ status: 404 });
+  });
+  await page.route(app.origin + '/api/capture/sessions/**', async route => {
+    if (route.request().method() === 'PUT' && route.request().url().endsWith('/photos/1') && failUpload) {
+      failUpload = false; return route.fulfill({ status: 503, headers: { 'Access-Control-Allow-Origin': app.captureOrigin }, json: { code: 'TEMPORARY', message: 'controlled outage' } });
+    }
+    return route.continue();
+  });
+  await page.goto(app.captureOrigin + '/reelme.html#setup');
+  await page.getByLabel('Ключ установки', { exact: true }).fill(app.installationKey);
+  await page.getByRole('button', { name: 'Проверить и сохранить' }).click();
+  await expect(page.getByRole('status')).toContainText('Ключ проверен');
+  await page.getByRole('link', { name: 'Открыть каталог' }).click();
+  await page.getByRole('link', { name: 'Выбрать сюжет: Независимая съёмка двух', exact: true }).click();
+  await page.getByRole('button', { name: 'Мне нравится' }).click();
+  await expect(page.locator('.pose-guide img')).toHaveJSProperty('naturalWidth', 512);
+  const receipt = await page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!).receipt);
+  expect(receipt.posePlan.map((p: any) => [p.participant,p.guideNumber,p.guideMediaId])).toEqual([[1,1,mediaId],[2,1,mediaId]]);
+  await page.getByRole('button', { name: 'Продолжить без превью', exact: true }).click();
+  await expect(page.getByText('Съёмка без превью', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Начать съёмку', exact: true }).click();
+  await expect(page.locator('.countdown strong')).toHaveText('3');
+  await page.getByRole('button', { name: 'Пауза', exact: true }).click();
+  await expect(page.getByText('Съёмка на паузе', { exact: true })).toBeVisible();
+  await page.waitForTimeout(1200); expect(shutters).toBe(0);
+  await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
+  await expect(page.locator('.countdown strong')).toHaveText('3');
+  await page.screenshot({ path: out + '/countdown-wide.png', fullPage: true });
+  await page.getByRole('button', { name: 'Пауза', exact: true }).click();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
+  await expect(page.locator('.countdown strong')).toHaveText('3');
+  await expect(page.locator('.pose-guide img')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: out + '/countdown-narrow.png', fullPage: true });
+  await expect(page.getByText('Подготовьте второго человека', { exact: false })).toBeVisible({ timeout: 10_000 });
+  expect(shutters).toBe(1); expect(writes).toEqual([]);
+  await page.getByRole('button', { name: 'Перефоткать последнее', exact: true }).click();
+  await expect(page.locator('.participant-label')).toHaveText('Человек 1');
+  await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
+  await expect(page.getByText('Подготовьте второго человека', { exact: false })).toBeVisible({ timeout: 10_000 });
+  expect(shutters).toBe(2);
+  await page.getByRole('button', { name: 'Restart фотосессия', exact: true }).click();
+  await expect(page.locator('.capture-progress')).toHaveText('Снято: 0 из 2');
+  await page.waitForTimeout(500); expect(shutters).toBe(2); expect(writes).toEqual([]);
+  await page.getByRole('button', { name: 'Начать съёмку', exact: true }).click();
+  await expect(page.getByText('Подготовьте второго человека', { exact: false })).toBeVisible({ timeout: 10_000 });
+  await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Завершить фотосессию', exact: true })).toBeVisible({ timeout: 10_000 });
+  await page.getByRole('button', { name: 'Перефоткать последнее', exact: true }).click();
+  await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Завершить фотосессию', exact: true })).toBeVisible({ timeout: 10_000 });
+  expect(shutters).toBe(5); expect(writes).toEqual([]); expect(await app.photos(receipt.sessionId)).toEqual([]);
+  await page.screenshot({ path: out + '/review-narrow.png', fullPage: true });
+  await page.getByRole('button', { name: 'Завершить фотосессию', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('снятые кадры сохранены');
+  const partial = await app.photos(receipt.sessionId); expect(partial).toHaveLength(1); expect(partial[0].bytes).toEqual(frames[3]);
+  await expect(page.getByRole('button', { name: 'Перефоткать последнее', exact: true })).toHaveCount(0);
+  await page.screenshot({ path: out + '/retry-narrow.png', fullPage: true });
+  await page.getByRole('button', { name: 'Повторить', exact: true }).click();
+  await expect(page.locator('.visitor-number')).toHaveText('001');
+  expect(shutters).toBe(5); const photos = await app.photos(receipt.sessionId); expect(photos).toHaveLength(2);
+  expect(photos[0].bytes).toEqual(frames[3]); expect(photos[1].bytes).toEqual(frames[5]);
+  expect(pageErrors).toEqual([]);
+  await writeFile(out + '/observations.json', JSON.stringify({ savedGuideVisible: true, pauseAndFullCountdown: true, noPreview: true, waitsForSecondPerson: true, retakeBoundaryAndLast: true, restartWaits: true, noUploadBeforeFinish: true, transferRetryWithoutShutter: true, shutterCount: shutters, finalFrames: [3,5], horizontalOverflow: false, viewports: [[1440,1000],[375,812]], pageErrors }, null, 2));
+  await admin.dispose();
+});

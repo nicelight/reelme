@@ -9,6 +9,7 @@ import type { CatalogItem, SlotSnapshot } from '../../shared/capture.js';
 import { buildPosePlan } from '../../shared/slot-setup.js';
 import { HttpError } from '../errors.js';
 import { readMedia, readTestPhoto } from './media.js';
+import { readCaptureGuides } from './guides.js';
 
 export function readSlot(db: DB, id: string): Slot {
   const row = db.prepare('SELECT config FROM slots WHERE id=?').get(id) as { config: string } | undefined;
@@ -37,7 +38,7 @@ export function snapshotSlot(db: DB, id: string, manualTest = false): SlotSnapsh
   if (!slotReady(slot)) throw new HttpError(400, 'TEMPLATE_VIDEO_REQUIRED', 'Для запуска нужен шаблонный ролик слота');
   const configured = hasSlotSetup(slot);
   if (configured) { const { id: _id, ...input } = slot; slotSchema.parse(input); }
-  const posePlan = configured ? buildPosePlan(slot) : undefined;
+  const posePlan = configured ? buildPosePlan(slot, readCaptureGuides(db)) : undefined;
   const { id: slotId, description, thumbnailId, demoId, testPhotoId, testPhotoIds, visible: _visible, ...generation } = slot;
   if (manualTest) {
     if (posePlan) {

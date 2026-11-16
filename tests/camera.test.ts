@@ -1,4 +1,4 @@
-/** Local HTTP contract fixtures, not evidence of Canon compatibility. */
+/** Module contract: local camera/pending fixtures, not Canon acceptance. Source: docs/slot-setup/matrix.md. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -60,13 +60,14 @@ test('retry recovers list/download errors at current pose and never replaces ear
   const f = await cameraFixture(); t.after(() => f.close());
   f.failList();
   await assert.rejects(f.camera.capture('a', 0, false, signal()), /Повторить/);
-  assert.equal(f.shutter, 0);
+  assert.equal(f.shutter, 0); assert.equal(f.camera.hasPendingCapture, false);
   const first = await f.camera.capture('a', 0, false, signal());
   f.failDownload();
   await assert.rejects(f.camera.capture('a', 1, false, signal()), /Повторить/);
-  assert.equal(f.shutter, 2);
+  assert.equal(f.shutter, 2); assert.equal(f.camera.hasPendingCapture, true);
   await assert.rejects(f.camera.capture('b', 0, false, signal()), /текущего снимка/);
   const second = await f.camera.capture('a', 1, false, signal());
+  assert.equal(f.camera.hasPendingCapture, false);
   assert.equal(f.shutter, 2);
   assert.deepEqual(Buffer.from(await first.arrayBuffer()), f.jpeg);
   assert.deepEqual(Buffer.from(await second.arrayBuffer()), f.other);

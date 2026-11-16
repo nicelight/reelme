@@ -1,9 +1,10 @@
+/** Module contract: capture/browser evidence for docs/slot-setup/matrix.md; isolated local fixtures only. */
 /** Real browser + Svelte/API/SQLite; only camera HTTP and selected transport
  * failures are controlled. Synthetic JPEGs, no cloud generation consumer. */
 import { test, expect } from './browser-fixture';
 import { request as apiRequest } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import type { CaptureStatus, StartReceipt } from '../src/shared/capture';
 const artifacts = process.env.REELME_BROWSER_ARTIFACTS || '.tasks/TASK-004-T2-FT-002-W3';
@@ -21,9 +22,12 @@ test('accepted JPEGs, same-Blob upload retry, lost finalize acknowledgement and 
     expect(response.status()).toBe(201); return (await response.json()).id;
   };
   const thumbnailId = await upload(app.image, 'image/png');
-  const videoId = await upload(app.video, 'video/mp4');
+
   for (const one of [true, false]) {
+    const id = randomUUID(); let videoId: string | undefined;
+    if (one) { await app.prepareTemplate(id); const imported = await admin.post(`/api/admin/slots/${id}/template-video`, { data: { orientation: 'landscape', model: 'minimax/h3-max/recast' } }); expect(imported.status()).toBe(201); videoId = (await imported.json()).id; }
     const response = await admin.post('/api/admin/slots', { data: {
+      id, participants: 1, photosPerParticipant: one ? 1 : 4, orientation: 'landscape', ...(one ? {} : { aspectRatio: '16:9' }),
       description: one ? 'Один портрет Recast' : 'Четыре разные позы', visible: true, thumbnailId, referenceIds: [],
       ...(one ? { mode: 'V2V', model: 'minimax/h3-max/recast', videoId, resolution: '768P', recastShotsConfirmed: true }
         : { mode: 'P2V', model: 'kling/v4/reference-to-video', resolution: '720p', duration: 5, prompt: 'Visitor @Element1' }),
@@ -132,6 +136,9 @@ test('accepted JPEGs, same-Blob upload retry, lost finalize acknowledgement and 
   expect((await status(firstId)).state).toBe('capturing');
   await noReceipt();
   await page.getByRole('button', { name: 'Начать съёмку' }).click();
+  await expect(page.getByRole('button', { name: 'Завершить фотосессию' })).toBeVisible({ timeout: 15_000 });
+  expect(await app.photos(firstId)).toEqual([]); expect(finalizePosts).toEqual([]);
+  await page.getByRole('button', { name: 'Завершить фотосессию' }).click();
   await expect.poll(() => firstFinalized, { timeout: 15_000 }).toBe(true);
   await noReceipt();
   await expect(page.getByRole('heading', { name: 'Передаём фотографии…' })).toBeVisible();
@@ -167,6 +174,7 @@ test('accepted JPEGs, same-Blob upload retry, lost finalize acknowledgement and 
   await expect(page.locator('.capture-progress')).toHaveText('Снято: 0 из 4');
   await noReceipt();
   await page.getByRole('button', { name: 'Начать съёмку' }).click();
+  await page.getByRole('button', { name: 'Завершить фотосессию' }).click({ timeout: 40_000 });
   await expect(page.getByRole('alert')).toContainText('снятые кадры сохранены', { timeout: 40_000 });
   await noReceipt();
   expect(commands).toHaveLength(5);

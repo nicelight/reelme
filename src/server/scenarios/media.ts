@@ -2,6 +2,7 @@
  * Bytes stream into unique private paths, never overwrite old materials. No
  * remote URLs or client paths are executed; failed uploads remove partial files.
  * sendMedia serves a stored file only after the caller checks surface permissions.
+ * Source: docs/slot-setup/matrix.md.
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createReadStream, createWriteStream } from 'node:fs';
@@ -18,9 +19,9 @@ import type { Media } from '../../shared/scenarios.js';
 import { HttpError } from '../errors.js';
 import { MAX_PHOTO_BYTES } from '../../shared/capture.js';
 const run = promisify(execFile);
-interface StoredMedia extends Media { path: string }
+interface StoredMedia extends Media { path: string; template_slot_id?: string | null; template_orientation?: string | null }
 export function readMedia(db: DB, id: string): StoredMedia {
-  const row = db.prepare("SELECT id,path,kind,mime,size,duration,width,height FROM slot_media WHERE id=? AND owner='scenarios'").get(id) as StoredMedia | undefined;
+  const row = db.prepare("SELECT id,path,kind,mime,size,duration,width,height,template_slot_id,template_orientation FROM slot_media WHERE id=? AND owner='scenarios'").get(id) as StoredMedia | undefined;
   if (!row) throw new HttpError(400, 'INVALID_MEDIA', 'Материал не найден');
   return row;
 }
@@ -34,7 +35,7 @@ export function readTestPhoto(db: DB, id: string): StoredMedia {
 export function mediaInfo(row: StoredMedia): Media {
   return { id: row.id, kind: row.kind, mime: row.mime, size: row.size, ...(row.duration == null ? {} : { duration: row.duration }), width: row.width, height: row.height };
 }
-async function inspect(path: string, mime: string): Promise<Omit<Media, 'id' | 'size'>> {
+export async function inspectMedia(path: string, mime: string, rejectRotation = false): Promise<Omit<Media, 'id' | 'size'>> {
   if (['image/jpeg', 'image/png', 'image/webp'].includes(mime)) {
     try {
       const image = sharp(path, { limitInputPixels: 40_000_000, failOn: 'warning' });
@@ -51,6 +52,7 @@ async function inspect(path: string, mime: string): Promise<Omit<Media, 'id' | '
       const probe = JSON.parse(stdout);
       const stream = probe.streams.find((s: { codec_type: string; disposition?: { attached_pic: number } }) => s.codec_type === 'video' && !s.disposition?.attached_pic);
       const duration = Number(probe.format.duration);
+      if (rejectRotation && (Number(stream?.tags?.rotate ?? 0) % 360 || stream?.side_data_list?.some((item: { rotation?: number }) => Number(item.rotation ?? 0) % 360))) throw new Error();
       if (!stream?.width || !stream.height || !Number.isFinite(duration) || duration <= 0) throw new Error();
       return { kind: 'video', mime, duration, width: stream.width, height: stream.height };
     } catch { throw new HttpError(400, 'INVALID_MEDIA', 'Нужен корректный MP4 или MOV с видеодорожкой'); }
@@ -67,7 +69,7 @@ export function registerMedia(app: FastifyInstance, db: DB, dataDir: string, acc
       await pipeline(file.file, createWriteStream(path, { flags: 'wx', mode: 0o600 }));
       if (file.file.truncated) throw new HttpError(413, 'FILE_TOO_LARGE', 'Размер файла превышает 300 MB');
       const size = (await stat(path)).size;
-      const meta = await inspect(path, file.mimetype);
+      const meta = await inspectMedia(path, file.mimetype);
       db.prepare('INSERT INTO slot_media(id,path,kind,mime,size,duration,width,height) VALUES (?,?,?,?,?,?,?,?)').run(id, id, meta.kind, meta.mime, size, meta.duration ?? null, meta.width, meta.height);
       return reply.code(201).send({ id, size, ...meta });
     } catch (error) { await rm(path, { force: true }); throw error; }

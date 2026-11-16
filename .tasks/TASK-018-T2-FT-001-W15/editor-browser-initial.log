@@ -1,0 +1,33 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/editor.spec.ts
+
+
+Running 4 tests using 1 worker
+
+(node:1815605) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/editor.spec.ts:49:1 › sequential setup exposes real capacities, locks fields, saves both modes and preserves the source on unlock (13.1s)
+  ✓  2 tests/editor.spec.ts:135:1 › prompt text survives reference changes and stale fetches; real load failures block stale saves (3.0s)
+  ✓  3 tests/editor.spec.ts:184:3 › manual test flow › per-position JPEG cache separates people/group and real results survive resets, failures and simulation (12.3s)
+  ✘  4 tests/editor.spec.ts:244:1 › draft source binding and five-guide page show actual immutable media on desktop and mobile (3.1s)
+
+
+  1) tests/editor.spec.ts:244:1 › draft source binding and five-guide page show actual immutable media on desktop and mobile 
+
+    TypeError: apiRequestContext.get: Invalid URL
+
+      259 |   await player.evaluate(node => (node as HTMLVideoElement).play()); await expect.poll(() => player.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(0.1); await player.evaluate(node => (node as HTMLVideoElement).pause());
+      260 |   await page.getByLabel('Подтверждаю:', { exact: false }).check(); await save(page);
+    > 261 |   const saved = await (await page.request.get(`/api/admin/slots/${id}`)).json();
+          |                                           ^
+      262 |   await expect(player).toHaveAttribute('src', `/api/admin/slot-media/${saved.videoId}`);
+      263 |   const oldSource = saved.videoId;
+      264 |   await page.getByRole('button', { name: 'Обновить исходник из файла', exact: true }).click();
+        at /home/serg/Projects/reelme/tests/editor.spec.ts:261:43
+
+    Error Context: .tasks/TASK-018-T2-FT-001-W15/browser-results/editor-draft-source-bindin-a5c2f-media-on-desktop-and-mobile/error-context.md
+
+  1 failed
+    tests/editor.spec.ts:244:1 › draft source binding and five-guide page show actual immutable media on desktop and mobile 
+  3 passed (35.3s)

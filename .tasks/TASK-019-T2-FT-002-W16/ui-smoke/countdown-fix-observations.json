@@ -1,0 +1,16 @@
+{
+  "fallbackCopyHidden": true,
+  "countdownAndGuideVisible": true,
+  "viewports": [
+    [
+      1440,
+      1000
+    ],
+    [
+      375,
+      812
+    ]
+  ],
+  "shutterCount": 0,
+  "horizontalOverflow": false
+}

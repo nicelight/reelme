@@ -1,7 +1,7 @@
 /** Module contract: composes Fastify, Access, Scenarios and Sessions with private storage.
  * Public assets and scoped provider capabilities are served; capture-loader reads the current manifest
  * and imports cloud assets without changing localhost origin. Stable prompt text assets
- * revalidate on every reuse. Source: docs/slot-setup/matrix.md. No device APIs here.
+ * revalidate on every reuse. Source: docs/slot-setup/matrix.md. No device APIs here. Source: docs/slot-setup/matrix.md.
  */
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
@@ -47,7 +47,7 @@ export async function createApp(config: Config, options: { now?: () => number; l
   await app.register(multipart);
   await app.register(rateLimit, { global: false });
   const access = await createAccess(app, db, config, options.now ?? Date.now);
-  registerScenarios(app, db, config.dataDir, access);
+  registerScenarios(app, db, config.dataDir, access, config.templateVideosDir);
   registerSessions(app, db, config.dataDir, access, options.now ?? Date.now);
   registerSlotResults(app, db, config.dataDir, access);
   registerProviderMedia(app, db, config.dataDir);

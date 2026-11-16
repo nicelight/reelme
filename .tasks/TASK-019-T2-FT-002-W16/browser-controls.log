@@ -1,0 +1,13 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/capture-controls.spec.ts
+
+
+Running 2 tests using 1 worker
+
+(node:1833479) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/capture-controls.spec.ts:22:1 › pause 3/2/1, restart, last retakes, person boundary, pending JPEG and guide visibility (4.5s)
+  ✓  2 tests/capture-controls.spec.ts:117:1 › group uses guide 5; lost local transfer after reload stops even before first accepted upload (3.5s)
+
+  2 passed (9.6s)

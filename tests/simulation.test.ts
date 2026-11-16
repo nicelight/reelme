@@ -1,5 +1,7 @@
 /** Slot simulation acceptance: ordinary capture APIs, isolated SQLite/files and
- * controlled transports. No external provider or SMTP requests. */
+ * controlled transports. No external provider or SMTP requests.
+ * Source: docs/slot-setup/matrix.md.
+ */
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -117,8 +119,8 @@ test('simulation default, admin-only persistence, catalog privacy and immutable 
 test('one/four-photo simulations survive pending and terminal restart with zero provider calls, no delivery, ordinary archive/retention', async t => {
   const h = await setup(t); const { f, db } = h; const forbidden = forbiddenTransport();
   const p2v = await h.save();
-  const bytes = await videoBytes(f.root, 5); const clip = await f.upload(h.admin.cookie, bytes, 'video/mp4', 'clip.mp4');
-  const recast = await h.save({ participants: 1, photosPerParticipant: 1, orientation: 'landscape', description: 'Recast', visible: true, simulateGeneration: true, thumbnailId: h.input.thumbnailId,
+  const bytes = await videoBytes(f.root, 5); const clip = await f.importTemplate(h.admin.cookie, bytes);
+  const recast = await h.save({ id: clip.slotId, participants: 1, photosPerParticipant: 1, orientation: 'landscape', description: 'Recast', visible: true, simulateGeneration: true, thumbnailId: h.input.thumbnailId,
     mode: 'V2V', model: 'minimax/h3-max/recast', videoId: clip.id, resolution: '768P', referenceIds: [], recastShotsConfirmed: true });
   const ids: string[] = [];
   for (const [slot, count] of [[p2v, 4], [recast, 1]] as const) {

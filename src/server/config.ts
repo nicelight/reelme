@@ -1,9 +1,10 @@
 /** Module contract: server-only environment configuration. Data never lives in
- * build/static directories; origin is explicit, never taken from request headers. */
+ * build/static directories; origin is explicit, never taken from request headers.
+ * Template imports read the configured preparation folder. Source: docs/slot-setup/matrix.md. */
 import { resolve, sep } from 'node:path';
 import { z } from 'zod';
 export interface SmtpConfig { host: string; port: number; user: string; password: string; from: string }
-export interface Config { origin: string; host: string; port: number; dataDir: string; clientDir: string; falKey?: string; smtp?: SmtpConfig }
+export interface Config { origin: string; host: string; port: number; dataDir: string; clientDir: string; templateVideosDir?: string; falKey?: string; smtp?: SmtpConfig }
 export function readConfig(): Config {
   const origin = process.env.APP_ORIGIN || 'http://localhost:3000';
   const url = new URL(origin);
@@ -29,5 +30,5 @@ export function readConfig(): Config {
   if (dataDir === buildDir || dataDir.startsWith(buildDir + sep) || buildDir.startsWith(dataDir + sep)) throw new Error('DATA_DIR должен находиться отдельно от dist');
   const port = Number(process.env.PORT || 3000);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Недопустимый PORT');
-  return { falKey, smtp, origin, host: process.env.HOST || '127.0.0.1', port, dataDir, clientDir: resolve('dist/client') };
+  return { falKey, smtp, origin, host: process.env.HOST || '127.0.0.1', port, dataDir, clientDir: resolve('dist/client'), templateVideosDir: resolve(process.env.TEMPLATE_VIDEOS_DIR || 'media/template-videos') };
 }

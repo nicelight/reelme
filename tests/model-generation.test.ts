@@ -88,7 +88,9 @@ test('ten model inputs, snapshot isolation and reusable P2V URLs yield decoded s
       ...(model.mode === 'P2V' ? { duration: 10, demoId: videoId } : { videoId }),
       ...(endpoint.startsWith('minimax/') ? { duration: 0.92, promptExpansionMode: 'disabled' as const } : {}),
     };
-    const slot = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: admin, payload: input });
+    const slotId = randomUUID();
+    if (model.mode === 'V2V') input.videoId = (await f.importTemplate(cookie, bytes, slotId, endpoint)).id;
+    const slot = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: admin, payload: { ...input, id: slotId } });
     assert.equal(slot.statusCode, 201, slot.body);
     await capture(slot.json().id, input);
   }

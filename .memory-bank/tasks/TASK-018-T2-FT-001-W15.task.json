@@ -1,7 +1,7 @@
 {
   "id": "TASK-018-T2-FT-001-W15",
   "title": "Связать исходник слота и админские образцы ракурсов с неизменными медиа",
-  "status": "planned",
+  "status": "done",
   "wave": "W15",
   "feature": "FT-001",
   "reqs": [
@@ -36,7 +36,7 @@
     },
     {
       "name": "materials-api",
-      "command": "node --import tsx --test tests/scenarios.test.ts tests/capture.test.ts tests/cleanup.test.ts",
+      "command": "node --import tsx --test tests/slot-materials.test.ts tests/scenarios.test.ts tests/capture.test.ts tests/cleanup.test.ts",
       "required": true
     },
     {
@@ -45,7 +45,33 @@
       "required": true
     }
   ],
-  "verify": [],
+  "verify": [
+    {
+      "date": "2026-11-16T16:06:56+05:00",
+      "result": "PASS development implementation; awaiting root closure",
+      "summary": "Immutable named template import/provenance, stable draft UUID, fixed source player and five admin guide assignments implemented; snapshots/protected guide route/cleanup preserved. Existing same-slot source remains compatible until replacement. No camera client changes.",
+      "checks": [
+        "npm run check PASS (0 errors/0 warnings)",
+        "npm run build PASS",
+        "npm test PASS 91/91, including 3 dedicated materials API tests",
+        "editor.spec.ts prior 3 scenarios PASS; new materials scenario first failed from relative test request URL, corrected and targeted rerun PASS 1/1",
+        "Desktop/mobile screenshots inspected, 375px no overflow; git diff --check PASS"
+      ],
+      "evidence": [
+        ".tasks/TASK-018-T2-FT-001-W15/verification.json",
+        ".tasks/TASK-018-T2-FT-001-W15/pose-guides-desktop.png",
+        ".tasks/TASK-018-T2-FT-001-W15/pose-guides-mobile.png"
+      ],
+      "limitations": [
+        "Only local isolated synthetic media, no actual prepared slot movies, real camera or live fal/SMTP. TASK-019 owns countdown/sample rendering."
+      ]
+    },
+    {
+      "stage": "closure",
+      "result": "PASS",
+      "summary": "Root проверил import/provenance, snapshot guide read/cleanup и evidence. Header links и git diff --check PASS; HTTP/domain/README/media инструкции согласованы. TASK-018 закрыта, TASK-019 готова."
+    }
+  ],
   "docs": [
     ".memory-bank/analysis/slot-setup-plan.md",
     "docs/slot-setup/matrix.md"

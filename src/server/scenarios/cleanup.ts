@@ -10,10 +10,10 @@ import type { SlotSnapshot } from '../../shared/capture.js';
 import type { Slot } from '../../shared/scenarios.js';
 export function materialIds(value: Slot | SlotSnapshot): string[] {
   const generation = 'generation' in value ? value.generation : value;
-  return [value.thumbnailId, value.demoId, value.testPhotoId, ...(value.testPhotoIds ?? []), generation.videoId, ...(generation.referenceIds ?? [])].filter((id): id is string => !!id);
+  return [value.thumbnailId, value.demoId, value.testPhotoId, ...(value.testPhotoIds ?? []), ...('generation' in value ? value.posePlan?.map(pose => pose.guideMediaId) ?? [] : []), generation.videoId, ...(generation.referenceIds ?? [])].filter((id): id is string => !!id);
 }
 export function removeUnusedMaterials(db: DB, dataDir: string, candidates: string[], deletingDate: string) {
-  const used = new Set<string>();
+  const used = new Set<string>((db.prepare('SELECT media_id FROM capture_guides').all() as { media_id: string }[]).map(row => row.media_id));
   for (const row of db.prepare('SELECT config FROM slots').all() as { config: string }[]) {
     materialIds(JSON.parse(row.config)).forEach(id => used.add(id));
   }

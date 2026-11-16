@@ -2,13 +2,14 @@
  * request. It compares file lists and returns original JPEG bytes, never mirrors
  * them or sends installation credentials. Retry resumes the same pending file;
  * an uncertain shutter response must not trigger another exposure or a new pose.
- * Nonrepeating filenames and exclusive control of the camera are prerequisites. */
+ * Source: docs/slot-setup/matrix.md. Nonrepeating filenames and exclusive control of the camera are prerequisites. */
 export class CameraError extends Error {}
 interface CameraFile { FileName: string; Original: string }
 interface Pending { key: string; before: Set<string>; original?: string }
 export class DigiCamControl {
   private pending?: Pending;
   private busy = false;
+  get hasPendingCapture(): boolean { return this.pending !== undefined; }
   constructor(private fetcher: typeof fetch = (input, init) => fetch(input, init), private waitMs = 30_000, private pollMs = 500) {}
   private async get(path: string, signal: AbortSignal) {
     const response = await this.fetcher(path, { cache: 'no-store', credentials: 'omit', signal });

@@ -1,0 +1,10 @@
+{
+  "distinctJPEGs": 4,
+  "cacheSeparatedGroupsAndPeople": true,
+  "lostResponseRetriedSameId": true,
+  "actualPlayback": true,
+  "readySurvivesUnlockFailureSimulation": true,
+  "unknownLegacyTimes": true,
+  "receiveNotOpened": true,
+  "pageErrors": []
+}

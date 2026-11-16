@@ -1,7 +1,8 @@
 /** Module contract: account-only archive projection and admin deletion of past Novosibirsk events.
  * Counts stored session-owned files once, excluding shared scenario materials.
  * Saved snapshots select thumbnails; only this session's ready video is served.
- * Deletion delegates to the shared restartable Sessions cleanup after role/date checks. */
+ * Deletion delegates to the shared restartable Sessions cleanup after role/date checks.
+ * Saved slot material semantics: docs/slot-setup/matrix.md. */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';

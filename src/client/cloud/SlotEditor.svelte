@@ -11,9 +11,10 @@
   import type { Pose } from '../../shared/capture';
   import MediaField from './MediaField.svelte';
   import SlotTest from './SlotTest.svelte';
+  import { api, mediaUrl } from './api';
 
-  let { draft = $bindable(), videoMedia = $bindable(), canSave = $bindable(false), slotId, cacheKey, photoCaches, disabled, dirty, sourceProblem, onError, onBusy }: {
-    draft: SlotInput; videoMedia?: Media; canSave?: boolean; slotId: string | null;
+  let { draft = $bindable(), videoMedia = $bindable(), canSave = $bindable(false), slotId, draftId, cacheKey, photoCaches, disabled, dirty, sourceProblem, onError, onBusy }: {
+    draft: SlotInput; videoMedia?: Media; canSave?: boolean; slotId: string | null; draftId: string;
     cacheKey: string; photoCaches: Map<string, Record<string, string>>; disabled: boolean; dirty: boolean;
     sourceProblem?: string; onError: (value: unknown) => void; onBusy: (value: boolean) => void;
   } = $props();
@@ -36,6 +37,8 @@
   // svelte-ignore state_referenced_locally
   let manualPrompt = $state(!!slotId);
   let referenceNotice = $state('');
+  let sourceLoading = $state(false);
+  let sourceError = $state('');
   let requestRevision = 0;
   let controller: AbortController | undefined;
   const currentModel = $derived(models.find(item => item.id === draft.model)!);
@@ -117,7 +120,18 @@
   function changePhotos(value: string) { resetLower(); draft.photosPerParticipant = Number(value); photosChosen = true; }
   function changeOrientation(value: Orientation) {
     resetLower(); draft.orientation = value;
+    draft.videoId = undefined; videoMedia = undefined; sourceError = '';
+    draft.recastShotsConfirmed = draft.model === recastId ? false : undefined;
     draft.aspectRatio = matrixModel.orientationMode === 'aspect-ratio' ? matrixModel.aspectRatios[value][0] : undefined;
+  }
+  async function importSource() {
+    sourceLoading = true; sourceError = ''; onBusy(true);
+    try {
+      const media = await api<Media>(`/admin/slots/${draftId}/template-video`, { method: 'POST', body: JSON.stringify({ orientation: draft.orientation, model: draft.model }) });
+      draft.videoId = media.id; videoMedia = media;
+      draft.recastShotsConfirmed = draft.model === recastId ? false : undefined;
+    } catch (value) { sourceError = value instanceof Error ? value.message : 'Не удалось подключить исходник'; }
+    finally { sourceLoading = false; onBusy(false); }
   }
   function syncTestSet() {
     const ids = plan.map(pose => photoCache[positionKey(pose)]);
@@ -217,7 +231,15 @@
   {#if locked}
     <div class="materials">
       {#if draft.mode === 'V2V'}
-        <MediaField label="Исходное видео" kind="video" id={draft.videoId} hint={`MP4 или MOV · ${currentModel.minSeconds}–${currentModel.maxSeconds} с${currentModel.maxVideoMB ? ` · до ${currentModel.maxVideoMB} MB` : ''}`} onUploaded={media => { draft.videoId = media.id; videoMedia = media; draft.recastShotsConfirmed = draft.model === recastId ? false : undefined; }} {onError} {onBusy} />
+        <section class="template-video" aria-label="Исходное видео слота">
+          <h4>Исходное видео</h4>
+          <p class="hint">ID сюжета: <code data-testid="draft-slot-id">{draftId}</code></p>
+          <p class="hint">Файл: <code>{draftId}__{draft.orientation}.mp4</code></p>
+          <p class="hint">Подготовьте его в папке шаблонных роликов. MP4 · {currentModel.minSeconds}–{currentModel.maxSeconds} с{currentModel.maxVideoMB ? ` · до ${currentModel.maxVideoMB} MB` : ''}.</p>
+          {#if draft.videoId}<video src={mediaUrl(draft.videoId)} aria-label="Исходный ролик сюжета" controls playsinline preload="metadata"><track kind="captions" /></video><p class="hint">Подключён этот исходник. Изменения файла применятся после повторного подключения и сохранения.</p>{/if}
+          <button type="button" class="quiet" disabled={sourceLoading} onclick={importSource}>{sourceLoading ? 'Проверяем исходник…' : draft.videoId ? 'Обновить исходник из файла' : 'Подключить исходник из файла'}</button>
+          {#if sourceError}<p class="error" role="alert">{sourceError}</p>{/if}
+        </section>
         {#if !draft.videoId}<p class="hint">Сюжет можно сохранить как черновик. Для запуска нужен исходный ролик.</p>{/if}
         {#if sourceProblem}<p class="error" role="alert">{sourceProblem}</p>{/if}
         {#if draft.model === recastId && draft.videoId}<label class="checkbox-label shot-confirmation"><input type="checkbox" bind:checked={draft.recastShotsConfirmed} />Подтверждаю: каждый непрерывный кадр длится не более 15 секунд</label>{/if}
@@ -261,6 +283,8 @@
 </section>
 
 <style>
+  .template-video { margin-top:20px; overflow-wrap:anywhere; }
+  .template-video video { display:block; width:100%; max-height:360px; margin:16px 0; background:#17251c; }
   .capacity-note { margin-top:20px; padding:16px; border:1px solid var(--line); border-radius:6px; background:var(--bg); font-size:14px; overflow-wrap:anywhere; }
   .capacity-note p { margin-top:6px; }
   .setup-actions { display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-top:22px; }

@@ -1,0 +1,27 @@
+{
+  "savedGuideVisible": true,
+  "pauseAndFullCountdown": true,
+  "noPreview": true,
+  "waitsForSecondPerson": true,
+  "retakeBoundaryAndLast": true,
+  "restartWaits": true,
+  "noUploadBeforeFinish": true,
+  "transferRetryWithoutShutter": true,
+  "shutterCount": 5,
+  "finalFrames": [
+    3,
+    5
+  ],
+  "horizontalOverflow": false,
+  "viewports": [
+    [
+      1440,
+      1000
+    ],
+    [
+      375,
+      812
+    ]
+  ],
+  "pageErrors": []
+}

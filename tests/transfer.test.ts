@@ -1,4 +1,4 @@
-/** Accepted photo sets, durable handoff and installation access on real SQLite/files. */
+/** Accepted photo sets, durable handoff and installation access on real SQLite/files. Source: docs/slot-setup/matrix.md. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -17,11 +17,11 @@ const jpeg = (color: string) => sharp({ create: { width: 64, height: 48, channel
 async function setup(f: Fixture) {
   const cookie = await f.login();
   const thumbnail = await f.upload(cookie, await imageBytes());
-  const clip = await f.upload(cookie, await videoBytes(f.root), 'video/mp4', 'clip.mp4');
+  const clip = await f.importTemplate(cookie, await videoBytes(f.root));
   const ids: string[] = [];
   for (const count of [1, 4]) {
     const response = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: { cookie, origin: f.config.origin }, payload: {
-      participants: 1, photosPerParticipant: count, orientation: 'landscape', ...(count === 4 ? { aspectRatio: '16:9' } : {}),
+      ...(count === 1 ? { id: clip.slotId } : {}), participants: 1, photosPerParticipant: count, orientation: 'landscape', ...(count === 4 ? { aspectRatio: '16:9' } : {}),
       description: `Сюжет ${count} фото`, visible: true, thumbnailId: thumbnail.id, referenceIds: [],
       ...(count === 1 ? { mode: 'V2V', model: 'minimax/h3-max/recast', videoId: clip.id, resolution: '768P', recastShotsConfirmed: true }
         : { mode: 'P2V', model: 'kling/v4/reference-to-video', resolution: '720p', duration: 5, prompt: 'Visitor @Element1' }),

@@ -46,7 +46,7 @@ status: active
 | domain_data_and_states | authoritative | [Данные](domains/core-domain.md), [состояния](states/lifecycle-map.md) | Основной путь и владение файлами определены |
 | module_and_api_contracts | authoritative | [Boundary Map](contracts/boundary-map.md), [HTTP](contracts/http-api.md) | HTTP и [внешние интеграции](contracts/integrations.md) достаточны для задач |
 | runtime_and_operations | authoritative | [Архитектура](architecture/system-architecture.md) | Один процесс/systemd, Caddy, SQLite/файлы, SMTP, роли и установка определены |
-| verification | authoritative | [Функции](epics/EP-001-reelme-event.md) | План функциональных проверок; результатов выполнения пока нет |
+| verification | authoritative | [Функции](epics/EP-001-reelme-event.md) | Критерии функций; фактические доказательства в карточках задач |
 
 ## Handoff To /prd-to-features
 - Ready: yes

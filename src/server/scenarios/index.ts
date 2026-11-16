@@ -5,19 +5,23 @@
  * Source: docs/slot-setup/matrix.md. Editor defaults never rewrite raw legacy slots.
  */
 import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
-import { models, slotSchema, videoProblem, type SlotInput } from '../../shared/scenarios.js';
+import { models, slotSchema, videoProblem, type SlotInput, type Slot } from '../../shared/scenarios.js';
 import { editorSlot, readSlot } from './store.js';
-import { getSlotSetup } from '../../shared/slot-setup.js';
 import { registerCatalog } from './catalog.js';
+import { registerTemplateVideos } from './templates.js';
+import { registerCaptureGuides } from './guides.js';
 import { HttpError } from '../errors.js';
 import { readMedia, readTestPhoto, registerMedia } from './media.js';
-export function registerScenarios(app: FastifyInstance, db: DB, dataDir: string, access: Access) {
+export function registerScenarios(app: FastifyInstance, db: DB, dataDir: string, access: Access, templateVideosDir?: string) {
   registerMedia(app, db, dataDir, access);
   registerCatalog(app, db, dataDir, access);
-  function validate(body: unknown): SlotInput {
+  registerTemplateVideos(app, db, dataDir, access, templateVideosDir);
+  registerCaptureGuides(app, db, access);
+  function validate(body: unknown, slotId: string, previous?: Slot): SlotInput {
     const slot = slotSchema.parse(body);
     const image = (id: string) => { if (readMedia(db, id).kind !== 'image') throw new HttpError(400, 'INVALID_MEDIA', 'Выберите изображение'); };
     image(slot.thumbnailId);
@@ -27,9 +31,11 @@ export function registerScenarios(app: FastifyInstance, db: DB, dataDir: string,
     if (slot.demoId && readMedia(db, slot.demoId).kind !== 'video') throw new HttpError(400, 'INVALID_MEDIA', 'Демоматериал должен быть видео');
     if (slot.videoId) {
       const media = readMedia(db, slot.videoId);
+      const grandfathered = !media.template_slot_id && previous?.videoId === slot.videoId;
+      if (!grandfathered && (media.template_slot_id !== slotId || media.template_orientation !== slot.orientation)) throw new HttpError(400, 'TEMPLATE_VIDEO_MISMATCH', 'Используйте шаблонный ролик этого сюжета и выбранной ориентации');
       const problem = videoProblem(models.find(m => m.id === slot.model)!, media);
       if (problem) throw new HttpError(400, 'MODEL_LIMIT', problem);
-      if (getSlotSetup(slot).model.orientationMode === 'source-video' && !(slot.orientation === 'portrait' ? media.height > media.width : media.width > media.height)) throw new HttpError(400, 'VIDEO_ORIENTATION', 'Ориентация определяется исходным видео; выберите соответствующий исходник');
+      if (!(slot.orientation === 'portrait' ? media.height > media.width : media.width > media.height)) throw new HttpError(400, 'VIDEO_ORIENTATION', 'Ориентация определяется исходным видео; выберите соответствующий исходник');
     }
     return slot;
   }
@@ -40,13 +46,15 @@ export function registerScenarios(app: FastifyInstance, db: DB, dataDir: string,
   });
   app.get<{ Params: { id: string } }>('/api/admin/slots/:id', { preHandler: access.requireAdmin }, request => editorSlot(db, readSlot(db, request.params.id)));
   app.post('/api/admin/slots', { preHandler: [access.requireAdmin, access.requireOrigin] }, (request, reply) => {
-    const slot = validate(request.body); const id = randomUUID();
+    const { id = randomUUID(), ...body } = z.object({ id: z.string().uuid().optional() }).passthrough().parse(request.body);
+    if (db.prepare('SELECT 1 FROM slots WHERE id=?').get(id)) throw new HttpError(409, 'SLOT_EXISTS', 'Сюжет с этим ID уже существует');
+    const slot = validate(body, id);
     db.prepare('INSERT INTO slots(id,config) VALUES (?,?)').run(id, JSON.stringify(slot));
     return reply.code(201).send({ ...slot, id });
   });
   app.put<{ Params: { id: string } }>('/api/admin/slots/:id', { preHandler: [access.requireAdmin, access.requireOrigin] }, request => {
-    readSlot(db, request.params.id);
-    const slot = validate(request.body);
+    const previous = readSlot(db, request.params.id);
+    const slot = validate(request.body, request.params.id, previous);
     db.prepare('UPDATE slots SET config=? WHERE id=?').run(JSON.stringify(slot), request.params.id);
     return { ...slot, id: request.params.id };
   });

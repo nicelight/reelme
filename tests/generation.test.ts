@@ -1,5 +1,5 @@
 /** Recast acceptance on real SQLite/files/FFmpeg with explicit fake fal transport.
- * No paid calls or external input uploads occur in this suite. */
+ * No paid calls or external input uploads occur in this suite. Source: docs/slot-setup/matrix.md. */
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
@@ -22,9 +22,9 @@ async function setup(t: TestContext) {
   const cookie = await f.login();
   const thumb = await f.upload(cookie, await imageBytes());
   const bytes = await videoBytes(f.root, 5);
-  const clip = await f.upload(cookie, bytes, 'video/mp4', 'clip.mp4');
+  const clip = await f.importTemplate(cookie, bytes);
   const input = { participants: 1, photosPerParticipant: 1, orientation: 'landscape', description: 'Recast fixture', visible: true, thumbnailId: thumb.id, referenceIds: [], mode: 'V2V', model: endpoint, videoId: clip.id, resolution: '768P', recastShotsConfirmed: true };
-  const response = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: { cookie, origin: f.config.origin }, payload: input });
+  const response = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: { cookie, origin: f.config.origin }, payload: { ...input, id: clip.slotId } });
   assert.equal(response.statusCode, 201, response.body);
   return { f, cookie, input, slotId: response.json().id as string, bytes };
 }
@@ -63,7 +63,7 @@ test('saved A/B snapshots, stable scoped provider URLs and verified files surviv
   const { f, cookie, input, slotId, bytes } = await setup(t);
   const a = await captured(f, slotId);
   const replacementBytes = await videoBytes(f.root, 6);
-  const replacement = await f.upload(cookie, replacementBytes, 'video/mp4', 'new.mp4');
+  const replacement = await f.importTemplate(cookie, replacementBytes, slotId);
   const changed = await f.app.inject({ method: 'PUT', url: `/api/admin/slots/${slotId}`, headers: { cookie, origin: f.config.origin }, payload: { ...input, videoId: replacement.id, resolution: '1080P' } });
   assert.equal(changed.statusCode, 200);
   const b = await captured(f, slotId); const c = await captured(f, slotId);

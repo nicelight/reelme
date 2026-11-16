@@ -92,7 +92,9 @@ test('sequential setup exposes real capacities, locks fields, saves both modes a
   await upload(page, 'Изображение сюжета', app.image); await page.getByLabel('Описание', { exact: true }).fill('Исходный ролик для портрета'); await save(page);
   const catalogueBefore = await page.request.get(app.origin + '/api/catalog', { headers: { authorization: `Bearer ${app.installationKey}` } });
   expect((await catalogueBefore.json()).total).toBe(1);
-  await upload(page, 'Исходное видео', app.video); await page.getByLabel('Подтверждаю:', { exact: false }).check(); await save(page);
+  const draftId = (await page.getByTestId('draft-slot-id').textContent())!; await app.prepareTemplate(draftId);
+  await page.getByRole('button', { name: 'Подключить исходник из файла', exact: true }).click();
+  await expect(page.getByLabel('Исходный ролик сюжета', { exact: true })).toBeVisible(); await page.getByLabel('Подтверждаю:', { exact: false }).check(); await save(page);
   const source = await page.locator('.materials video').getAttribute('src');
   await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click(); await lock(page);
   await expect(page.locator('.materials video')).toHaveAttribute('src', source!);
@@ -237,4 +239,62 @@ test.describe('manual test flow', () => {
     expect(errors).toEqual([]);
     await writeFile(join(artifacts, 'editor-observations.json'), JSON.stringify({ distinctJPEGs: photos.length, cacheSeparatedGroupsAndPeople: true, lostResponseRetriedSameId: requestIds[0] === requestIds[1], actualPlayback: true, readySurvivesUnlockFailureSimulation: true, unknownLegacyTimes: true, receiveNotOpened: true, pageErrors: errors }, null, 2));
   });
+});
+
+test('draft source binding and five-guide page show actual immutable media on desktop and mobile', async ({ page, app }) => {
+  await mkdir(artifacts, { recursive: true });
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message)); page.on('dialog', dialog => dialog.accept());
+  await login(page, app.origin, app.password);
+  await setup(page, 'V2V', 'minimax/h3-max/recast', '1', '1'); await lock(page);
+  const id = (await page.getByTestId('draft-slot-id').textContent())!;
+  expect(id).toMatch(/^[0-9a-f-]{36}$/);
+  await expect(page.getByText(`${id}__landscape.mp4`, { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Исходное видео', { exact: true })).toHaveCount(0);
+  const connect = page.getByRole('button', { name: 'Подключить исходник из файла', exact: true });
+  await connect.click(); await expect(page.getByRole('alert')).toContainText('Шаблонный ролик этой ориентации не найден');
+  await upload(page, 'Изображение сюжета', app.image); await page.getByLabel('Описание', { exact: true }).fill('Подготовленный исходник');
+  await app.prepareTemplate(id); await connect.click();
+  const player = page.getByLabel('Исходный ролик сюжета', { exact: true }); await expect(player).toBeVisible();
+  await expect.poll(() => player.evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
+  await player.evaluate(node => (node as HTMLVideoElement).play()); await expect.poll(() => player.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(0.1); await player.evaluate(node => (node as HTMLVideoElement).pause());
+  await page.getByLabel('Подтверждаю:', { exact: false }).check(); await save(page);
+  const saved = await (await page.request.get(`${app.origin}/api/admin/slots/${id}`)).json();
+  await expect(player).toHaveAttribute('src', `/api/admin/slot-media/${saved.videoId}`);
+  const oldSource = saved.videoId;
+  await page.getByRole('button', { name: 'Обновить исходник из файла', exact: true }).click();
+  await expect(player).not.toHaveAttribute('src', `/api/admin/slot-media/${oldSource}`);
+  await page.getByLabel('Подтверждаю:', { exact: false }).check(); await save(page);
+  await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+  await page.getByLabel('Ориентация', { exact: true }).selectOption('portrait'); await lock(page);
+  await expect(player).toHaveCount(0); await expect(page.getByText(`${id}__portrait.mp4`, { exact: true })).toBeVisible();
+  // Filename alone cannot disguise a landscape fixture as portrait.
+  await app.prepareTemplate(id, 'portrait'); await connect.click(); await expect(page.getByRole('alert')).toContainText('Ориентация файла не соответствует');
+  await save(page); // Save an honest not-ready draft, without the prior landscape source.
+  expect((await (await page.request.get(`${app.origin}/api/admin/slots/${id}`)).json()).videoId).toBeUndefined();
+  await page.getByRole('button', { name: 'Образцы ракурсов', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Образцы ракурсов', exact: true })).toBeVisible();
+  await expect(page.locator('.guide-card')).toHaveCount(5);
+  await expect(page.getByText('Образец не загружен.', { exact: false })).toHaveCount(5);
+  for (const number of [1, 2, 3, 4, 5]) {
+    const card = page.getByRole('region', { name: `Ракурс ${number}`, exact: true });
+    await card.locator('input[type=file]').setInputFiles(number === 1 ? app.jpeg : app.image);
+    await expect(card.locator('img')).toBeVisible();
+    await expect.poll(async () => (await (await page.request.get(app.origin + '/api/admin/capture-guides')).json())[number - 1].mediaId).toBeTruthy();
+  }
+  const before = await (await page.request.get(app.origin + '/api/admin/capture-guides')).json();
+  const firstCard = page.getByRole('region', { name: 'Ракурс 1', exact: true });
+  await firstCard.locator('input[type=file]').setInputFiles(app.image);
+  await expect.poll(async () => (await (await page.request.get(app.origin + '/api/admin/capture-guides')).json())[0].mediaId).not.toBe(before[0].mediaId);
+  await page.screenshot({ path: join(artifacts, 'pose-guides-desktop.png'), fullPage: true });
+  await page.getByRole('region', { name: 'Ракурс 3', exact: true }).getByRole('button', { name: 'Убрать', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Ракурс 3', exact: true }).getByText('Образец не загружен.', { exact: false })).toBeVisible();
+  await page.setViewportSize({ width: 375, height: 812 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: join(artifacts, 'pose-guides-mobile.png'), fullPage: true });
+  await page.reload(); await page.getByRole('button', { name: 'Образцы ракурсов', exact: true }).click();
+  await expect(page.locator('.guide-card img')).toHaveCount(4);
+  await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+  await login(page, app.origin, app.password, 'operator');
+  await expect(page.getByRole('button', { name: 'Образцы ракурсов', exact: true })).toHaveCount(0);
+  expect(errors).toEqual([]);
 });

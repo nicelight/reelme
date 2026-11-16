@@ -1,0 +1,28 @@
+TAP version 13
+# Subtest: named source imports preserve draft identity, provenance, ranges and old session bytes
+ok 1 - named source imports preserve draft identity, provenance, ranges and old session bytes
+  ---
+  duration_ms: 1034.711918
+  type: 'test'
+  ...
+# Subtest: already saved upload sources remain usable; arbitrary replacements need named import
+ok 2 - already saved upload sources remain usable; arbitrary replacements need named import
+  ---
+  duration_ms: 403.664273
+  type: 'test'
+  ...
+# Subtest: five admin guides are pinned to sessions, protected from cleanup and absent from fal inputs
+ok 3 - five admin guides are pinned to sessions, protected from cleanup and absent from fal inputs
+  ---
+  duration_ms: 461.420686
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2795.34767

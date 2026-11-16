@@ -2,7 +2,7 @@
  * Landscape source supports the two-orientation editor. Source: docs/slot-setup/matrix.md. */
 import { test as base, expect } from '@playwright/test';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -11,7 +11,7 @@ import sharp from 'sharp';
 import Database from 'better-sqlite3';
 
 type StoredPhoto = { session_id: string; pose_index: number; path: string; size: number; width: number; height: number; bytes: Buffer };
-type App = { photos: (sessionId: string) => Promise<StoredPhoto[]>; origin: string; dataDir: string; captureOrigin: string; password: string; image: string; jpeg: string; video: string; installationKey: string; sessionCount: () => number; restart: () => Promise<void> };
+type App = { photos: (sessionId: string) => Promise<StoredPhoto[]>; origin: string; dataDir: string; captureOrigin: string; password: string; image: string; jpeg: string; video: string; templateVideosDir: string; prepareTemplate: (slotId: string, orientation?: 'landscape' | 'portrait', file?: string) => Promise<void>; installationKey: string; sessionCount: () => number; restart: () => Promise<void> };
 export const test = base.extend<{ app: App; capturePort: number; runGeneration: boolean }>({
   capturePort: [5513, { option: true }],
   runGeneration: [false, { option: true }],
@@ -20,7 +20,8 @@ export const test = base.extend<{ app: App; capturePort: number; runGeneration: 
     const port = 3197;
     const origin = `http://localhost:${port}`;
     const password = randomUUID();
-    const env = { ...process.env, RUN_GENERATION: String(runGeneration), FIXTURE_VIDEO: join(dir, 'fixture.mp4'), CAPTURE_TEST_ORIGIN: '', FAL_KEY: '', SMTP_HOST: '', SMTP_PORT: '', SMTP_USER: '', SMTP_PASSWORD: '', SMTP_FROM: '', APP_ORIGIN: origin, HOST: '127.0.0.1', PORT: String(port), DATA_DIR: dir, ADMIN_PASSWORD: password, OPERATOR_PASSWORD: password };
+    const templateVideosDir = join(dir, 'templates');
+    const env = { ...process.env, TEMPLATE_VIDEOS_DIR: templateVideosDir, RUN_GENERATION: String(runGeneration), FIXTURE_VIDEO: join(dir, 'fixture.mp4'), CAPTURE_TEST_ORIGIN: '', FAL_KEY: '', SMTP_HOST: '', SMTP_PORT: '', SMTP_USER: '', SMTP_PASSWORD: '', SMTP_FROM: '', APP_ORIGIN: origin, HOST: '127.0.0.1', PORT: String(port), DATA_DIR: dir, ADMIN_PASSWORD: password, OPERATOR_PASSWORD: password };
     const image = join(dir, 'fixture.png');
     const jpeg = join(dir, 'fixture.jpg');
     const video = join(dir, 'fixture.mp4');
@@ -61,7 +62,8 @@ export const test = base.extend<{ app: App; capturePort: number; runGeneration: 
         return Promise.all(rows.map(async row => ({ ...row, bytes: await readFile(join(dir, 'media', row.path)) })));
       };
       const captureOrigin = `http://localhost:${(capture.address() as import('node:net').AddressInfo).port}`;
-      await use({ origin, dataDir: dir, captureOrigin, password, image, jpeg, video, installationKey, sessionCount, photos, restart: async () => { await stop(); await start(); } });
+      const prepareTemplate = async (slotId: string, orientation: 'landscape' | 'portrait' = 'landscape', file = video) => { await mkdir(templateVideosDir, { recursive: true }); await copyFile(file, join(templateVideosDir, `${slotId}__${orientation}.mp4`)); };
+      await use({ templateVideosDir, prepareTemplate, origin, dataDir: dir, captureOrigin, password, image, jpeg, video, installationKey, sessionCount, photos, restart: async () => { await stop(); await start(); } });
     } finally {
       await stop();
       if (capture.listening) await new Promise<void>(resolve => capture.close(() => resolve()));

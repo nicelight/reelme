@@ -1,7 +1,7 @@
 {
   "id": "TASK-019-T2-FT-002-W16",
   "title": "Завершить управляемую фотосессию с паузой, пересъёмками и явной передачей",
-  "status": "planned",
+  "status": "done",
   "wave": "W16",
   "feature": "FT-002",
   "reqs": [
@@ -20,7 +20,8 @@
     "tests/camera.spec.ts",
     "tests/capture.spec.ts",
     "tests/transfer.spec.ts",
-    "tests/transfer.test.ts"
+    "tests/transfer.test.ts",
+    "tests/capture-controls.spec.ts"
   ],
   "tier": "T2",
   "gates": [
@@ -41,11 +42,55 @@
     },
     {
       "name": "capture-browser",
-      "command": "npm run test:ui -- tests/camera.spec.ts tests/capture.spec.ts tests/transfer.spec.ts",
+      "command": "npm run test:ui -- tests/camera.spec.ts tests/capture.spec.ts tests/transfer.spec.ts tests/capture-controls.spec.ts",
       "required": true
     }
   ],
-  "verify": [],
+  "verify": [
+    {
+      "date": "2026-11-16",
+      "stage": "implementation",
+      "result": "PASS",
+      "summary": "Управляемая локальная серия с pause/continue/restart/retake и ожиданием второго человека; Finish единственная граница upload. Pending JPEG запрещает новый затвор/пересъёмки даже после ошибки. Защищённый guide из snapshot/placeholder, legacy SVG сохранён. После начала передачи только retry исходных Blobs; reload с потерянными missing кадрами явно останавливает сессию и позволяет осознанно начать новую без удаления старых принятых фото.",
+      "checks": [
+        "npm run check: PASS, 0 errors / 0 warnings; npm run build: PASS.",
+        "node --import tsx --test tests/camera.test.ts tests/transfer.test.ts: PASS 7/7.",
+        "Browser camera/catalog/transfer regression: PASS 3/3; real local API/SQLite and controlled camera HTTP.",
+        "Browser capture-controls: PASS 2/2. Pause на3/2/1 и continue full countdown; retake на границе людей и после последнего; restart wait; pending JPEG error/retry без нового shutter; no upload/finalize до Finish; принятые байты соответствуют финальным кадрам [5,6,7,9].",
+        "Group guide5/placeholder; reload при0/1 принятой позиции останавливает передачу без нового shutter и сохраняет принятые файлы; уход во время countdown не вызывает поздний shutter.",
+        "Wide1280/mobile375 screenshots просмотрены: countdown и закреплённый образец одновременно видимы, pause доступна, horizontal overflow отсутствует.",
+        "git diff --check PASS."
+      ],
+      "evidence": [
+        ".tasks/TASK-019-T2-FT-002-W16/check.log",
+        ".tasks/TASK-019-T2-FT-002-W16/build.log",
+        ".tasks/TASK-019-T2-FT-002-W16/camera-transfer-unit.log",
+        ".tasks/TASK-019-T2-FT-002-W16/browser-regression.log",
+        ".tasks/TASK-019-T2-FT-002-W16/browser-controls.log",
+        ".tasks/TASK-019-T2-FT-002-W16/controls-observations.json",
+        ".tasks/TASK-019-T2-FT-002-W16/reload-loss-observations.json"
+      ],
+      "limitations": [
+        "Не выполнялись физическая Canon/digiCamControl проверка, реальный fal/SMTP, commit/deploy.",
+        "Без IndexedDB по решению оператора; JPEG до Finish/при retry живут в памяти текущей вкладки. Неполный набор после reload нельзя восстановить; явно остановлен.",
+        "Полный npm test и независимый UI smoke выполняет root отдельно."
+      ],
+      "handoff": "Product code стабилен; task status оставлен in_progress для root closure."
+    },
+    {
+      "date": "2026-11-16",
+      "stage": "closure",
+      "result": "PASS",
+      "summary": "Root просмотрел state machine и transfer marker. Полный npm test91/91 PASS; независимый UI smoke1/1 PASS (guide/pause/person boundary/restart/retake/Finish/retry, final bytes сохранены, без pageerrors/overflow). Фоновый текст no-preview скрыт только при countdown; targeted wide/narrow screenshot recheck1/1 PASS. Финальные check0/0, build, git diff --check и ссылки на матрицу в шапках PASS.",
+      "evidence": [
+        ".tasks/TASK-019-T2-FT-002-W16/ui-smoke/report.md",
+        ".tasks/TASK-019-T2-FT-002-W16/controls-observations.json"
+      ],
+      "limitations": [
+        "Только изолированный backend и управляемая камера; реальные Canon/digiCamControl, fal/SMTP и production не запускались. Без IndexedDB: потеря недостающих Blobs послеreload останавливает передачу."
+      ]
+    }
+  ],
   "docs": [
     ".memory-bank/analysis/slot-setup-plan.md",
     "docs/slot-setup/matrix.md"

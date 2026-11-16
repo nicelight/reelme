@@ -101,7 +101,15 @@ export function openDatabase(dataDir: string) {
   for (const column of ['submitted_at', 'ready_at']) {
     if (!jobColumns.has(column)) db.exec(`ALTER TABLE generation_jobs ADD COLUMN ${column} INTEGER`);
   }
-  db.pragma('user_version = 8');
+  const mediaColumns = new Set((db.prepare('PRAGMA table_info(slot_media)').all() as { name: string }[]).map(column => column.name));
+  for (const column of ['template_slot_id', 'template_orientation']) {
+    if (!mediaColumns.has(column)) db.exec(`ALTER TABLE slot_media ADD COLUMN ${column} TEXT`);
+  }
+  db.exec(`CREATE TABLE IF NOT EXISTS capture_guides (
+    number INTEGER PRIMARY KEY CHECK(number BETWEEN 1 AND 5),
+    media_id TEXT NOT NULL REFERENCES slot_media(id)
+  )`);
+  db.pragma('user_version = 9');
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

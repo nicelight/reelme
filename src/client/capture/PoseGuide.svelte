@@ -1,7 +1,17 @@
 <script lang="ts">
+  /** Module contract: displays the session-pinned guide, or an honest missing-image
+   * placeholder. Legacy sessions alone retain their original SVG pose meaning.
+   * Source: docs/slot-setup/matrix.md. Guides never enter captured JPEGs/provider input. */
+  import ProtectedMedia from './ProtectedMedia.svelte';
   import type { Pose } from '../../shared/capture';
-  let { pose }: { pose: Pose } = $props();
+  let { pose, sessionId, installationKey }: { pose: Pose; sessionId: string; installationKey: string } = $props();
 </script>
+{#if pose.guideNumber}
+  <div class="pose-guide" aria-label={`Образец позы ${pose.guideNumber}`}>
+    {#if pose.guideMediaId}<ProtectedMedia mediaId={pose.guideMediaId} {installationKey} path={`/api/capture/sessions/${sessionId}/guides/${pose.guideNumber}`} alt={`Образец позы: ${pose.instruction}`} contain />
+    {:else}<div class="guide-placeholder"><span>Образец №{pose.guideNumber} ещё не загружен</span><small>Следуйте инструкции</small></div>{/if}
+  </div>
+{:else}
 <!-- Diagram is deliberately schematic: direction belongs to the visitor, not a mirrored photo. -->
 <svg viewBox="0 0 240 220" role="img" aria-label={`Образец позы: ${pose.instruction}`}>
   <path d="M43 207c3-45 32-62 77-62s74 17 77 62" fill="var(--surface)" stroke="currentColor" stroke-width="3" />
@@ -19,3 +29,10 @@
     {:else if pose.key === 'down-right'}<path d="m178 115 35 35m0 0v-23m0 23h-23" fill="none" stroke="var(--accent)" stroke-width="4" />{/if}
   {/if}
 </svg>
+
+{/if}
+<style>
+  .pose-guide { margin-top:16px; min-width:0; }
+  .guide-placeholder { display:grid; place-content:center; gap:12px; min-height:150px; padding:16px; border:1px dashed var(--line); border-radius:8px; color:var(--muted); text-align:center; }
+  @media(max-width:899px) { .pose-guide { margin:0; } .guide-placeholder { min-height:110px; padding:10px; font-size:13px; } }
+</style>

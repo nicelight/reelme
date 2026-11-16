@@ -92,23 +92,25 @@ test('all eleven models save; invalid model settings and wrong media are rejecte
   const image = await f.upload(cookie, await imageBytes());
   const video = await f.upload(cookie, await videoBytes(f.root), 'video/mp4', 'clip.mp4');
   const short = await f.upload(cookie, await videoBytes(f.root, 1), 'video/mp4', 'short.mp4');
-  async function save(payload: unknown, expected: number) {
-    const response = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers, payload: payload as object });
+  async function save(payload: unknown, expected: number, updateId?: string) {
+    const response = await f.app.inject({ method: updateId ? 'PUT' : 'POST', url: updateId ? `/api/admin/slots/${updateId}` : '/api/admin/slots', headers, payload: payload as object });
     assert.equal(response.statusCode, expected, response.body); return response;
   }
   for (const [model, mode, resolution, max] of cases) {
     await t.test(model, async () => {
       const recast = model === 'minimax/h3-max/recast';
       const input: SlotInput = { ...defaultSlotSetup(model, mode), description: 'Первые три слова описания сюжета', visible: true, simulateGeneration: false, thumbnailId: image.id, model, mode, referenceIds: [], ...(resolution ? { resolution } : {}), ...(recast ? { recastShotsConfirmed: true } : { prompt: 'Transform the visitor' }), ...(mode === 'V2V' ? { videoId: video.id } : { duration: max }), ...(model === 'minimax/h3-max/reference-to-video' ? { promptExpansionMode: 'disabled' } : {}) };
-      const saved = (await save(input, 201)).json<Slot>();
+      const slotId = randomUUID();
+      if (mode === 'V2V') input.videoId = (await f.importTemplate(cookie, await videoBytes(f.root), slotId, model)).id;
+      const saved = (await save({ ...input, id: slotId }, 201)).json<Slot>();
       const read = await f.app.inject({ url: `/api/admin/slots/${saved.id}`, headers });
       assert.equal(read.statusCode, 200); assert.deepEqual(read.json(), saved);
-      await save({ ...input, prompt: recast ? 'x'.repeat(2001) : '' }, 400);
-      await save({ ...input, resolution: 'not-a-resolution' }, 400);
-      await save({ ...input, mode: mode === 'V2V' ? 'P2V' : 'V2V' }, 400);
-      await save(mode === 'P2V' ? { ...input, duration: max + 1 } : { ...input, videoId: short.id }, 400);
-      await save(mode === 'P2V' ? { ...input, referenceIds: [video.id] } : { ...input, videoId: image.id }, 400);
-      if (recast) await save({ ...input, recastShotsConfirmed: false }, 400);
+      await save({ ...input, prompt: recast ? 'x'.repeat(2001) : '' }, 400, saved.id);
+      await save({ ...input, resolution: 'not-a-resolution' }, 400, saved.id);
+      await save({ ...input, mode: mode === 'V2V' ? 'P2V' : 'V2V' }, 400, saved.id);
+      await save(mode === 'P2V' ? { ...input, duration: max + 1 } : { ...input, videoId: short.id }, 400, saved.id);
+      await save(mode === 'P2V' ? { ...input, referenceIds: [video.id] } : { ...input, videoId: image.id }, 400, saved.id);
+      if (recast) await save({ ...input, recastShotsConfirmed: false }, 400, saved.id);
     });
   }
   const base = { participants: 1, photosPerParticipant: 4, orientation: 'landscape', aspectRatio: '16:9', description: 'P2V без демо', visible: false, thumbnailId: image.id, model: 'kling/v4/reference-to-video', mode: 'P2V', resolution: '720p', prompt: '@Element1 visits @Image1', duration: 10, referenceIds: [image.id, image.id, image.id] };

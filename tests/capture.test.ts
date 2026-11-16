@@ -1,4 +1,5 @@
-/** Contract checks for installation catalog, atomic starts and immutable session inputs. */
+/** Contract checks for installation catalog, atomic starts and immutable session inputs.
+ * Source: docs/slot-setup/matrix.md. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -17,14 +18,23 @@ async function setup(f: Fixture) {
   const image = await imageBytes();
   const video = await videoBytes(f.root);
   const thumbnail = await f.upload(cookie, image);
-  const clip = await f.upload(cookie, video, 'video/mp4', 'clip.mp4');
+  const clip = await f.importTemplate(cookie, video);
+  const clips = new Map<string, string>();
+  let first = true;
   const recast: SlotInput = { participants: 1, photosPerParticipant: 1, orientation: 'landscape', description: 'Первый сюжет для посетителя', visible: true, simulateGeneration: false, thumbnailId: thumbnail.id, mode: 'V2V', model: 'minimax/h3-max/recast', referenceIds: [], videoId: clip.id, resolution: '768P', recastShotsConfirmed: true };
   async function save(input: SlotInput, id?: string) {
-    const response = await f.app.inject({ method: id ? 'PUT' : 'POST', url: `/api/admin/slots${id ? `/${id}` : ''}`, headers: { cookie, origin: f.config.origin }, payload: input });
+    const slotId = id ?? (first ? clip.slotId : randomUUID());
+    if (!id) first = false;
+    let payload = input;
+    if (input.mode === 'V2V' && !id) {
+      const source = slotId === clip.slotId ? clip : await f.importTemplate(cookie, video, slotId, input.model);
+      clips.set(slotId, source.id); payload = { ...input, videoId: source.id };
+    }
+    const response = await f.app.inject({ method: id ? 'PUT' : 'POST', url: `/api/admin/slots${id ? `/${id}` : ''}`, headers: { cookie, origin: f.config.origin }, payload: id ? payload : { ...payload, id: slotId } });
     assert.equal(response.statusCode, id ? 200 : 201, response.body);
     return response.json<{ id: string }>().id;
   }
-  return { cookie, image, video, thumbnail, clip, recast, save };
+  return { cookie, image, video, thumbnail, clip, clips, recast, save };
 }
 async function start(f: Fixture, slotId: string, startRequestId = randomUUID(), status = 201) {
   const response = await f.app.inject({ method: 'POST', url: '/api/capture/sessions', headers: installation, payload: { slotId, startRequestId } });
@@ -52,7 +62,7 @@ test('installation catalog paginates 13 visible slots and protects current previ
     const result = response.json<CatalogPage>();
     assert.deepEqual({ page: result.page, pageSize: result.pageSize, total: result.total, totalPages: result.totalPages }, { page, pageSize: 12, total: 13, totalPages: 2 });
     assert.deepEqual(result.items.map(item => item.id), expected);
-    assert.deepEqual(result.items[0], { id: expected[0], description: `Сюжет номер ${page === 1 ? 0 : 12} полное описание`, thumbnailId: s.thumbnail.id, mode: 'V2V', previewId: s.clip.id });
+    assert.deepEqual(result.items[0], { id: expected[0], description: `Сюжет номер ${page === 1 ? 0 : 12} полное описание`, thumbnailId: s.thumbnail.id, mode: 'V2V', previewId: s.clips.get(expected[0]) });
   }
   const detail = await f.app.inject({ url: `/api/catalog/${ids[0]}`, headers: installation });
   assert.equal(detail.statusCode, 200);

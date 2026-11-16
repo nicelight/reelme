@@ -7,7 +7,8 @@
   import './style.css';
   /** Module contract: visitor catalog → durable start → PhotoSession owns capture
    * and transfer. sessionStorage recovers the server receipt; only confirmed
-   * completion permits releasing it and returning to the next visitor's catalog. */
+   * completion or explicit abandonment of lost local JPEGs permits returning to
+   * the catalog. Source: docs/slot-setup/matrix.md. Server photos are never erased here. */
   type StartState = { startRequestId: string; slotId: string; receipt?: StartReceipt };
   let key = $state('');
   let setup = $state(false);

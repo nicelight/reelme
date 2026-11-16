@@ -74,7 +74,9 @@ test('all eleven endpoints receive ordered new plans through real intake and moc
       referenceIds: model.id.includes('recast') ? [] : [thumbnail.id],
       ...(model.mode === 'V2V' ? { videoId: video.id } : {}),
       ...(model.id.includes('recast') ? { prompt: 'Replace two people from left to right.' } : {}) };
-    const saved = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: admin, payload: input });
+    const slotId = randomUUID();
+    if (model.mode === 'V2V') input.videoId = (await f.importTemplate(cookie, await videoBytes(f.root, 5), slotId, model.id)).id;
+    const saved = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: admin, payload: { ...input, id: slotId } });
     assert.equal(saved.statusCode, 201, saved.body);
     const start = await f.app.inject({ method: 'POST', url: '/api/capture/sessions', headers: installation, payload: { slotId: saved.json().id, startRequestId: randomUUID() } });
     assert.equal(start.statusCode, 201, start.body);
@@ -153,8 +155,9 @@ test('V2V drafts are saved but unavailable to catalog/start/test; direct invalid
   }
   assert.equal((await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: admin, payload: { ...draft, participants: undefined } })).statusCode, 400);
   const video = await f.upload(cookie, await videoBytes(f.root, 5), 'video/mp4', 'landscape.mp4');
-  assert.equal((await f.app.inject({ method: 'PUT', url: `/api/admin/slots/${id}`, headers: admin, payload: { ...draft, videoId: video.id, orientation: 'portrait' } })).json().code, 'VIDEO_ORIENTATION');
-  assert.equal((await f.app.inject({ method: 'PUT', url: `/api/admin/slots/${id}`, headers: admin, payload: { ...draft, videoId: video.id } })).statusCode, 200);
+  const source = await f.importTemplate(cookie, await videoBytes(f.root, 5), id, o1);
+  assert.equal((await f.app.inject({ method: 'PUT', url: `/api/admin/slots/${id}`, headers: admin, payload: { ...draft, videoId: source.id, orientation: 'portrait' } })).statusCode, 400);
+  assert.equal((await f.app.inject({ method: 'PUT', url: `/api/admin/slots/${id}`, headers: admin, payload: { ...draft, videoId: source.id } })).statusCode, 200);
   const rejectedTest = await f.app.inject({ method: 'POST', url: `/api/admin/slots/${id}/test-generations`, headers: admin, payload: { startRequestId: randomUUID() } });
   assert.equal(rejectedTest.statusCode, 400); assert.equal(rejectedTest.json().code, 'TEST_PHOTOS_REQUIRED');
 });

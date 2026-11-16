@@ -1,3 +1,5 @@
+/** Module contract: capture/browser evidence for docs/slot-setup/matrix.md; isolated local fixtures only. */
+import { randomUUID } from 'node:crypto';
 /** Browser contract evidence uses real Svelte/API/SQLite and controlled local
  * digiCamControl HTTP responses. It does not claim camera or acoustic hardware acceptance. */
 import { test, expect } from './browser-fixture';
@@ -18,10 +20,14 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
     expect(response.status()).toBe(201); return (await response.json()).id;
   };
   const thumbnailId = await upload(app.image, 'image/png');
-  const videoId = await upload(app.video, 'video/mp4');
+
   const slots: string[] = [];
   for (const mode of ['one', 'four']) {
+    const one = mode === 'one';
+    const id = randomUUID(); let videoId: string | undefined;
+    if (one) { await app.prepareTemplate(id); const imported = await admin.post(`/api/admin/slots/${id}/template-video`, { data: { orientation: 'landscape', model: 'minimax/h3-max/recast' } }); expect(imported.status()).toBe(201); videoId = (await imported.json()).id; }
     const response = await admin.post('/api/admin/slots', { data: {
+      id, participants: 1, photosPerParticipant: one ? 1 : 4, orientation: 'landscape', ...(one ? {} : { aspectRatio: '16:9' }),
       description: mode === 'one' ? 'Один портрет Recast' : 'Четыре позы для сюжета', visible: true, thumbnailId, referenceIds: [],
       ...(mode === 'one' ? { mode: 'V2V', model: 'minimax/h3-max/recast', videoId, resolution: '768P', recastShotsConfirmed: true }
         : { mode: 'P2V', model: 'kling/v4/reference-to-video', resolution: '720p', duration: 5, prompt: 'Visitor @Element1' }),
@@ -101,6 +107,7 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
   await expect(page.locator('.countdown strong')).toHaveText('1');
   await expect(page.getByText('Кадр снят ✓')).toBeVisible();
   await page.screenshot({ path: `${artifacts}/camera-original.png`, fullPage: true });
+  await page.getByRole('button', { name: 'Завершить фотосессию' }).click();
   await expect(page.getByRole('heading', { name: /^Ищи свое видео под номером \d{3} на промо экране$/ })).toBeVisible();
   const first = await page.evaluate(() => (window as typeof window & { cameraObservations: Observations }).cameraObservations);
   expect(first.beeps).toBe(3); expect(first.countdowns).toEqual(['3', '2', '1']);
@@ -129,11 +136,12 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
   await page.getByRole('button', { name: 'Повторить', exact: true }).click();
   await expect(page.locator('.capture-progress')).toHaveText('Снято: 2 из 4', { timeout: 10_000 });
   expect(commands).toHaveLength(3);
+  await page.getByRole('button', { name: 'Завершить фотосессию' }).click({ timeout: 30_000 });
   await expect(page.getByRole('heading', { name: /^Ищи свое видео под номером \d{3} на промо экране$/ })).toBeVisible({ timeout: 30_000 });
   const second = await page.evaluate(() => (window as typeof window & { cameraObservations: Observations }).cameraObservations);
   expect(second.poses).toEqual(secondReceipt.posePlan.map((pose: { instruction: string }) => pose.instruction));
-  expect(second.frames).toHaveLength(4); expect(second.beeps).toBe(15);
-  expect(second.countdowns).toEqual(Array.from({ length: 5 }, () => ['3', '2', '1']).flat());
+  expect(second.frames).toHaveLength(4); expect(second.beeps).toBe(12);
+  expect(second.countdowns).toEqual(Array.from({ length: 4 }, () => ['3', '2', '1']).flat());
   for (let i = 0; i < 4; i++) { expect(Buffer.from(second.frames[i].bytes)).toEqual(frames[i + 2]); expect(second.frames[i].step).toBe(`ФОТО ${i + 1} ИЗ 4`); expect(second.frames[i].transform).toBe('none'); }
   expect(downloads).toEqual(['/image/visitor-1.jpg', '/image/visitor-2.jpg', '/image/visitor-3.jpg', '/image/visitor-3.jpg', '/image/visitor-4.jpg', '/image/visitor-5.jpg']);
   expect(commands).toEqual(['LiveView_Capture', 'Capture', 'Capture', 'Capture', 'Capture']);

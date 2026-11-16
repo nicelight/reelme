@@ -28,8 +28,8 @@ source_of_truth:
 | contract | [.memory-bank/contracts/http-api.md](contracts/http-api.md) | active | Каталог, съёмка, экран, архив и выдача; payloads, ошибки и повторы. | /spec-design |
 | contract | [.memory-bank/contracts/access.md](contracts/access.md) | active | Права, сроки входа, ключ установки и ссылки посетителя. | /spec-design |
 | contract | [.memory-bank/contracts/integrations.md](contracts/integrations.md) | active | Камера, SMTP, очередь fal и хранение медиа. | /spec-design |
-| behavior | [docs/slot-setup/matrix.md](../docs/slot-setup/matrix.md) | agreed | Согласованные настройки, люди/кадры, пересъёмка, промпты, параметры видео и трактовки лимитов API; внедрение ещё не выполнено. | Прямое задание оператора |
-| data | [src/shared/slot-setup-matrix.json](../src/shared/slot-setup-matrix.json) | prepared | Машинный каталог допустимых наборов и путей к 813 готовым промптам; подключение UI ещё не выполнено. | Прямое задание оператора |
+| behavior | [docs/slot-setup/matrix.md](../docs/slot-setup/matrix.md) | agreed | Согласованные настройки, люди/кадры, пересъёмка, промпты, параметры видео и трактовки лимитов API. | Прямое задание оператора |
+| data | [src/shared/slot-setup-matrix.json](../src/shared/slot-setup-matrix.json) | active | Машинный каталог допустимых наборов, возможностей API и путей к 813 готовым промптам. | Прямое задание оператора |
 | foundation | [.memory-bank/foundation.md](foundation.md) | active | Принятое отсутствие отдельной Foundation-очереди. | /spec-design |
 | testing | [.memory-bank/testing/strategy.md](testing/strategy.md) | active | Framework baseline testing policy. | explicit project-level user decision |
 

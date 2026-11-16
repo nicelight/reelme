@@ -21,7 +21,10 @@ status: active
 | GET /admin/slots, /admin/slots/:id | Администратор | Список и полная конфигурация слота |
 | POST /admin/slot-media | Администратор | Multipart `file` → метаданные с `id` материала |
 | GET /admin/slot-media/:id, /admin/slot-media/:id/info | Администратор | Байты (с Range) / метаданные материала |
-| POST /admin/slots, PUT /admin/slots/:id | Администратор | Сохранение конфигурации |
+| POST /admin/slots, PUT /admin/slots/:id | Администратор | Сохранение конфигурации; POST допускает UUID `id` черновика |
+| POST /admin/slots/:id/template-video | Admin + разрешённый Origin | `{orientation,model}` → импортированный immutable `Media`, 201 |
+| GET /admin/capture-guides | Администратор | Пять `{number,instruction,mediaId?}` |
+| PUT /admin/capture-guides/:number | Admin + разрешённый Origin | `{mediaId: UUID|null}` → назначение образца |
 
 Каталог возвращает `CatalogPage` (`items`, `page`, `pageSize=12`, `total`, `totalPages`),
 карточка — `CatalogItem` из [capture.ts](../../src/shared/capture.ts). `previewId`
@@ -54,6 +57,22 @@ H3 Reference использует `promptExpansionMode: disabled`. Ограни�
 `Cache-Control: no-cache`; нулевой файл Recast — успешный ответ. Редактор читает
 `response.text()`, различает HTTP-ошибку и пустой текст, игнорирует устаревший
 ответ после смены setup или ручной правки. Текст не собирается из частей в runtime.
+
+## Исходники и образцы
+
+Новый UUID слота доступен до первого сохранения. Импорт принимает только UUID,
+модель V2V и ориентацию; путь клиента не принимается. Файл
+`<slot-id>__landscape.mp4` / `<slot-id>__portrait.mp4` читается из серверной папки
+шаблонов и копируется в immutable storage после проверок. Отсутствие —
+404 TEMPLATE_VIDEO_MISSING; неверная ориентация/модельные ограничения — 400.
+Повторный импорт создаёт новый media ID; слот изменяется только после save.
+Плеер использует тот же videoId. Чужой исходник или другая ориентация отвергаются
+при save; ранее закреплённый upload того же слота допускается при совместимости.
+
+Образцы загружаются обычным media API как изображения и назначаются номерам 1..5.
+PUT с null удаляет текущее назначение. Уже начатые сессии сохраняют прежние IDs;
+при отсутствии образца новый snapshot сохраняет его отсутствие. Установка читает
+только сохранённый образец по маршруту сессии, не получает admin-доступ.
 
 ## Тестирование слота
 
@@ -102,6 +121,7 @@ TEST_PHOTO_REQUIRED, неверный файл — INVALID_PHOTO, без зап�
 | Операция | Данные и результат |
 |---|---|
 | POST /capture/sessions | startRequestId, slotId → sessionId, дата, номер, план поз |
+| GET /capture/sessions/:id/guides/:number | Закреплённый образец из snapshot; 404 при отсутствии, ключ установки обязателен |
 | GET /capture/sessions/:id | `CaptureStatus`: состояние, принятые позиции, полный набор и подтверждение finalize |
 | PUT /capture/sessions/:id/photos/:poseIndex | Multipart `file` (JPEG) → `CaptureStatus` с принятой позицией |
 | POST /capture/sessions/:id/finalize | Полный набор → `submit_pending`, `CaptureStatus.finalized=true` |
@@ -129,6 +149,7 @@ TEST_PHOTO_REQUIRED, неверный файл — INVALID_PHOTO, без зап�
 реестр старых ключей не сохраняется. Загрузка адресует конкретную позицию; до finalize
 повтор записывает тот же кадр в неё, не затрагивая остальные. После finalize фото закрыты
 для изменений. Сервер проверяет JPEG и количество фото, но не ведёт протокол сравнения hash.
+Клиент начинает PUT/finalize только после явного Finish; пересъёмки до него локальны.
 Повтор finalize возвращает текущее состояние без нового перехода в обработку.
 После подтверждения finalize установка показывает номер и освобождается.
 `submit_pending` в SQLite — граница FT-003; потребитель генерации реализуется отдельно. Ошибка камеры/загрузки допускает ручной повтор.

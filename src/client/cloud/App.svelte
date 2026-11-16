@@ -11,8 +11,10 @@
   import Display from './Display.svelte';
   import MediaField from './MediaField.svelte';
   import SlotEditor from './SlotEditor.svelte';
+  import CaptureGuides from './CaptureGuides.svelte';
 
   let archive = $state(false);
+  let guides = $state(false);
   let ready = $state(false);
   let role = $state<'admin' | 'operator' | null>(null);
   let username = $state('');
@@ -23,6 +25,7 @@
   let notice = $state('');
   let slots = $state<Slot[]>([]);
   let selectedId = $state<string | null>(null);
+  let draftId = $state<string>(crypto.randomUUID());
   let slotSelection = $state(0);
   let draft = $state<SlotInput>(blankSlot());
   let baseline = $state(JSON.stringify(blankSlot()));
@@ -66,13 +69,13 @@
     busy = true;
     try {
       await api('/auth/logout', { method: 'POST' });
-      role = null; archive = false; slots = []; selectedId = null; slotSelection++; photoCaches.clear(); draft = blankSlot(); baseline = JSON.stringify(draft); notice = ''; error = ''; videoMedia = undefined;
+      role = null; archive = false; guides = false; slots = []; selectedId = null; draftId = crypto.randomUUID(); slotSelection++; photoCaches.clear(); draft = blankSlot(); baseline = JSON.stringify(draft); notice = ''; error = ''; videoMedia = undefined;
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
   function fresh() {
     if (!canLeave()) return;
-    selectedId = null; slotSelection++; draft = blankSlot(); baseline = JSON.stringify(draft); videoMedia = undefined; error = ''; notice = '';
+    selectedId = null; draftId = crypto.randomUUID(); slotSelection++; draft = blankSlot(); baseline = JSON.stringify(draft); videoMedia = undefined; error = ''; notice = '';
   }
   async function openSlot(id: string) {
     if (!canLeave()) return;
@@ -80,7 +83,7 @@
     try {
       const { id: slotId, ...config } = await api<Slot>(`/admin/slots/${id}`);
       const metadata = config.videoId ? await api<Media>(`/admin/slot-media/${config.videoId}/info`) : undefined;
-      selectedId = slotId; slotSelection++; draft = config; videoMedia = metadata; baseline = JSON.stringify(config);
+      selectedId = slotId; draftId = slotId; slotSelection++; draft = config; videoMedia = metadata; baseline = JSON.stringify(config);
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
@@ -93,7 +96,7 @@
     if (sourceProblem) { error = sourceProblem; return; }
     busy = true;
     try {
-      const saved = await api<Slot>(selectedId ? `/admin/slots/${selectedId}` : '/admin/slots', { method: selectedId ? 'PUT' : 'POST', body: JSON.stringify(result.data) });
+      const saved = await api<Slot>(selectedId ? `/admin/slots/${selectedId}` : '/admin/slots', { method: selectedId ? 'PUT' : 'POST', body: JSON.stringify(selectedId ? result.data : { ...result.data, id: draftId }) });
       const { id, ...config } = saved;
       selectedId = id; draft = config; baseline = JSON.stringify(config);
       await loadSlots(); notice = 'Сюжет сохранён.';
@@ -117,7 +120,7 @@
 </script>
 
 <svelte:window onbeforeunload={beforeUnload} />
-<svelte:head><title>ReelMe — {archive ? 'Архив' : role === 'admin' ? 'Сюжеты' : role === 'operator' ? 'Ваши видео' : 'Вход'}</title></svelte:head>
+<svelte:head><title>ReelMe — {guides ? 'Образцы ракурсов' : archive ? 'Архив' : role === 'admin' ? 'Сюжеты' : role === 'operator' ? 'Ваши видео' : 'Вход'}</title></svelte:head>
 
 <header class="app-header">
   <a class="brand" href="/" aria-label="ReelMe — главная">Reel<span>Me</span><span class="brand-caption">STUDIO</span></a>
@@ -129,8 +132,9 @@
 
 {#if ready && role}
   <nav class="surface-nav" aria-label="Разделы">
-    <button class="quiet" aria-current={!archive ? 'page' : undefined} onclick={() => archive = false}>{role === 'admin' ? 'Сюжеты' : 'Сегодня'}</button>
-    <button class="quiet" aria-current={archive ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (role !== 'admin' || canLeave()) archive = true; }}>Архив</button>
+    <button class="quiet" aria-current={!archive && !guides ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = false; guides = false; }}>{role === 'admin' ? 'Сюжеты' : 'Сегодня'}</button>
+    {#if role === 'admin'}<button class="quiet" aria-current={guides ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { guides = true; archive = false; } }}>Образцы ракурсов</button>{/if}
+    <button class="quiet" aria-current={archive ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (role !== 'admin' || canLeave()) { archive = true; guides = false; } }}>Архив</button>
   </nav>
 {/if}
 
@@ -148,6 +152,8 @@
       <p class="hint">Используйте аккаунт администратора или оператора, созданный при настройке.</p>
     </form>
   </main>
+{:else if guides && role === 'admin'}
+  <CaptureGuides onunauthorized={() => role = null} onBusy={uploadBusy} />
 {:else if archive}
   <Archive {role} onunauthorized={() => role = null} />
 {:else if role === 'operator'}
@@ -183,7 +189,7 @@
           </section>
 
           {#key slotSelection}
-            <SlotEditor bind:draft bind:videoMedia bind:canSave={editorCanSave} slotId={selectedId} cacheKey={selectedId ?? `draft:${slotSelection}`} {photoCaches} disabled={formDisabled} {dirty} {sourceProblem} onError={fail} onBusy={uploadBusy} />
+            <SlotEditor bind:draft bind:videoMedia bind:canSave={editorCanSave} slotId={selectedId} {draftId} cacheKey={selectedId ?? `draft:${slotSelection}`} {photoCaches} disabled={formDisabled} {dirty} {sourceProblem} onError={fail} onBusy={uploadBusy} />
           {/key}
         </fieldset>
         <div class="editor-footer">

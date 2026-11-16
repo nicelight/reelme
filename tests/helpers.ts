@@ -1,3 +1,5 @@
+/** Module contract: isolated test data and actual media upload/import helpers.
+ * Template files stay inside each fixture root. Source: docs/slot-setup/matrix.md. */
 import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,7 +22,7 @@ export function seedLegacySlot(db: DB, input: unknown, id = randomUUID()): Slot 
 
 export async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'reelme-test-'));
-  const config = { origin: 'https://reelme.test', host: '127.0.0.1', port: 3000, dataDir: join(root, 'data'), clientDir: join(root, 'client') };
+  const config = { origin: 'https://reelme.test', host: '127.0.0.1', port: 3000, dataDir: join(root, 'data'), clientDir: join(root, 'client'), templateVideosDir: join(root, 'templates') };
   await mkdir(config.clientDir);
   await writeFile(join(config.clientDir, 'index.html'), '<html><body>Test entrypoint</body></html>');
   const db = openDatabase(config.dataDir);
@@ -44,6 +46,13 @@ export async function fixture() {
       assert.match(cookie, /Secure/i);
       assert.match(cookie, /(?:Max-Age|Expires)=/i);
       return cookie.split(';')[0];
+    },
+    async importTemplate(cookie: string, bytes: Buffer, slotId = randomUUID(), model = 'minimax/h3-max/recast', orientation: 'landscape' | 'portrait' = 'landscape') {
+      await mkdir(config.templateVideosDir, { recursive: true });
+      await writeFile(join(config.templateVideosDir, `${slotId}__${orientation}.mp4`), bytes);
+      const response = await app.inject({ method: 'POST', url: `/api/admin/slots/${slotId}/template-video`, headers: { cookie, origin: config.origin }, payload: { model, orientation } });
+      assert.equal(response.statusCode, 201, response.body);
+      return { ...response.json<Media>(), slotId };
     },
     async upload(cookie: string, bytes: Buffer, mime = 'image/png', filename = 'fixture.png') {
       const part = multipart(bytes, mime, filename);
