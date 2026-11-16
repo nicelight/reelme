@@ -1,0 +1,7 @@
+Edit @Video1.
+
+Replace the main person in @Video1 with @Element1. Keep this person's facial identity and appearance consistent throughout the clip.
+
+Preserve the source action, timing, camera movement, environment and scene continuity.
+
+Keep the people recognizable and anatomically coherent. Do not merge identities or duplicate the referenced people.

@@ -14,6 +14,8 @@
     "build": "npm run build:client && tsc -p tsconfig.server.json",
     "start": "node --env-file-if-exists=.env dist/server/main.js",
     "test": "tsx --test tests/*.test.ts",
+    "generate:slot-prompts": "node scripts/generate-slot-prompts.mjs",
+    "check:slot-prompts": "node scripts/generate-slot-prompts.mjs --check",
     "test:ui": "playwright test"
   },
   "dependencies": {
