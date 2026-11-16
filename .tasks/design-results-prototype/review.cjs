@@ -1,0 +1,54 @@
+const { chromium } = require('playwright');
+const { PNG } = require('pngjs');
+const jsQR = require('jsqr');
+const fs = require('fs');
+const path = require('path');
+const out = __dirname;
+const base = 'http://localhost:5173/?prototype=results&variant=';
+(async()=>{
+ const browser = await chromium.launch({headless:true});
+ const page = await browser.newPage({viewport:{width:1672,height:941},deviceScaleFactor:1});
+ const errors=[],requests=[],checks=[];
+ page.on('pageerror',e=>errors.push(String(e)));
+ page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
+ page.on('request',r=>requests.push(r.url()));
+ page.on('response',r=>{if(r.status()>=400)errors.push(`${r.status()} ${r.url()}`)});
+ const check=(name,pass,detail)=>checks.push({name,pass,detail});
+ const shot=async name=>page.screenshot({path:path.join(out,name+'.png'),fullPage:true});
+ const state=async()=>page.locator('.grid').evaluate(e=>({phase:e.dataset.phase,center:+e.dataset.center,version:+e.dataset.pageVersion,ids:[...e.querySelectorAll('.card')].map(x=>+x.dataset.number)}));
+ const unique=async name=>{let s=await state();check(name,s.ids.length===9&&new Set(s.ids).size===9,s)};
+ await page.goto(base+'A&still=egg');await page.locator('.card').first().waitFor();await page.waitForTimeout(500);
+ await unique('initial nine unique cards');check('held egg',(await state()).phase==='egg');
+ await shot('review-A-1672-egg-tools');
+ const allQrs=[];
+ for(let i=0;i<9;i++){if(i===4)continue;const loc=page.locator('.qr').nth(i);const bytes=await loc.screenshot();if(i===0)fs.writeFileSync(path.join(out,'review-QR-037.png'),bytes);const png=PNG.sync.read(bytes);allQrs.push(jsQR(new Uint8ClampedArray(png.data),png.width,png.height)?.data??null)}
+ check('eight rendered QR decode distinctly',allQrs.every(Boolean)&&new Set(allQrs).size===8,allQrs);
+ await page.getByRole('button',{name:'+ 3 в очередь',exact:true}).click();await page.getByRole('button',{name:'+ 1 видео',exact:true}).click();
+ check('arrivals do not interrupt held center',(await state()).center===53&&(await state()).phase==='egg');
+ await page.getByRole('button',{name:'Показать появление',exact:true}).click();await page.waitForTimeout(1700);await shot('review-A-shake');
+ check('shake only central',await page.locator('.shaking').count()===1&&await page.locator('.center .shaking').count()===1);
+ await page.waitForTimeout(650);await shot('review-A-bloom');check('bloom only central',await page.locator('.bloom.expanding').count()===1&&await page.locator('.center .bloom.expanding').count()===1);
+ await page.waitForTimeout(1400);await shot('review-A-result');check('result completes',(await state()).phase==='result');
+ const centers=[];for(let i=0;i<5;i++){await page.getByRole('button',{name:'Следующая страница',exact:true}).click();await page.waitForTimeout(350);centers.push((await state()).center);await unique('unique page '+i)}
+ check('FIFO once per page',JSON.stringify(centers.slice(0,4))==='[54,55,56,57]',centers);
+ check('empty queue uses old result',(await state()).phase==='result'&&(await state()).center<58,await state());
+ const old=(await state()).center;await page.getByRole('button',{name:'+ 1 видео',exact:true}).click();await page.waitForTimeout(100);check('arrival leaves old center unchanged',(await state()).center===old&&(await state()).phase==='result');
+ await page.getByRole('button',{name:'Следующая страница',exact:true}).click();await page.waitForTimeout(350);check('arrival shows next page',(await state()).center===58,await state());
+ await page.getByRole('button',{name:'Рассмотреть яйцо',exact:true}).click();
+ for(const v of ['A','B','C']){await page.goto(base+v+'&still=egg&clean=1');await page.waitForTimeout(250);await shot('review-'+v+'-1672-clean');check('URL variant '+v,await page.locator('.screen').getAttribute('data-variant')===v);}
+ await page.keyboard.press('ArrowRight');check('keyboard wraps variant and URL',await page.locator('.screen').getAttribute('data-variant')==='A'&&page.url().includes('variant=A'));
+ check('clean hides tools',await page.locator('.workbench').count()===0);await page.keyboard.press('h');check('H shows tools',await page.locator('.workbench').count()===1);await page.keyboard.press('h');
+ await page.setViewportSize({width:1920,height:1080});await shot('review-A-1920-clean');
+ await page.setViewportSize({width:1280,height:720});await shot('review-A-1280-clean');
+ await page.keyboard.press('h');await shot('review-A-1280-tools');
+ await page.setViewportSize({width:390,height:844});await shot('review-A-390-tools');
+ check('portrait tooling no horizontal overflow',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ check('portrait remains 16:9 preview',await page.locator('.screen').evaluate(e=>Math.abs(e.clientWidth/e.clientHeight-16/9)<.02));
+ await page.setViewportSize({width:1672,height:941});await page.emulateMedia({reducedMotion:'reduce'});await page.goto(base+'C&still=egg');await page.getByRole('button',{name:'Показать появление',exact:true}).click();await page.waitForTimeout(1620);await shot('review-reduced-reveal');
+ check('reduced no shake/flash',await page.locator('.shaking,.bloom').count()===0&&(await state()).phase==='reveal',await state());await page.waitForTimeout(400);check('reduced result completes',(await state()).phase==='result');
+ await page.emulateMedia({reducedMotion:'no-preference'});await page.goto(base+'A');await page.waitForTimeout(10800);check('autoplay one turn at ten seconds',(await state()).version===1,await state());
+ check('no browser errors',errors.length===0,errors);
+ check('no backend requests',requests.every(u=>!(/\/api\//.test(u))),[...new Set(requests)].filter(u=>/\/api\//.test(u)));
+ fs.writeFileSync(path.join(out,'review-report.json'),JSON.stringify({checks,errors,requests:[...new Set(requests)]},null,2));
+ console.log(JSON.stringify(checks,null,2));await browser.close();
+})().catch(e=>{console.error(e);process.exit(1)});

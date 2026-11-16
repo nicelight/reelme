@@ -5,6 +5,7 @@
  * data never leave this module. Simulation is a separate safe projection with no
  * ready card or completed real stages. See contracts/access.md and states/lifecycle-map.md. */
 import QRCode from 'qrcode';
+import { z } from 'zod';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
@@ -12,13 +13,13 @@ import { HttpError } from '../errors.js';
 import { eventDate } from './index.js';
 import { readyCard } from './receive.js';
 import { sendMedia } from '../scenarios/media.js';
-import { stageLabels, type DisplaySession, type TodayDisplay } from '../../shared/display.js';
+import { pageDurationOptions, stageLabels, type DisplaySettings, type DisplaySession, type TodayDisplay } from '../../shared/display.js';
 
 interface Row {
   id: string; number: number; state: string; snapshot: string; error_code: string | null; email: string | null;
-  email_state: string | null; opened_at: number | null; email_confirmed_at: number | null;
+  email_state: string | null; opened_at: number | null; email_confirmed_at: number | null; ready_at: number | null;
 }
-const selection = `SELECT s.id,s.number,s.state,s.snapshot,g.error_code,d.email,d.email_state,d.opened_at,d.email_confirmed_at
+const selection = `SELECT s.id,s.number,s.state,s.snapshot,g.error_code,g.ready_at,d.email,d.email_state,d.opened_at,d.email_confirmed_at
   FROM capture_sessions s LEFT JOIN session_delivery d ON d.session_id=s.id LEFT JOIN generation_jobs g ON g.session_id=s.id
   WHERE s.event_date=? AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.deleting=0) AND (d.email_confirmed_at IS NULL OR d.email_confirmed_at+180000>?)`;
 // Match the PRD's local-prefix***@***.suffix presentation, bounding long names.
@@ -38,7 +39,7 @@ function projection(row: Row): DisplaySession {
     ? { status: row.state === 'simulated' ? 'passed' : row.state === 'failed' ? 'failed' : 'pending',
       message: row.state === 'simulated' ? 'Эмуляция успешна, но fal не отвечает' : row.state === 'failed' ? 'Эмуляция не завершена' : 'Подготовка тестовой генерации',
       detail: row.state === 'failed' ? failure : 'Тестовый режим: fal не вызывался' } : null;
-  return { id: row.id, number: row.number, stage, simulation,
+  return { id: row.id, number: row.number, stage, simulation, readyAt: row.state === 'ready' ? row.ready_at : null,
     label: stage === 6 ? `Видео отправлено на ${maskEmail(row.email ?? '')}` : row.state === 'failed' ? 'Генерация не завершена' : stageLabels[stage as 0 | 1 | 2 | 3 | 4 | 5],
     error: row.state === 'failed' ? failure
       : row.email_state === 'failed' ? 'Письмо не подтверждено. Откройте форму и повторите отправку.' : null,
@@ -46,13 +47,21 @@ function projection(row: Row): DisplaySession {
     card: row.state === 'ready' ? { photoUrl: `/api/display/${row.id}/photo`, frameUrl: `/api/display/${row.id}/frame`, qrUrl: `/api/display/${row.id}/qr` } : null };
 }
 export function registerDisplay(app: FastifyInstance, db: DB, dataDir: string, origin: string, access: Access, now: () => number) {
+  const settings = () => db.prepare('SELECT page_duration_seconds AS pageDurationSeconds FROM display_settings WHERE id=1').get() as DisplaySettings;
+  const settingsSchema = z.object({ pageDurationSeconds: z.union(pageDurationOptions.map(value => z.literal(value))) }).strict();
+  app.get('/api/admin/display-settings', { preHandler: access.requireAdmin }, settings);
+  app.put('/api/admin/display-settings', { preHandler: [access.requireOrigin, access.requireAdmin] }, request => {
+    const value = settingsSchema.parse(request.body);
+    db.prepare('UPDATE display_settings SET page_duration_seconds=? WHERE id=1').run(value.pageDurationSeconds);
+    return settings();
+  });
   async function operator(request: FastifyRequest, reply: FastifyReply) {
     if (access.context(request, reply) !== 'operator') throw new HttpError(403, 'FORBIDDEN', 'Нужны права оператора');
   }
   app.get('/api/display/today', { preHandler: operator }, (): TodayDisplay => {
     const time = now(); const date = eventDate(time);
     const rows = db.prepare(`${selection} ORDER BY s.number,s.id`).all(date, time) as Row[];
-    return { date, serverNow: time, sessions: rows.map(projection) };
+    return { date, serverNow: time, ...settings(), sessions: rows.map(projection) };
   });
   for (const kind of ['photo', 'frame', 'qr'] as const) {
     app.get<{ Params: { id: string } }>(`/api/display/:id/${kind}`, { preHandler: operator }, async (request, reply) => {

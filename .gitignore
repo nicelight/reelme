@@ -7,3 +7,4 @@ var/
 *.sqlite*
 playwright-report/
 test-results/
+/docs/DESIGN templates/

@@ -1,0 +1,341 @@
+{
+  "checks": [
+    {
+      "name": "initial nine unique cards",
+      "pass": true,
+      "detail": {
+        "phase": "egg",
+        "center": 53,
+        "version": 0,
+        "ids": [
+          37,
+          38,
+          39,
+          40,
+          53,
+          41,
+          42,
+          43,
+          44
+        ]
+      }
+    },
+    {
+      "name": "held egg",
+      "pass": true
+    },
+    {
+      "name": "eight rendered QR decode distinctly",
+      "pass": true,
+      "detail": [
+        "ReelMe demo #037",
+        "ReelMe demo #038",
+        "ReelMe demo #039",
+        "ReelMe demo #040",
+        "ReelMe demo #041",
+        "ReelMe demo #042",
+        "ReelMe demo #043",
+        "ReelMe demo #044"
+      ]
+    },
+    {
+      "name": "arrivals do not interrupt held center",
+      "pass": true
+    },
+    {
+      "name": "shake only central",
+      "pass": true
+    },
+    {
+      "name": "bloom only central",
+      "pass": false
+    },
+    {
+      "name": "result completes",
+      "pass": true
+    },
+    {
+      "name": "unique page 0",
+      "pass": true,
+      "detail": {
+        "phase": "egg",
+        "center": 54,
+        "version": 1,
+        "ids": [
+          45,
+          46,
+          47,
+          48,
+          54,
+          49,
+          50,
+          51,
+          52
+        ]
+      }
+    },
+    {
+      "name": "unique page 1",
+      "pass": true,
+      "detail": {
+        "phase": "egg",
+        "center": 55,
+        "version": 2,
+        "ids": [
+          53,
+          54,
+          37,
+          38,
+          55,
+          39,
+          40,
+          41,
+          42
+        ]
+      }
+    },
+    {
+      "name": "unique page 2",
+      "pass": true,
+      "detail": {
+        "phase": "egg",
+        "center": 56,
+        "version": 3,
+        "ids": [
+          37,
+          38,
+          39,
+          40,
+          56,
+          41,
+          42,
+          43,
+          44
+        ]
+      }
+    },
+    {
+      "name": "unique page 3",
+      "pass": true,
+      "detail": {
+        "phase": "egg",
+        "center": 57,
+        "version": 4,
+        "ids": [
+          45,
+          46,
+          47,
+          48,
+          57,
+          49,
+          50,
+          51,
+          52
+        ]
+      }
+    },
+    {
+      "name": "unique page 4",
+      "pass": true,
+      "detail": {
+        "phase": "result",
+        "center": 40,
+        "version": 5,
+        "ids": [
+          54,
+          55,
+          56,
+          57,
+          40,
+          37,
+          38,
+          39,
+          41
+        ]
+      }
+    },
+    {
+      "name": "FIFO once per page",
+      "pass": true,
+      "detail": [
+        54,
+        55,
+        56,
+        57,
+        40
+      ]
+    },
+    {
+      "name": "empty queue uses old result",
+      "pass": true,
+      "detail": {
+        "phase": "result",
+        "center": 40,
+        "version": 5,
+        "ids": [
+          54,
+          55,
+          56,
+          57,
+          40,
+          37,
+          38,
+          39,
+          41
+        ]
+      }
+    },
+    {
+      "name": "arrival leaves old center unchanged",
+      "pass": true
+    },
+    {
+      "name": "arrival shows next page",
+      "pass": true,
+      "detail": {
+        "phase": "egg",
+        "center": 58,
+        "version": 6,
+        "ids": [
+          37,
+          38,
+          39,
+          40,
+          58,
+          41,
+          42,
+          43,
+          44
+        ]
+      }
+    },
+    {
+      "name": "URL variant A",
+      "pass": true
+    },
+    {
+      "name": "URL variant B",
+      "pass": true
+    },
+    {
+      "name": "URL variant C",
+      "pass": true
+    },
+    {
+      "name": "keyboard wraps variant and URL",
+      "pass": true
+    },
+    {
+      "name": "clean hides tools",
+      "pass": true
+    },
+    {
+      "name": "H shows tools",
+      "pass": true
+    },
+    {
+      "name": "portrait tooling no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "portrait remains 16:9 preview",
+      "pass": true
+    },
+    {
+      "name": "reduced no shake/flash",
+      "pass": false,
+      "detail": {
+        "phase": "result",
+        "center": 53,
+        "version": 0,
+        "ids": [
+          37,
+          38,
+          39,
+          40,
+          53,
+          41,
+          42,
+          43,
+          44
+        ]
+      }
+    },
+    {
+      "name": "reduced result completes",
+      "pass": true
+    },
+    {
+      "name": "autoplay one turn at ten seconds",
+      "pass": true,
+      "detail": {
+        "phase": "result",
+        "center": 53,
+        "version": 1,
+        "ids": [
+          45,
+          46,
+          47,
+          48,
+          53,
+          49,
+          50,
+          51,
+          52
+        ]
+      }
+    },
+    {
+      "name": "no browser errors",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "no backend requests",
+      "pass": true,
+      "detail": []
+    }
+  ],
+  "errors": [],
+  "requests": [
+    "http://localhost:5173/?prototype=results&variant=A&still=egg",
+    "http://localhost:5173/@vite/client",
+    "http://localhost:5173/src/client/cloud/main.ts",
+    "http://localhost:5173/@id/__x00__vite/modulepreload-polyfill.js",
+    "http://localhost:5173/node_modules/.vite/deps/svelte.js?v=e5baf8ef",
+    "http://localhost:5173/node_modules/.vite/deps/runtime-Do_u7Ssq.js?v=e8e2f960",
+    "http://localhost:5173/node_modules/.vite/deps/index-client-DvavOWo3.js?v=e8e2f960",
+    "http://localhost:5173/node_modules/.vite/deps/legacy-client-B4NOc9it.js?v=e8e2f960",
+    "http://localhost:5173/node_modules/.vite/deps/warnings-eg1vThES.js?v=e8e2f960",
+    "http://localhost:5173/node_modules/.vite/deps/flags-qfBdqUK7.js?v=e8e2f960",
+    "http://localhost:5173/node_modules/.vite/deps/events-jRM3pnpv.js?v=e8e2f960",
+    "http://localhost:5173/node_modules/.vite/deps/create-subscriber-5X-uY-QT.js?v=e8e2f960",
+    "http://localhost:5173/node_modules/.vite/deps/svelte_n_clsx.js?v=e5baf8ef",
+    "http://localhost:5173/node_modules/.vite/deps/shared-CnQOmpvc.js?v=e8e2f960",
+    "http://localhost:5173/node_modules/vite/dist/client/env.mjs",
+    "http://localhost:5173/src/client/cloud/results-prototype/ResultsPrototype.svelte",
+    "http://localhost:5173/node_modules/.vite/deps/svelte_internal_disclose-version.js?v=e5baf8ef",
+    "http://localhost:5173/node_modules/.vite/deps/svelte_internal_client.js?v=e5baf8ef",
+    "http://localhost:5173/src/client/cloud/results-prototype/assets/egg.png?import",
+    "http://localhost:5173/src/client/cloud/results-prototype/assets/portraits.png?import",
+    "http://localhost:5173/src/client/cloud/results-prototype/qr.json?import",
+    "http://localhost:5173/src/client/cloud/results-prototype/assets/fonts.css",
+    "http://localhost:5173/src/client/cloud/results-prototype/ResultsPrototype.svelte?svelte&type=style&lang.css",
+    "http://localhost:5173/src/client/cloud/results-prototype/assets/egg.png",
+    "http://localhost:5173/src/client/cloud/results-prototype/assets/manrope-0.woff2",
+    "http://localhost:5173/src/client/cloud/results-prototype/assets/manrope-3.woff2",
+    "http://localhost:5173/src/client/cloud/results-prototype/assets/portraits.png",
+    "http://localhost:5173/src/client/cloud/results-prototype/assets/manrope-2.woff2",
+    "http://localhost:5173/src/client/cloud/results-prototype/assets/manrope-4.woff2",
+    "http://localhost:5173/?prototype=results&variant=A&still=egg&clean=1",
+    "http://localhost:5173/?prototype=results&variant=B&still=egg&clean=1",
+    "http://localhost:5173/?prototype=results&variant=C&still=egg&clean=1",
+    "http://localhost:5173/?prototype=results&variant=C&still=egg",
+    "http://localhost:5173/?prototype=results&variant=A"
+  ],
+  "supersededChecks": {
+    "bloom only central": "Screenshot finished after phase changed; 30ms follow-up sampler confirmed central bloom.",
+    "reduced no shake/flash": "Screenshot finished after reveal completed; 30ms follow-up sampler confirmed no shake or bloom."
+  },
+  "followupReport": "followup-report.json"
+}

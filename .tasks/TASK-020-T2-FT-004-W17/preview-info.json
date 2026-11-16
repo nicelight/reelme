@@ -1,0 +1,11 @@
+{
+  "dataDir": "/tmp/reelme-approved-preview-9XINnP/data",
+  "origin": "http://localhost:3197",
+  "accounts": [
+    "operator",
+    "admin"
+  ],
+  "password": "test-password",
+  "syntheticSessions": true,
+  "noExternalCalls": true
+}

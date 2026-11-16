@@ -1,0 +1,80 @@
+[
+  {
+    "variant": "A",
+    "geometry": {
+      "center": {
+        "x": 595.796875,
+        "y": 393.1875,
+        "w": 480.390625,
+        "h": 211.65625
+      },
+      "egg": {
+        "x": 596.796875,
+        "y": 377.421875,
+        "w": 478.390625,
+        "h": 243.1875
+      },
+      "noLowerOverlap": true
+    }
+  },
+  {
+    "variant": "B",
+    "geometry": {
+      "center": {
+        "x": 595.796875,
+        "y": 393.1875,
+        "w": 480.390625,
+        "h": 211.65625
+      },
+      "egg": {
+        "x": 596.796875,
+        "y": 377.421875,
+        "w": 478.390625,
+        "h": 243.1875
+      },
+      "noLowerOverlap": true
+    }
+  },
+  {
+    "variant": "C",
+    "geometry": {
+      "center": {
+        "x": 595.796875,
+        "y": 393.1875,
+        "w": 480.390625,
+        "h": 211.65625
+      },
+      "egg": {
+        "x": 596.796875,
+        "y": 377.421875,
+        "w": 478.390625,
+        "h": 243.1875
+      },
+      "noLowerOverlap": true
+    }
+  },
+  {
+    "motion": {
+      "phases": [
+        "egg",
+        "shake",
+        "bloom",
+        "reveal",
+        "result"
+      ],
+      "onlyCentral": true,
+      "shakeObserved": true,
+      "bloomObserved": true
+    }
+  },
+  {
+    "reduced": {
+      "phases": [
+        "egg",
+        "reveal",
+        "result"
+      ],
+      "noShakeOrFlash": true
+    }
+  }
+]

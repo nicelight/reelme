@@ -1,0 +1,8 @@
+{
+  "ribbons": true,
+  "background_markup": true,
+  "ribbon_motion": true,
+  "hatch": true,
+  "egg_styles": true,
+  "egg_keyframes": true
+}

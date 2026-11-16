@@ -9,9 +9,16 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { randomInt } from 'node:crypto';
 const run = promisify(execFile);
 export class InvalidVideo extends Error {}
 export interface PreparedVideo { video_path: string; frame_path: string; video_size: number; frame_size: number; width: number; height: number; duration: number }
+/** Card frames use 5–12 seconds, or 1–3 seconds before the end of shorter clips.
+ * Treat the exact end as unavailable; very short clips safely fall back to zero. */
+export function cardFrameTime(duration: number, pick: (min: number, max: number) => number = randomInt) {
+  const selected = pick(5, 13);
+  return selected < duration ? selected : Math.max(0, duration - pick(1, 4));
+}
 export async function prepareVideo(dataDir: string, sessionId: string, resultUrl: string, transport: typeof fetch = fetch): Promise<PreparedVideo> {
   const relative = `sessions/${sessionId}/result.mp4`;
   const frameRelative = `sessions/${sessionId}/result.jpg`;
@@ -31,7 +38,8 @@ export async function prepareVideo(dataDir: string, sessionId: string, resultUrl
       const duration = Number(probe.format.duration);
       if (!stream?.width || !stream.height || !Number.isFinite(duration) || duration <= 0) throw new Error('Missing video track');
       await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-xerror', ...input, '-i', video, '-map', '0:v:0', '-f', 'null', '-'], { timeout: 120_000, maxBuffer: 2 * 1024 * 1024 });
-      await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', ...input, '-i', video, '-frames:v', '1', '-q:v', '3', '-y', frame], { timeout: 30_000, maxBuffer: 2 * 1024 * 1024 });
+      const frameTime = cardFrameTime(duration);
+      await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', ...input, '-i', video, '-ss', String(frameTime), '-frames:v', '1', '-q:v', '3', '-y', frame], { timeout: 30_000, maxBuffer: 2 * 1024 * 1024 });
       const frameSize = (await stat(frame)).size;
       if (!frameSize) throw new Error('Empty frame');
       return { video_path: relative, frame_path: frameRelative, video_size: size, frame_size: frameSize, width: stream.width, height: stream.height, duration };

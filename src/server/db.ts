@@ -109,7 +109,12 @@ export function openDatabase(dataDir: string) {
     number INTEGER PRIMARY KEY CHECK(number BETWEEN 1 AND 5),
     media_id TEXT NOT NULL REFERENCES slot_media(id)
   )`);
-  db.pragma('user_version = 9');
+  db.exec(`CREATE TABLE IF NOT EXISTS display_settings (
+    id INTEGER PRIMARY KEY CHECK(id=1),
+    page_duration_seconds INTEGER NOT NULL CHECK(page_duration_seconds IN (10,20,30,40,50,60))
+  );
+  INSERT OR IGNORE INTO display_settings(id,page_duration_seconds) VALUES(1,10);`);
+  db.pragma('user_version = 10');
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

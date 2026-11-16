@@ -1,0 +1,14 @@
+import {chromium} from '@playwright/test';
+import {writeFile} from 'node:fs/promises';
+const browser=await chromium.launch();const page=await browser.newPage({viewport:{width:1672,height:941}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+await page.goto('http://127.0.0.1:3197/?screen=results');
+await page.getByRole('heading',{name:'ReelMe',exact:true}).waitFor();await page.evaluate(()=>document.fonts.ready);
+await page.screenshot({path:'.tasks/TASK-020-T2-FT-004-W17/login-desktop.png'});
+const desktop={headers:await page.locator('.app-header').count(),headings:await page.locator('h1,h2').allTextContents(),overflow:await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)};
+await page.setViewportSize({width:390,height:844});
+await page.screenshot({path:'.tasks/TASK-020-T2-FT-004-W17/login-mobile.png'});
+const mobile={overflow:await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),form:await page.locator('form').boundingBox()};
+await page.getByLabel('Логин').fill('operator');await page.getByLabel('Пароль',{exact:true}).fill('test-password');await page.getByRole('button',{name:'Войти',exact:true}).click();
+await page.getByRole('region',{name:'Экран результатов ReelMe'}).waitFor();
+const observations={desktop,mobile,operatorLogin:true,errors};
+await writeFile('.tasks/TASK-020-T2-FT-004-W17/login-observations.json',JSON.stringify(observations,null,2));console.log(JSON.stringify(observations));await browser.close();

@@ -16,10 +16,11 @@ const origin = 'http://127.0.0.1:3197';
 const app = await createApp({ ...f.config, origin, clientDir: resolve('dist/client') }, { now: () => Date.UTC(2026, 0, 1) });
 const cookie = await f.login(); const image = await f.upload(cookie, await imageBytes());
 const saved = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: { cookie, origin: f.config.origin }, payload: {
+  participants: 1, photosPerParticipant: 4, orientation: 'landscape', aspectRatio: '16:9',
   description: 'Тест эмуляции', visible: true, simulateGeneration: true, thumbnailId: image.id,
   mode: 'P2V', model: 'kling/v4/reference-to-video', prompt: '@Element1', resolution: '720p', duration: 3, referenceIds: [],
 } });
-assert.equal(saved.statusCode, 201);
+assert.equal(saved.statusCode, 201, saved.body);
 const headers = { authorization: `Bearer ${'a'.repeat(43)}` };
 const jpeg = await sharp(await imageBytes()).jpeg().toBuffer();
 for (const broken of [false, true]) {

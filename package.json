@@ -16,7 +16,8 @@
     "test": "tsx --test tests/*.test.ts",
     "generate:slot-prompts": "node scripts/generate-slot-prompts.mjs",
     "check:slot-prompts": "node scripts/generate-slot-prompts.mjs --check",
-    "test:ui": "playwright test"
+    "test:ui": "playwright test",
+    "dev:design": "vite --host 0.0.0.0 --port 5173"
   },
   "dependencies": {
     "@fal-ai/client": "^1.10.1",

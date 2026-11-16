@@ -12,11 +12,16 @@
   import MediaField from './MediaField.svelte';
   import SlotEditor from './SlotEditor.svelte';
   import CaptureGuides from './CaptureGuides.svelte';
+  import DisplaySettings from './DisplaySettings.svelte';
+  import Login from './Login.svelte';
 
   let archive = $state(false);
   let guides = $state(false);
+  let displaySettings = $state(false);
+  const dedicatedScreen = new URLSearchParams(location.search).get('screen') === 'results';
   let ready = $state(false);
   let role = $state<'admin' | 'operator' | null>(null);
+  const publicScreen = $derived(ready && role === 'operator' && dedicatedScreen);
   let username = $state('');
   let password = $state('');
   let busy = $state(false);
@@ -69,7 +74,7 @@
     busy = true;
     try {
       await api('/auth/logout', { method: 'POST' });
-      role = null; archive = false; guides = false; slots = []; selectedId = null; draftId = crypto.randomUUID(); slotSelection++; photoCaches.clear(); draft = blankSlot(); baseline = JSON.stringify(draft); notice = ''; error = ''; videoMedia = undefined;
+      role = null; archive = false; guides = false; displaySettings = false; slots = []; selectedId = null; draftId = crypto.randomUUID(); slotSelection++; photoCaches.clear(); draft = blankSlot(); baseline = JSON.stringify(draft); notice = ''; error = ''; videoMedia = undefined;
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
@@ -120,8 +125,9 @@
 </script>
 
 <svelte:window onbeforeunload={beforeUnload} />
-<svelte:head><title>ReelMe — {guides ? 'Образцы ракурсов' : archive ? 'Архив' : role === 'admin' ? 'Сюжеты' : role === 'operator' ? 'Ваши видео' : 'Вход'}</title></svelte:head>
+<svelte:head><title>ReelMe — {displaySettings ? 'Экран результатов' : guides ? 'Образцы ракурсов' : archive ? 'Архив' : role === 'admin' ? 'Сюжеты' : role === 'operator' ? 'Ваши видео' : 'Вход'}</title></svelte:head>
 
+{#if role && !publicScreen}
 <header class="app-header">
   <a class="brand" href="/" aria-label="ReelMe — главная">Reel<span>Me</span><span class="brand-caption">STUDIO</span></a>
   <div class="header-actions">
@@ -132,26 +138,23 @@
 
 {#if ready && role}
   <nav class="surface-nav" aria-label="Разделы">
-    <button class="quiet" aria-current={!archive && !guides ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = false; guides = false; }}>{role === 'admin' ? 'Сюжеты' : 'Сегодня'}</button>
-    {#if role === 'admin'}<button class="quiet" aria-current={guides ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { guides = true; archive = false; } }}>Образцы ракурсов</button>{/if}
-    <button class="quiet" aria-current={archive ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (role !== 'admin' || canLeave()) { archive = true; guides = false; } }}>Архив</button>
+    <button class="quiet" aria-current={!archive && !guides && !displaySettings ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = false; guides = false; displaySettings = false; }}>{role === 'admin' ? 'Сюжеты' : 'Сегодня'}</button>
+    {#if role === 'admin'}<button class="quiet" aria-current={guides ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { guides = true; archive = false; displaySettings = false; } }}>Образцы ракурсов</button>{/if}
+    {#if role === 'admin'}<button class="quiet" aria-current={displaySettings ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { displaySettings = true; archive = false; guides = false; } }}>Экран результатов</button>{/if}
+    <button class="quiet" aria-current={archive ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (role !== 'admin' || canLeave()) { archive = true; guides = false; displaySettings = false; } }}>Архив</button>
+    {#if role === 'operator'}<a class="button" href="/?screen=results" target="_blank" rel="noopener">Открыть экран</a>{/if}
   </nav>
+{/if}
 {/if}
 
 {#if !ready}
   <main class="centered"><p role="status">Открываем ReelMe…</p></main>
 {:else if !role}
-  <main class="login-layout">
-    <section class="login-intro"><p class="eyebrow">REELME / УПРАВЛЕНИЕ</p><h1>История начинается<br />с сюжета.</h1><p>Подготовьте образы, выберите модель<br class="desktop-break" /> и задайте настроение будущего видео.</p></section>
-    <form class="login-form" onsubmit={login}>
-      <p class="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</p><h2>Войти в аккаунт</h2>
-      <label for="username">Логин</label><input id="username" name="username" autocomplete="username" bind:value={username} required disabled={busy} />
-      <label for="password">Пароль</label><input id="password" name="password" type="password" autocomplete="current-password" bind:value={password} required disabled={busy} />
-      {#if error}<p class="error" role="alert">{error}</p>{/if}
-      <button class="primary" type="submit" disabled={busy}>{busy ? 'Входим…' : 'Войти'}</button>
-      <p class="hint">Используйте аккаунт администратора или оператора, созданный при настройке.</p>
-    </form>
-  </main>
+  <Login bind:username bind:password {busy} {error} onsubmit={login} />
+{:else if publicScreen}
+  <Display onunauthorized={() => role = null} />
+{:else if displaySettings && role === 'admin'}
+  <DisplaySettings onunauthorized={() => role = null} />
 {:else if guides && role === 'admin'}
   <CaptureGuides onunauthorized={() => role = null} onBusy={uploadBusy} />
 {:else if archive}

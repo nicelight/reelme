@@ -1,0 +1,137 @@
+{
+  "id": "TASK-020-T2-FT-004-W17",
+  "title": "Перенести утверждённый экран результатов A с очередями и настройкой интервала",
+  "status": "done",
+  "wave": "W17",
+  "feature": "FT-004",
+  "tier": "T2",
+  "reqs": [
+    "REQ-010",
+    "REQ-011",
+    "REQ-013",
+    "REQ-018"
+  ],
+  "depends_on": [
+    "TASK-010-T2-FT-004-W7"
+  ],
+  "purpose": "Показывать реальные результаты в утверждённом дизайне с последовательным первым появлением и справедливой круговой очередью.",
+  "success_outcome": "Рабочий экран воспроизводит A, использует реальные кадры и QR, начальное заполнение и две очереди; администратор сохраняет N из шести разрешённых значений.",
+  "touched_files": [
+    "src/client/cloud/",
+    "src/shared/display.ts",
+    "src/server/sessions/display.ts",
+    "src/server/app.ts",
+    "src/server/db.ts",
+    "tests/display.test.ts",
+    "tests/display.spec.ts",
+    "tests/results-screen.spec.ts",
+    "tests/display-settings.test.ts",
+    "tests/results-state.test.ts",
+    "tests/results-progress.test.ts"
+  ],
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "display-api-settings",
+      "command": "npx tsx --test tests/display.test.ts tests/display-settings.test.ts",
+      "required": true
+    },
+    {
+      "name": "results-state-progress",
+      "command": "npx tsx --test tests/results-state.test.ts tests/results-progress.test.ts",
+      "required": true
+    },
+    {
+      "name": "display-browser",
+      "command": "npm run test:ui -- tests/display.spec.ts",
+      "required": true
+    },
+    {
+      "name": "results-screen-browser",
+      "command": "npm run test:ui -- tests/results-screen.spec.ts",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-17",
+      "stage": "implementation",
+      "result": "PASS",
+      "summary": "npm run check: 0 ошибок/предупреждений; npx tsx --test tests/display.test.ts tests/display-settings.test.ts: 4/4 PASS; npx tsx --test tests/results-state.test.ts tests/results-progress.test.ts: 9/9 PASS. Проверены настройка/права/постоянство, две очереди, стабильные слоты прогресса. npm run build: PASS на финальном коде."
+    },
+    {
+      "date": "2026-11-17",
+      "stage": "browser",
+      "result": "PASS",
+      "summary": "Первый прогон tests/results-screen.spec.ts: core production flow 1 PASS (1.9m). После изменения только шапки заключительный прогон tests/display.spec.ts tests/results-screen.spec.ts подтвердил stable header (17.7s) и simulation (3.4s). Следовавший избыточный повтор core остановлен SIGINT по указанию оператора прекратить дополнительные проверки; повтор не завершён и не объявляется PASS. Предыдущий core PASS сохранён. Снимки рабочего A и новой шапки просмотрены.",
+      "evidence": [
+        ".tasks/TASK-020-T2-FT-004-W17/production-results-observations.json",
+        ".tasks/TASK-020-T2-FT-004-W17/production-results-A.png",
+        ".tasks/TASK-020-T2-FT-004-W17/production-progress-header.png",
+        ".tasks/TASK-020-T2-FT-004-W17/display-simulation-desktop.png",
+        ".tasks/TASK-020-T2-FT-004-W17/display-simulation-mobile.png"
+      ],
+      "limitations": [
+        "Только локальные изолированные данные/Chromium; реальные fal/SMTP, целевое оборудование фотобудки и performance не проверялись.",
+        "Deployment и commit/push не выполнялись; локальный preview не является развёртыванием."
+      ]
+    }
+  ],
+  "docs": [
+    "DESIGN.md",
+    ".memory-bank/states/results-display.md",
+    ".memory-bank/features/FT-004-public-delivery.md",
+    ".memory-bank/contracts/http-api.md"
+  ],
+  "evidence_required": [
+    "Фактические результаты проверок очередей/таймеров и сохранения N; сравнение рабочего экрана с утверждённым A.",
+    "Реальный QR из отрисованной карточки декодируется в правильную форму; роль оператора, маскирование данных и дедлайн скрытия сохранены."
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-004-public-delivery.md#FT-004-AC-002",
+    ".memory-bank/states/results-display.md",
+    "DESIGN.md",
+    "src/client/cloud/results-prototype/BRIEF.md"
+  ],
+  "normative_inputs": [
+    ".memory-bank/constitution.md",
+    ".memory-bank/contracts/access.md",
+    ".memory-bank/contracts/http-api.md",
+    ".memory-bank/states/lifecycle-map.md",
+    ".impeccable/design.json"
+  ],
+  "constraints": [
+    "Перенести текущие assets/CSS/motion A без пересоздания художественного решения; не менять каталог, фотосессию, генерацию и email.",
+    "Две очереди, первый экран 0→9, счёт вылупления/обычного показа, N и предзагрузка следуют results-display.md.",
+    "Админская настройка сохраняется на сервере; допустимы только 10/20/30/40/50/60 секунд.",
+    "До изменения N сохраняется прежнее значение 10 секунд; готовые при reload истории показываются обычными карточками без повторного вылупления.",
+    "Восемь неподвижных FIFO-слотов прогресса (2×4) заменяют заголовок/подпись. Нажатие строки скрывает блок, кнопка «StatusShow» возвращает; отдельной вкладки статусов нет.",
+    "Готовая строка ждёт замены следующей подготовкой; без замены показывает «вот вот вылупится :)» до вылупления и «готово» после. Ошибки/эмуляции остаются в компактном операторском управлении."
+  ],
+  "invariants": [
+    "Новые готовые карточки содержат только реальный кадр, № NNN и QR; demo-данные и инструменты прототипа не поставляются посетителю.",
+    "Общий экран/API требуют operator, изменение настройки требует admin; клиент не получает полный email или секреты.",
+    "Просмотр/пагинация не открывают receive и не меняют серверные времена; истечение срока не удаляет результат из архива.",
+    "Трёхминутный deadline исключает результат из будущих очередей/страниц, но все карточки активного экрана сохраняются до смены страницы, включая начальное заполнение; N относится ко всему экрану."
+  ],
+  "verification_targets": [
+    "Первое заполнение 0→9, очередь нескольких новых, удержание центра2s, показ при переносе в боковую позицию, первый отсчёт N после девятого вылупления.",
+    "В многостраничном режиме N стартует при появлении страницы; одно вылупление на страницу, arrivals midpage ждут, круговая очередь newest-front/shown-tail, уникальные истории внутри страницы.",
+    "Предзагрузка/decode до появления, отсутствие старого результата при ошибке/потере связи; сравнение A и сохранение reduced motion.",
+    "Сохранение N и отказ значений вне списка; доступ по ролям, настоящие QR, исключение по deadline из будущих страниц при сохранении текущего экрана и данных.",
+    "Восемь слотов прогресса сохраняют позиции при замене и свободных местах; подписи до/после вылупления, скрытие/возврат блока и независимость от снимка карточек."
+  ],
+  "anti_goals": [
+    "Развёртывание, commit/push, новая архитектура генерации или почты.",
+    "Новый визуальный дизайн и художественный пересмотр утверждённых анимаций."
+  ]
+}

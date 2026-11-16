@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-16T20:18:23.613059+00:00",
+  "title": "ReelMe — утверждённый экран результатов A",
+  "extensions": {
+    "shadows": [
+      {
+        "name": "result-card",
+        "value": "0 .35cqw 1.2cqw #0005,0 0 .65cqw #f573c014,inset 0 .35cqw 1.4cqw #ed65be16",
+        "purpose": "Глубина карточки; локальные corner-glows заданы CSS компонента."
+      },
+      {
+        "name": "qr",
+        "value": "0 0 .6cqw #ffd2f126",
+        "purpose": "Небольшое свечение вокруг белого QR."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(.23,1,.32,1)",
+        "purpose": "Рост белого, его затухание и пространственные переходы."
+      },
+      {
+        "name": "rim-gain",
+        "value": "0 → 1 → 0",
+        "purpose": "Принятый default100%; opacity только дополнительного светового слоя."
+      },
+      {
+        "name": "rim-pulse",
+        "value": "1000ms; ease-in-out",
+        "purpose": "Одно дыхание каждой рамки."
+      },
+      {
+        "name": "rim-stagger",
+        "value": "0 / 200 / 400 / 600 / 800ms",
+        "purpose": "Группы позиций [1], [2,4], [3,5,7], [6,8], [9]; всего1800ms."
+      },
+      {
+        "name": "rim-cycle",
+        "value": "random(5000,7000)ms",
+        "purpose": "Единый start-to-start цикл; ручной replay заменяет тот же timer."
+      },
+      {
+        "name": "ribbon-travel",
+        "value": "random(7000,15000)ms; linear",
+        "purpose": "Каждый видимый участок сохранённой Bézier-кривой; новый duration на каждом проходе."
+      },
+      {
+        "name": "ribbon-opacity",
+        "value": "3000ms in / 3000ms out",
+        "purpose": "Внутри travel; в оставшееся время opacity1."
+      },
+      {
+        "name": "egg-initial-wait",
+        "value": "1400ms",
+        "purpose": "Начальная пауза демонстрации перед первым колебанием."
+      },
+      {
+        "name": "egg-pre-bloom",
+        "value": "1050ms",
+        "purpose": "Непрерывная тряска перед началом белого роста."
+      },
+      {
+        "name": "egg-shake",
+        "value": "2850ms; ease-in-out; 1deg → 3deg",
+        "purpose": "1050ms lead +1800ms роста; возрастающие полуволны, точные keyframes в source."
+      },
+      {
+        "name": "egg-hide",
+        "value": "250ms; ease",
+        "purpose": "Исчезновение яйца при начале проявления результата."
+      },
+      {
+        "name": "bloom-expand",
+        "value": "1800ms; scale(.025) → scale(1)",
+        "purpose": "Непрерывная траектория роста с ease-out; источник62%/50%, feather1.5H."
+      },
+      {
+        "name": "bloom-opacity-in",
+        "value": "250ms; ease",
+        "purpose": "Начальное появление белого слоя."
+      },
+      {
+        "name": "bloom-fade-offset",
+        "value": "400ms after bloom start",
+        "purpose": "Затухание начинается во время роста; полного белого gate/hold нет."
+      },
+      {
+        "name": "bloom-fade",
+        "value": "2000ms; cubic-bezier(.23,1,.32,1)",
+        "purpose": "Fade overlapping growth; финал2400ms от начала роста."
+      },
+      {
+        "name": "result-reveal",
+        "value": "300ms; ease-out",
+        "purpose": "Мягкое появление готовой карточки под белым слоем."
+      },
+      {
+        "name": "page-leave",
+        "value": "280ms; opacity ease / transform ease-out",
+        "purpose": "Текущий визуальный переход прототипа, не правило наполнения страниц."
+      },
+      {
+        "name": "page-enter",
+        "value": "700ms; cubic-bezier(.23,1,.32,1)",
+        "purpose": "ВариантA: opacity и translateY(.5cqw)→0."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "prototype-compact",
+        "value": "900px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Result card — approved frame",
+      "kind": "card",
+      "refersTo": "result-card",
+      "description": "Статичная оболочка принятого результата. Полная композиция с кадром/QR и движение — в каноническом прототипе.",
+      "html": "<div class=\"ds-preview\"><article class=\"ds-card\"><div class=\"ds-rim-decoration\"><div class=\"ds-rim-light\"><i class=\"ds-rim-halo\"></i><i class=\"ds-rim-hotspot\"></i></div></div><h2>№ 037</h2></article></div>",
+      "css": ".ds-preview { container-type:inline-size; aspect-ratio:16/9; position:relative; font-family:Manrope,sans-serif; color:#fff4fb; background:#0d0a13; }\n.ds-card { min-width:0; min-height:0; position:relative; border:1px solid transparent; border-radius:1.65cqw; padding:.8cqw; background:linear-gradient(125deg,var(--glass),#130e1bea 68%) padding-box,linear-gradient(145deg,#ac59967d,#7b406b70) border-box; box-shadow:0 .35cqw 1.2cqw #0005,0 0 .65cqw #f573c014,inset 0 .35cqw 1.4cqw #ed65be16; }\n.ds-rim-decoration { position:absolute; inset:-1px; pointer-events:none; border-radius:inherit; z-index:3; }\n.ds-rim-light { --corner-light:radial-gradient(ellipse 38% 85% at 8% 0%,#ffbbe0 0%,#fb7dbf 24%,#e969bda8 43%,transparent 78%),radial-gradient(ellipse 22% 58% at 100% 100%,#ffe5ef 0%,#ff9cd0 20%,#ed71bfab 45%,transparent 88%); position:absolute; inset:0; border-radius:inherit; }\n.ds-rim-light::before,.ds-rim-halo::before { content:''; position:absolute; inset:0; border-radius:inherit; background:var(--corner-light); padding:1.15px; mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0); mask-composite:exclude; }\n.ds-rim-halo { position:absolute; inset:0; border-radius:inherit; filter:blur(.36cqw); opacity:.95; }\n.ds-rim-halo::before { padding:.42cqw; }\n.ds-rim-hotspot { position:absolute; top:-.025cqw; left:8%; width:14%; height:.12cqw; background:linear-gradient(90deg,transparent,#ffb0da 18%,#fffaf4 38%,#fffaf4 57%,#ffc3e3 72%,transparent); filter:drop-shadow(0 0 .15cqw #ffe5f2) drop-shadow(0 0 .32cqw #ff7fcaa6); }\n.ds-card h2 { margin:0; font-size:1.95cqw; font-weight:800; line-height:1.15; letter-spacing:-.025em; font-variant-numeric:tabular-nums; white-space:nowrap; }\n.ds-card { --glass:rgba(46,23,48,.8); position:absolute; top:9cqw; left:3.5cqw; width:calc((93cqw - 4.6cqw)/3); height:calc((41.75cqw - 2.8cqw)/3); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Premium Instagram с мягким кинематографическим motion design",
+    "overview": "Пользователь утвердил вариант A 17 ноября 2026. Это нормативный визуальный эталон экрана результатов: глубокая сливово-чёрная поверхность, розово-фиолетовый свет, кинематографические портреты и мягкое появление новой истории. B/C остаются экспериментами."
+  }
+}
