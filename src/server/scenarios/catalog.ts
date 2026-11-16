@@ -1,6 +1,7 @@
 /** Module contract: installation-only projection of currently visible slots.
  * Media access is restricted to that visible slot's thumbnail and preview;
- * editor references/settings and hidden or replaced media are not catalog data. */
+ * editor references/settings and hidden or replaced media are not catalog data.
+ * V2V drafts without a source cannot be started. Source: docs/slot-setup/matrix.md. */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Access } from '../access/index.js';
@@ -11,12 +12,13 @@ import { catalogItem, visibleSlot } from './store.js';
 import { readMedia, sendMedia } from './media.js';
 import { HttpError } from '../errors.js';
 const pageQuery = z.object({ page: z.coerce.number().int().min(1).max(1_000_000).default(1) }).strict();
+const available = "json_extract(config,'$.visible')=1 AND (json_extract(config,'$.mode')<>'V2V' OR json_extract(config,'$.videoId') IS NOT NULL)";
 export function registerCatalog(app: FastifyInstance, db: DB, dataDir: string, access: Access) {
   app.get('/api/catalog', { preHandler: access.requireInstallation }, request => {
     const { page } = pageQuery.parse(request.query);
     const pageSize = 12;
-    const { total } = db.prepare("SELECT COUNT(*) AS total FROM slots WHERE json_extract(config,'$.visible')=1").get() as { total: number };
-    const rows = db.prepare("SELECT id,config FROM slots WHERE json_extract(config,'$.visible')=1 ORDER BY rowid LIMIT ? OFFSET ?").all(pageSize, (page - 1) * pageSize) as { id: string; config: string }[];
+    const { total } = db.prepare(`SELECT COUNT(*) AS total FROM slots WHERE ${available}`).get() as { total: number };
+    const rows = db.prepare(`SELECT id,config FROM slots WHERE ${available} ORDER BY rowid LIMIT ? OFFSET ?`).all(pageSize, (page - 1) * pageSize) as { id: string; config: string }[];
     const result: CatalogPage = {
       items: rows.map(row => catalogItem({ ...JSON.parse(row.config), id: row.id } as Slot)),
       page, pageSize, total, totalPages: Math.ceil(total / pageSize),

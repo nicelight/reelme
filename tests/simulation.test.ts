@@ -25,7 +25,7 @@ async function setup(t: TestContext) {
   const image = await f.upload(cookie, await imageBytes());
   const db = openDatabase(f.config.dataDir); t.after(() => db.close());
   const jpeg = await sharp(await imageBytes()).jpeg().toBuffer();
-  const input: SlotInput = { description: 'Проверяем сюжет', visible: true, simulateGeneration: true,
+  const input: SlotInput = { participants: 1, photosPerParticipant: 4, orientation: 'landscape', aspectRatio: '16:9', description: 'Проверяем сюжет', visible: true, simulateGeneration: true,
     thumbnailId: image.id, mode: 'P2V', model: 'kling/v4/reference-to-video',
     referenceIds: [image.id], prompt: '@Element1 walks', resolution: '720p', duration: 3 };
   async function save(value: unknown = input, id?: string) {
@@ -66,8 +66,8 @@ function forbiddenTransport() {
 
 test('simulation default, admin-only persistence, catalog privacy and immutable old/new snapshots; real positive control', async t => {
   const h = await setup(t); const { f, db } = h;
-  const { simulateGeneration: _, ...legacyInput } = h.input;
-  const slot = await h.save(legacyInput); assert.equal(slot.simulateGeneration, false);
+  const { simulateGeneration: _, participants: _people, photosPerParticipant: _photos, orientation: _orientation, aspectRatio: _ratio, ...legacyInput } = h.input;
+  const slot = await h.save({ ...h.input, simulateGeneration: undefined }); assert.equal(slot.simulateGeneration, false);
   // Actual legacy stored JSON, not just omitted incoming field.
   db.prepare('UPDATE slots SET config=? WHERE id=?').run(JSON.stringify(legacyInput), slot.id);
   for (const url of ['/api/admin/slots', `/api/admin/slots/${slot.id}`]) {
@@ -118,7 +118,7 @@ test('one/four-photo simulations survive pending and terminal restart with zero 
   const h = await setup(t); const { f, db } = h; const forbidden = forbiddenTransport();
   const p2v = await h.save();
   const bytes = await videoBytes(f.root, 5); const clip = await f.upload(h.admin.cookie, bytes, 'video/mp4', 'clip.mp4');
-  const recast = await h.save({ description: 'Recast', visible: true, simulateGeneration: true, thumbnailId: h.input.thumbnailId,
+  const recast = await h.save({ participants: 1, photosPerParticipant: 1, orientation: 'landscape', description: 'Recast', visible: true, simulateGeneration: true, thumbnailId: h.input.thumbnailId,
     mode: 'V2V', model: 'minimax/h3-max/recast', videoId: clip.id, resolution: '768P', referenceIds: [], recastShotsConfirmed: true });
   const ids: string[] = [];
   for (const [slot, count] of [[p2v, 4], [recast, 1]] as const) {

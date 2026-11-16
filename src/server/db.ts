@@ -5,7 +5,8 @@
  * preserve confirmed fal identity and verified files. Nullable submit/ready times
  * preserve unknown history; migrations never invent historical timestamps. Session issuance owns scoped
  * capabilities, first-open/confirmation times and the independent email state.
- * Events retain a deletion marker until restartable local cleanup finishes. */
+ * Events retain a deletion marker until restartable local cleanup finishes.
+ * Capture positions follow docs/slot-setup/matrix.md; migrations retain provider capabilities. */
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -42,7 +43,7 @@ export function openDatabase(dataDir: string) {
     );
     CREATE TABLE IF NOT EXISTS capture_photos (
       session_id TEXT NOT NULL REFERENCES capture_sessions(id) ON DELETE CASCADE,
-      pose_index INTEGER NOT NULL CHECK(pose_index BETWEEN 0 AND 3),
+      pose_index INTEGER NOT NULL CHECK(pose_index BETWEEN 0 AND 7),
       path TEXT UNIQUE NOT NULL, size INTEGER NOT NULL,
       width INTEGER NOT NULL, height INTEGER NOT NULL,
       PRIMARY KEY(session_id, pose_index)
@@ -71,8 +72,28 @@ export function openDatabase(dataDir: string) {
         CHECK(email_state IN ('not_requested','pending','sending','sent','failed')),
       email_error TEXT, sent_at INTEGER
     );
-    PRAGMA user_version = 7;
   `);
+  const photosSql = (db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='capture_photos'").get() as { sql: string }).sql;
+  if (/BETWEEN\s+0\s+AND\s+3/i.test(photosSql)) {
+    // Keep the original table name in dependent FK definitions. Renaming the old
+    // table first would redirect provider_media; dropping with FK on would delete tokens.
+    db.pragma('foreign_keys = OFF');
+    try {
+      db.transaction(() => {
+        db.exec(`CREATE TABLE capture_photos_next (
+          session_id TEXT NOT NULL REFERENCES capture_sessions(id) ON DELETE CASCADE,
+          pose_index INTEGER NOT NULL CHECK(pose_index BETWEEN 0 AND 7),
+          path TEXT UNIQUE NOT NULL, size INTEGER NOT NULL,
+          width INTEGER NOT NULL, height INTEGER NOT NULL,
+          PRIMARY KEY(session_id, pose_index)
+        );
+        INSERT INTO capture_photos_next SELECT * FROM capture_photos;
+        DROP TABLE capture_photos;
+        ALTER TABLE capture_photos_next RENAME TO capture_photos;`);
+        if ((db.pragma('foreign_key_check') as unknown[]).length) throw new Error('Capture photo migration violates foreign keys');
+      }).immediate();
+    } finally { db.pragma('foreign_keys = ON'); }
+  }
   if (!(db.prepare('PRAGMA table_info(events)').all() as { name: string }[]).some(column => column.name === 'deleting')) {
     db.exec('ALTER TABLE events ADD COLUMN deleting INTEGER NOT NULL DEFAULT 0 CHECK(deleting IN (0,1))');
   }
@@ -80,6 +101,7 @@ export function openDatabase(dataDir: string) {
   for (const column of ['submitted_at', 'ready_at']) {
     if (!jobColumns.has(column)) db.exec(`ALTER TABLE generation_jobs ADD COLUMN ${column} INTEGER`);
   }
+  db.pragma('user_version = 8');
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

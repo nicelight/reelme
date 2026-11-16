@@ -1,0 +1,14 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/editor.spec.ts
+
+
+Running 3 tests using 1 worker
+
+(node:1789032) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/editor.spec.ts:49:1 › sequential setup exposes real capacities, locks fields, saves both modes and preserves the source on unlock (6.4s)
+  ✓  2 tests/editor.spec.ts:133:1 › prompt text survives reference changes and stale fetches; real load failures block stale saves (2.8s)
+  ✓  3 tests/editor.spec.ts:182:3 › manual test flow › per-position JPEG cache separates people/group and real results survive resets, failures and simulation (12.2s)
+
+  3 passed (23.0s)

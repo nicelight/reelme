@@ -2,11 +2,13 @@
  * A single SQLite transaction fixes Novosibirsk date, unique number and a value
  * snapshot from Scenarios. Repeated startRequestId returns the saved receipt,
  * including across edits, hidden slots and midnight. Manual admin tests alone use
- * a saved test JPEG, copied into independent photos through the same intake/finalize.
+ * saved test JPEGs, copied by position through the same intake/finalize. Legacy
+ * tests retain their single-source retry; new plans never duplicate it.
  * Test retries retain their original source; concurrent preparation is rejected. Photo bytes are written and
  * decoded before a short DB transaction publishes one position. Finalize changes
  * capturing to submit_pending once, only for a complete set; later photo writes
- * are refused, including uploads that started before finalize or event deletion. No camera/fal calls; generation errors are a safe projection from Sessions. */
+ * are refused, including uploads that started before finalize or event deletion. No camera/fal calls; generation errors are a safe projection from Sessions.
+ * Source: docs/slot-setup/matrix.md. New session plans are immutable snapshots. */
 import { randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
@@ -19,7 +21,7 @@ import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
 import { snapshotSlot } from '../scenarios/store.js';
 import { readTestPhoto } from '../scenarios/media.js';
-import { MAX_PHOTO_BYTES, photoPoses, type StartReceipt, type SlotSnapshot, type SessionState, type CaptureStatus } from '../../shared/capture.js';
+import { MAX_PHOTO_BYTES, snapshotPosePlan, type StartReceipt, type SlotSnapshot, type SessionState, type CaptureStatus } from '../../shared/capture.js';
 import { HttpError } from '../errors.js';
 
 interface SessionRow {
@@ -28,7 +30,7 @@ interface SessionRow {
 }
 const startSchema = z.object({ startRequestId: z.string().uuid(), slotId: z.string().uuid() }).strict();
 const sessionParams = z.object({ id: z.string().uuid() });
-const photoParams = sessionParams.extend({ poseIndex: z.string().regex(/^[0-3]$/).transform(Number) });
+const photoParams = sessionParams.extend({ poseIndex: z.string().regex(/^[0-7]$/).transform(Number) });
 const dateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Novosibirsk', year: 'numeric', month: '2-digit', day: '2-digit' });
 export function eventDate(timestamp: number): string {
   const fields = Object.fromEntries(dateFormatter.formatToParts(new Date(timestamp)).map(part => [part.type, part.value]));
@@ -36,7 +38,7 @@ export function eventDate(timestamp: number): string {
 }
 function receipt(row: SessionRow): StartReceipt {
   const snapshot = JSON.parse(row.snapshot) as SlotSnapshot;
-  return { sessionId: row.id, date: row.event_date, number: row.number, state: row.state, posePlan: photoPoses.slice(0, snapshot.expectedPhotos).map(pose => ({ ...pose })) };
+  return { sessionId: row.id, date: row.event_date, number: row.number, state: row.state, posePlan: snapshotPosePlan(snapshot) };
 }
 export function readSession(db: DB, sessionId: string) {
   const row = db.prepare('SELECT s.* FROM capture_sessions s JOIN events e ON e.date=s.event_date WHERE s.id=? AND e.deleting=0').get(sessionId) as SessionRow | undefined;
@@ -48,7 +50,7 @@ export function readSession(db: DB, sessionId: string) {
 export function captureStatus(db: DB, sessionId: string): CaptureStatus {
   const session = readSession(db, sessionId);
   const acceptedPoseIndices = (db.prepare('SELECT pose_index FROM capture_photos WHERE session_id=? ORDER BY pose_index').all(sessionId) as { pose_index: number }[]).map(row => row.pose_index);
-  const posePlan = photoPoses.slice(0, session.snapshot.expectedPhotos).map(pose => ({ ...pose }));
+  const posePlan = snapshotPosePlan(session.snapshot);
   const complete = acceptedPoseIndices.length === posePlan.length && posePlan.every(pose => acceptedPoseIndices.includes(pose.index));
   const error = db.prepare('SELECT error_code,error_message FROM generation_jobs WHERE session_id=?').get(sessionId) as { error_code: string | null; error_message: string | null } | undefined;
   return { ...(error?.error_code ? { error: { code: error.error_code, message: error.error_message! } } : {}), sessionId, date: session.event_date, number: session.number, state: session.state, posePlan, acceptedPoseIndices, complete, finalized: complete && session.state !== 'capturing' };
@@ -56,7 +58,7 @@ export function captureStatus(db: DB, sessionId: string): CaptureStatus {
 function requireCapturing(db: DB, sessionId: string, poseIndex: number) {
   const session = readSession(db, sessionId);
   if (session.state !== 'capturing') throw new HttpError(409, 'CAPTURE_CLOSED', 'Фотографии уже переданы на обработку');
-  if (poseIndex >= session.snapshot.expectedPhotos) throw new HttpError(400, 'INVALID_POSE', 'Эта позиция не входит в план съёмки');
+  if (!snapshotPosePlan(session.snapshot).some(pose => pose.index === poseIndex)) throw new HttpError(400, 'INVALID_POSE', 'Эта позиция не входит в план съёмки');
 }
 async function inspectPhoto(path: string) {
   try {
@@ -72,7 +74,7 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     const previous = db.prepare('SELECT * FROM capture_sessions WHERE start_request_id=?').get(startRequestId) as SessionRow | undefined;
     if (previous) {
       const saved = readSession(db, previous.id);
-      if (previous.slot_id !== slotId || !!saved.snapshot.testPhotoId !== manualTest) throw new HttpError(409, 'START_CONFLICT', 'Этот запрос уже относится к другому сюжету');
+      if (previous.slot_id !== slotId || !!(saved.snapshot.testPhotoIds || saved.snapshot.testPhotoId) !== manualTest) throw new HttpError(409, 'START_CONFLICT', 'Этот запрос уже относится к другому сюжету');
       return { created: false, value: receipt(previous) };
     }
     // Read the current visibility/config under the same write transaction as numbering.
@@ -158,11 +160,14 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     preparingTests.add(id);
     try {
       const session = readSession(db, id);
-      const media = readTestPhoto(db, session.snapshot.testPhotoId!);
-      const bytes = await readFile(join(dataDir, 'media', media.path));
       const accepted = captureStatus(db, id).acceptedPoseIndices;
-      for (let pose = 0; pose < session.snapshot.expectedPhotos; pose++) {
-        if (!accepted.includes(pose)) await storePhoto(id, pose, path => writeFile(path, bytes, { flag: 'wx', mode: 0o600 }));
+      for (const pose of snapshotPosePlan(session.snapshot)) {
+        if (accepted.includes(pose.index)) continue;
+        const source = session.snapshot.posePlan ? session.snapshot.testPhotoIds?.[pose.index] : session.snapshot.testPhotoId;
+        if (!source) throw new Error('Missing saved test source');
+        const media = readTestPhoto(db, source);
+        const bytes = await readFile(join(dataDir, 'media', media.path));
+        await storePhoto(id, pose.index, path => writeFile(path, bytes, { flag: 'wx', mode: 0o600 }));
       }
       const status = finalize.immediate(id);
       return reply.code(started.created ? 201 : 200).send(status);

@@ -2,13 +2,15 @@
  * Server validates every save against the finite model rules and stored media;
  * only Access-verified admin can read/write editor data. Catalog exposes a
  * separate installation-only projection; no provider submission.
+ * Source: docs/slot-setup/matrix.md. Editor defaults never rewrite raw legacy slots.
  */
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
 import { models, slotSchema, videoProblem, type SlotInput } from '../../shared/scenarios.js';
-import { readSlot } from './store.js';
+import { editorSlot, readSlot } from './store.js';
+import { getSlotSetup } from '../../shared/slot-setup.js';
 import { registerCatalog } from './catalog.js';
 import { HttpError } from '../errors.js';
 import { readMedia, readTestPhoto, registerMedia } from './media.js';
@@ -21,19 +23,22 @@ export function registerScenarios(app: FastifyInstance, db: DB, dataDir: string,
     image(slot.thumbnailId);
     slot.referenceIds.forEach(image);
     if (slot.testPhotoId) readTestPhoto(db, slot.testPhotoId);
+    slot.testPhotoIds?.forEach(id => readTestPhoto(db, id));
     if (slot.demoId && readMedia(db, slot.demoId).kind !== 'video') throw new HttpError(400, 'INVALID_MEDIA', 'Демоматериал должен быть видео');
     if (slot.videoId) {
-      const problem = videoProblem(models.find(m => m.id === slot.model)!, readMedia(db, slot.videoId));
+      const media = readMedia(db, slot.videoId);
+      const problem = videoProblem(models.find(m => m.id === slot.model)!, media);
       if (problem) throw new HttpError(400, 'MODEL_LIMIT', problem);
+      if (getSlotSetup(slot).model.orientationMode === 'source-video' && !(slot.orientation === 'portrait' ? media.height > media.width : media.width > media.height)) throw new HttpError(400, 'VIDEO_ORIENTATION', 'Ориентация определяется исходным видео; выберите соответствующий исходник');
     }
     return slot;
   }
   app.get('/api/admin/models', { preHandler: access.requireAdmin }, () => models);
   app.get('/api/admin/slots', { preHandler: access.requireAdmin }, () => {
     const rows = db.prepare('SELECT id,config FROM slots ORDER BY rowid').all() as { id: string; config: string }[];
-    return rows.map(row => ({ simulateGeneration: false, ...JSON.parse(row.config), id: row.id }));
+    return rows.map(row => editorSlot(db, { simulateGeneration: false, ...JSON.parse(row.config), id: row.id }));
   });
-  app.get<{ Params: { id: string } }>('/api/admin/slots/:id', { preHandler: access.requireAdmin }, request => readSlot(db, request.params.id));
+  app.get<{ Params: { id: string } }>('/api/admin/slots/:id', { preHandler: access.requireAdmin }, request => editorSlot(db, readSlot(db, request.params.id)));
   app.post('/api/admin/slots', { preHandler: [access.requireAdmin, access.requireOrigin] }, (request, reply) => {
     const slot = validate(request.body); const id = randomUUID();
     db.prepare('INSERT INTO slots(id,config) VALUES (?,?)').run(id, JSON.stringify(slot));

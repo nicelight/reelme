@@ -1,0 +1,104 @@
+TAP version 13
+# Subtest: cleanup manual: permissions, owned files/capabilities gone, other-day snapshot and current-slot materials survive
+ok 1 - cleanup manual: permissions, owned files/capabilities gone, other-day snapshot and current-slot materials survive
+  ---
+  duration_ms: 1474.036129
+  type: 'test'
+  ...
+# isolated DB/media fixture: /tmp/reelme-test-x8eiLZ
+# Subtest: retention: exactly 14 calendar days survive until Novosibirsk midnight; startup resumes saved deletion
+ok 2 - retention: exactly 14 calendar days survive until Novosibirsk midnight; startup resumes saved deletion
+  ---
+  duration_ms: 1236.541296
+  type: 'test'
+  ...
+# isolated DB/media fixture: /tmp/reelme-test-SwWaEB
+# Subtest: deleting marker immediately closes every new operation, late generation publication and email fallback
+ok 3 - deleting marker immediately closes every new operation, late generation publication and email fallback
+  ---
+  duration_ms: 1288.976636
+  type: 'test'
+  ...
+# isolated DB/media fixture: /tmp/reelme-test-DRyCSc
+# Subtest: fal delete contract: known URL only, bounded POST, remote failure logged and local cleanup completes
+ok 4 - fal delete contract: known URL only, bounded POST, remote failure logged and local cleanup completes
+  ---
+  duration_ms: 928.407115
+  type: 'test'
+  ...
+# isolated DB/media fixture: /tmp/reelme-test-p1IIpR
+# Subtest: simulation default, admin-only persistence, catalog privacy and immutable old/new snapshots; real positive control
+ok 5 - simulation default, admin-only persistence, catalog privacy and immutable old/new snapshots; real positive control
+  ---
+  duration_ms: 1228.143925
+  type: 'test'
+  ...
+# Subtest: one/four-photo simulations survive pending and terminal restart with zero provider calls, no delivery, ordinary archive/retention
+ok 6 - one/four-photo simulations survive pending and terminal restart with zero provider calls, no delivery, ordinary archive/retention
+  ---
+  duration_ms: 791.097069
+  type: 'test'
+  ...
+# Subtest: incomplete/order/missing-file/model-input failures never simulate success or call fal, including restart
+ok 7 - incomplete/order/missing-file/model-input failures never simulate success or call fal, including restart
+  ---
+  duration_ms: 865.569827
+  type: 'test'
+  ...
+# Subtest: the application worker consumes pending simulation without FAL_KEY; real mode reports FAL_NOT_CONFIGURED
+ok 8 - the application worker consumes pending simulation without FAL_KEY; real mode reports FAL_NOT_CONFIGURED
+  ---
+  duration_ms: 551.040195
+  type: 'test'
+  ...
+# Subtest: new manual test copies every active JPEG by saved pose; retry, ordinary capture and cleanup preserve ownership
+ok 9 - new manual test copies every active JPEG by saved pose; retry, ordinary capture and cleanup preserve ownership
+  ---
+  duration_ms: 1026.740136
+  type: 'test'
+  ...
+# Subtest: new test arrays reject incomplete, duplicate, excess and non-JPEG inputs; group uses distinct ordered positions
+ok 10 - new test arrays reject incomplete, duplicate, excess and non-JPEG inputs; group uses distinct ordered positions
+  ---
+  duration_ms: 422.188038
+  type: 'test'
+  ...
+# Subtest: sampled prompt assets serve verbatim including empty Recast, with revalidation and real missing-file errors
+ok 11 - sampled prompt assets serve verbatim including empty Recast, with revalidation and real missing-file errors
+  ---
+  duration_ms: 304.913086
+  type: 'test'
+  ...
+# Subtest: legacy manual hidden-slot tests own 1/4 photos, snapshot-only fixture and idempotent real/simulated processing; camera stays separate
+ok 12 - legacy manual hidden-slot tests own 1/4 photos, snapshot-only fixture and idempotent real/simulated processing; camera stays separate
+  ---
+  duration_ms: 1349.234856
+  type: 'test'
+  ...
+# Subtest: legacy manual request retry, concurrent preparation and partial restart retain the original fixture; preparation failure is terminal
+ok 13 - legacy manual request retry, concurrent preparation and partial restart retain the original fixture; preparation failure is terminal
+  ---
+  duration_ms: 729.272581
+  type: 'test'
+  ...
+# Subtest: test settings and routes validate JPEG/size, saved slot/body, account/origin and matching session
+ok 14 - test settings and routes validate JPEG/size, saved slot/body, account/origin and matching session
+  ---
+  duration_ms: 425.588246
+  type: 'test'
+  ...
+# Subtest: event cleanup removes owned test copies while preserving current fixture and another day snapshot source
+ok 15 - event cleanup removes owned test copies while preserving current fixture and another day snapshot source
+  ---
+  duration_ms: 524.745552
+  type: 'test'
+  ...
+1..15
+# tests 15
+# suites 0
+# pass 15
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6354.605084

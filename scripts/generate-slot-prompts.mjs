@@ -22,17 +22,17 @@ const ratios = (landscape = ['16:9'], portrait = ['9:16']) => ({
   orientationMode: 'aspect-ratio', aspectRatios: { landscape, portrait },
 });
 const models = [
-  { key: 'recast', id: 'minimax/h3-max/recast', mode: 'V2V', referenceStrategy: 'recast', resolutionOptions: ['768P', '1080P'], ...sourceVideo, promptMaxLength: 2000 },
-  { key: 'kling-o1-edit', id: 'fal-ai/kling-video/o1/video-to-video/edit', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: [], ...sourceVideo, promptMaxLength: 2500 },
-  { key: 'kling-o3-edit', id: 'fal-ai/kling-video/o3/pro/video-to-video/edit', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: [], ...sourceVideo, promptMaxLength: 2500 },
-  { key: 'kling-v4-edit', id: 'kling/v4/video-to-video/edit', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: ['720p', '1080p'], ...ratios(['16:9', '21:9']), promptMaxLength: 26000 },
-  { key: 'kling-v4-flash-edit', id: 'kling/v4/flash/video-to-video', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: ['720p'], ...sourceVideo, promptMaxLength: 26000 },
-  { key: 'kling-v4-reference', id: 'kling/v4/reference-to-video', mode: 'P2V', referenceStrategy: 'elements', resolutionOptions: ['720p', '1080p'], ...ratios(['16:9', '21:9']), promptMaxLength: 26000 },
-  { key: 'kling-o3-reference', id: 'fal-ai/kling-video/o3/pro/reference-to-video', mode: 'P2V', referenceStrategy: 'elements', resolutionOptions: [], ...ratios(), promptMaxLength: 2500 },
-  { key: 'kling-v4-flash-reference', id: 'kling/v4/flash/reference-to-video', mode: 'P2V', referenceStrategy: 'elements', resolutionOptions: ['720p'], ...ratios(['16:9', '21:9']), promptMaxLength: 26000 },
-  { key: 'h3-reference', id: 'minimax/h3-max/reference-to-video', mode: 'P2V', referenceStrategy: 'flat', resolutionOptions: ['768P', '1080P'], ...ratios(['16:9', '4:3', '21:9'], ['9:16', '3:4']), promptMaxLength: 50000 },
-  { key: 'vidu-q4-reference', id: 'fal-ai/vidu/q4/reference-to-video', mode: 'P2V', referenceStrategy: 'flat', resolutionOptions: ['720p', '1080p'], ...ratios(['16:9', '4:3'], ['9:16', '3:4']), promptMaxLength: 5000 },
-  { key: 'gemini-omni-reference', id: 'google/gemini-omni-flash/v1.2/reference-to-video', mode: 'P2V', referenceStrategy: 'flat', resolutionOptions: ['720p', '1080p'], ...ratios(), promptMaxLength: 20000 },
+  { key: 'recast', capabilities: {"peopleLimit":4,"photosPerPerson":1}, id: 'minimax/h3-max/recast', mode: 'V2V', referenceStrategy: 'recast', resolutionOptions: ['768P', '1080P'], ...sourceVideo, promptMaxLength: 2000 },
+  { key: 'kling-o1-edit', capabilities: {"combinedReferenceLimit":4,"photosPerElement":{"min":2,"max":4}}, id: 'fal-ai/kling-video/o1/video-to-video/edit', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: [], ...sourceVideo, promptMaxLength: 2500 },
+  { key: 'kling-o3-edit', capabilities: {"combinedReferenceLimit":4,"photosPerElement":{"min":2,"max":4}}, id: 'fal-ai/kling-video/o3/pro/video-to-video/edit', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: [], ...sourceVideo, promptMaxLength: 2500 },
+  { key: 'kling-v4-edit', capabilities: {"elementLimit":7,"ordinaryImageLimit":10,"assetLimit":15,"photosPerElement":{"min":2,"max":4}}, id: 'kling/v4/video-to-video/edit', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: ['720p', '1080p'], ...ratios(['16:9', '21:9']), promptMaxLength: 26000 },
+  { key: 'kling-v4-flash-edit', capabilities: {"elementLimit":7,"ordinaryImageLimit":10,"assetLimit":15,"photosPerElement":{"min":2,"max":4}}, id: 'kling/v4/flash/video-to-video', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: ['720p'], ...sourceVideo, promptMaxLength: 26000 },
+  { key: 'kling-v4-reference', capabilities: {"elementLimit":7,"ordinaryImageLimit":10,"assetLimit":15,"photosPerElement":{"min":2,"max":4}}, id: 'kling/v4/reference-to-video', mode: 'P2V', referenceStrategy: 'elements', resolutionOptions: ['720p', '1080p'], ...ratios(['16:9', '21:9']), promptMaxLength: 26000 },
+  { key: 'kling-o3-reference', capabilities: {"combinedReferenceLimit":7,"photosPerElement":{"min":2,"max":4}}, id: 'fal-ai/kling-video/o3/pro/reference-to-video', mode: 'P2V', referenceStrategy: 'elements', resolutionOptions: [], ...ratios(), promptMaxLength: 2500 },
+  { key: 'kling-v4-flash-reference', capabilities: {"elementLimit":7,"ordinaryImageLimit":10,"assetLimit":15,"photosPerElement":{"min":2,"max":4}}, id: 'kling/v4/flash/reference-to-video', mode: 'P2V', referenceStrategy: 'elements', resolutionOptions: ['720p'], ...ratios(['16:9', '21:9']), promptMaxLength: 26000 },
+  { key: 'h3-reference', capabilities: {"ordinaryImageLimit":9}, id: 'minimax/h3-max/reference-to-video', mode: 'P2V', referenceStrategy: 'flat', resolutionOptions: ['768P', '1080P'], ...ratios(['16:9', '4:3', '21:9'], ['9:16', '3:4']), promptMaxLength: 50000 },
+  { key: 'vidu-q4-reference', capabilities: {"ordinaryImageLimit":12}, id: 'fal-ai/vidu/q4/reference-to-video', mode: 'P2V', referenceStrategy: 'flat', resolutionOptions: ['720p', '1080p'], ...ratios(['16:9', '4:3'], ['9:16', '3:4']), promptMaxLength: 5000 },
+  { key: 'gemini-omni-reference', capabilities: {"ordinaryImageLimit":10}, id: 'google/gemini-omni-flash/v1.2/reference-to-video', mode: 'P2V', referenceStrategy: 'flat', resolutionOptions: ['720p', '1080p'], ...ratios(), promptMaxLength: 20000 },
 ];
 
 const sequence = (count, start = 0) => Array.from({ length: count }, (_, i) => i + start);

@@ -1,0 +1,166 @@
+{
+  "id": "TASK-017-T2-FT-001-W14",
+  "title": "Подключить последовательный редактор, готовые промпты и отдельные тестовые JPEG",
+  "status": "done",
+  "wave": "W14",
+  "feature": "FT-001",
+  "reqs": [
+    "REQ-002",
+    "REQ-018",
+    "REQ-019",
+    "REQ-020",
+    "REQ-021"
+  ],
+  "depends_on": [
+    "TASK-016-T2-FT-001-W13"
+  ],
+  "touched_files": [
+    "src/client/cloud/App.svelte",
+    "src/client/cloud/SlotTest.svelte",
+    "src/shared/scenarios.ts",
+    "src/server/app.ts",
+    "src/server/scenarios/",
+    "src/server/sessions/index.ts",
+    "tests/editor.spec.ts",
+    "tests/slot-test.test.ts",
+    "tests/simulation.test.ts",
+    "tests/cleanup.test.ts"
+  ],
+  "tier": "T2",
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "slot-test-api",
+      "command": "node --import tsx --test tests/slot-test-plan.test.ts tests/slot-test.test.ts tests/simulation.test.ts tests/cleanup.test.ts",
+      "required": true
+    },
+    {
+      "name": "editor-browser",
+      "command": "npm run test:ui -- tests/editor.spec.ts",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-16",
+      "stage": "implementation",
+      "result": "PASS",
+      "summary": "Последовательный SlotEditor с lock/unlock, сохранением совместимых верхних настроек и V2V source, общими API capacities, готовыми prompt assets и защитой от stale fetch/manual overwrite. Отдельные ordered testPhotoIds проходят strict validation, snapshot, копирование и cleanup; legacy tests сохраняют прежний retry. Media-ID кеш различает людей/ракурсы и групповые позиции, не отправляет неполный/лишний набор. SlotTest и последнее реальное видео сохраняются при сбросе setup.",
+      "checks": [
+        "npm run check: PASS, Svelte 0 errors / 0 warnings; TypeScript PASS. npm run build: PASS.",
+        "Новые distinct-source/static tests вместе с legacy slot-test, simulation и cleanup: PASS 15/15. Проверены разные JPEG по позициям, partial retry со старым snapshot после замены, запрет incomplete/duplicate/excess/non-JPEG, group positions, отсутствие test sources в обычной съёмке и сохранение/очистка media.",
+        "Prompt asset HTTP выборка: непустой H3 и нулевой Recast возвращаются verbatim; Cache-Control no-cache/ETag/304, отсутствующий файл404. Генератор не запускался, 813 assets не сканировались.",
+        "Editor Chromium: PASS 3/3, 23с. Проверены последовательность, 1/2/group, реальные capacities, disabled options, lock/reset, совместимые Vidu→Gemini 2×3/1080p/6с и несовместимый Recast K, editable empty Recast, V2V draft/source persistence.",
+        "Browser: ручной prompt сохранён при add/replace/remove references, включая неизменный count; поздние ответы не затирают manual/new setup; HTTP failure блокирует stale save до retry.",
+        "Browser: 4 разных JPEG сохранены в точном порядке, group cache отделён; lost response после принятого POST/reload использует тот же request ID. Simulated и controlled real-ready, фактическое воспроизведение MP4, сохранение last-ready при unlock/failure/simulation, неизвестные legacy времена и unchanged receive opened_at.",
+        "Просмотрены desktop/mobile screenshots; выбранные значения видимы, overflow на375px отсутствует, отдельные тестовые кадры и плеер помещаются в колонку.",
+        "Metadata-only parity: 11 capability objects совпадают с literals офлайн-генератора; captureVariants не менялись, prompt assets не изменены.",
+        "Дополнительная общая проверка владельцем /root: npm test PASS88/88 (65 top-level), /tmp/reelme-task017-all-tests.log; git diff --check PASS; ссылки matrix.md в headers всех изменённых/новых исходников PASS."
+      ],
+      "evidence": [
+        ".tasks/TASK-017-T2-FT-001-W14/check.log",
+        ".tasks/TASK-017-T2-FT-001-W14/build.log",
+        ".tasks/TASK-017-T2-FT-001-W14/unit-api.log",
+        ".tasks/TASK-017-T2-FT-001-W14/browser-retry.log",
+        ".tasks/TASK-017-T2-FT-001-W14/editor-observations.json",
+        ".tasks/TASK-017-T2-FT-001-W14/metadata-parity.log",
+        ".tasks/TASK-017-T2-FT-001-W14/editor-desktop.png",
+        ".tasks/TASK-017-T2-FT-001-W14/editor-mobile.png",
+        ".tasks/TASK-017-T2-FT-001-W14/slot-test-ready-desktop.png",
+        ".tasks/TASK-017-T2-FT-001-W14/slot-test-ready-mobile.png"
+      ],
+      "limitations": [
+        "Первый browser run: 2 из3 тестов упали из-за преждевременных проверок helper login/openTests. Исправлены ожидания завершённого экрана; assertions не ослаблены. Также исправлен реальный string/number mismatch выбора K, затем повтор3/3 PASS.",
+        "V2V upload остаётся прежним до TASK-018; фиксированный импорт/админские образцы и новые camera controls TASK-019 не реализуются в этом объёме. Это явные следующие задачи, не stubs нового API.",
+        "Проверки изолированные и локальные; живой fal, SMTP, аппаратная камера, production/deploy/commit не выполнялись."
+      ],
+      "handoff": "Готово к closure владельцем после его независимого UI smoke. По указанию оператора остановиться после TASK-017; TASK-018/019 не начинать."
+    },
+    {
+      "date": "2026-11-16",
+      "stage": "closure",
+      "result": "PASS",
+      "summary": "Root: общий npm test 88/88; независимый UI smoke 1/1 на 1440/375 px без ошибок браузера/overflow. Исправлен только пробел между предложениями budget-подсказки, повторный check 0 errors/0 warnings. Связанные исходники имеют ссылку на матрицу в шапках, prompt assets не изменены. TASK-017 завершена; по указанию оператора остановиться для коммита, TASK-018/019 не начаты.",
+      "evidence": [
+        ".tasks/TASK-017-T2-FT-001-W14/ui-smoke/report.md",
+        "tests/editor.spec.ts",
+        "tests/slot-test.test.ts"
+      ],
+      "limitations": [
+        "Реальные fal/SMTP/камера не запускались; template import/админские образцы и новое управление камерой остаются TASK-018/019."
+      ]
+    }
+  ],
+  "docs": [
+    ".memory-bank/analysis/slot-setup-plan.md",
+    "docs/slot-setup/matrix.md"
+  ],
+  "evidence_required": [
+    "Browser evidence на узком и широком экране и API assertions для distinct JPEG/permissions/idempotency/legacy/cleanup.",
+    "Проверки выбранных prompt URL/текста и гонок; подтверждение сохранности manual prompt и last-ready результата."
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-001-scenarios.md#FT-001-AC-001",
+    ".memory-bank/features/FT-001-scenarios.md#FT-001-AC-002",
+    ".memory-bank/features/FT-001-scenarios.md#FT-001-AC-004",
+    ".memory-bank/features/FT-006-slot-testing.md#FT-006-AC-001",
+    ".memory-bank/features/FT-006-slot-testing.md#FT-006-AC-003",
+    ".memory-bank/features/FT-006-slot-testing.md#FT-006-AC-004"
+  ],
+  "normative_inputs": [
+    ".memory-bank/constitution.md",
+    "docs/slot-setup/matrix.md",
+    ".memory-bank/analysis/slot-setup-plan.md",
+    ".memory-bank/contracts/http-api.md",
+    ".memory-bank/domains/core-domain.md",
+    ".memory-bank/states/lifecycle-map.md"
+  ],
+  "purpose": "Дать администратору согласованный путь настройки без потери ручного текста и без подмены отдельных кадров одним fixture.",
+  "success_outcome": "Редактор ведёт от модели/людей/кадров/видео к фиксации, материалам, целому готовому prompt и тестам. Каждый выбранный кадр теста получает собственный JPEG; старые результаты и запущенные тесты сохраняются при сбросах формы.",
+  "constraints": [
+    "Использовать общую машинную матрицу src/shared/slot-setup-matrix.json; не дублировать формулы лимитов в UI/server. Принятые API-трактовки не ужесточать для перестраховки.",
+    "Проверки только представительной выборки setup/промптов и существенных границ. Не перебирать все 813 файлов, не запускать check:slot-prompts как обязательную проверку.",
+    "Новые или существенно изменённые модули, использующие матрицу, ссылаются на docs/slot-setup/matrix.md в Module contract. Актуализировать затронутые канонические контракты вместе с реализацией.",
+    "Владеет последовательностью/сбросами/промптами FT-001 AC-001/002, правами AC-004 и новой панелью/наборами FT-006 AC-001/003; по AC-004 FT-006 сохраняет существующий last-ready результат при reset. Фиксированная привязка видео и отдельная страница поз — TASK-018.",
+    "Фиксация блокирует верхние настройки; разблокировка очищает нижние поля и ручной prompt, сохраняя тестовый кеш и карточку слота. При неравном количестве кадров двух людей запретить фиксацию с текстом «выберите меньшее количество фотографий во время фотосессии.»",
+    "Вместимость камеры, Elements и дополнительных references выводится раздельно. Допустимые выходные параметры и остаток берутся из общего setup. Не включать недоступный resolution/ratio и не преобразовывать изображение для имитации поддержки.",
+    "selectSlotPrompt выбирает готовый файл по фактическому числу references; fetch.response.text загружает весь текст без подстановок/Markdown/LLM. Раздать /slot-prompts/ из clientDir с ревалидацией кеша. Различать HTTP-ошибку и корректный пустой Recast.",
+    "Верхний setup сбрасывает ручной текст даже при том же имени prompt-файла. Любое изменение/замена/удаление references сохраняет ручной текст и напоминает проверить ссылки, включая неизменное количество. Шаблонный текст можно обновить; поздний fetch не затирает новый setup или ручную правку.",
+    "Recast показывает «РЕКОМЕНДУЕТСЯ ОСТАВИТЬ ПРОМПТ ПУСТЫМ!»; поле редактируемо и необязательно. «Тесты» раскрывает панель; simulateGeneration остаётся отдельной настройкой.",
+    "Сохранённые testPhotoIds содержат только активный набор JPEG в порядке posePlan; UI-кеш назначает их по человеку/ракурсу либо группе. Кеш переживает смену setup, но группы/индивиды не смешиваются; только используемые назначения отправляются. JPEG/base64 не хранить в localStorage. Без автоматического размножения одного файла на позиции.",
+    "Ручной запуск требует полного сохранённого набора и фиксирует source IDs в snapshot вне generation. Копировать каждый JPEG на свою позицию; повтор startRequestId продолжает принятую сессию. Старый одиночный fixture не заполняет новый многокадровый план; незавершённый старый тест продолжает прежний snapshot.",
+    "Добавить testPhotoIds в materialIds/cleanup для слотов и snapshots; неизменные media IDs и accepted test sessions переживают замену fixture/удаление другого мероприятия.",
+    "Для UI возможностей добавить capabilities metadata в SlotSetupModel, исходник офлайн-генератора и машинный JSON: реальные API maxima/общие бюджеты по матрице, без изменения captureVariants и без запуска генератора/проверки всех prompt assets. Максимум Elements нельзя выводить из двух поддержанных индивидуальных участников UI."
+  ],
+  "invariants": [
+    "Ни кеш другой группы, ни лишние сохранённые JPEG не расширяют текущий модельный набор.",
+    "Поздняя загрузка prompt не уничтожает авторский текст; сброс редактора не удаляет last-ready и active test.",
+    "Тестовые материалы не попадают в обычную camera-session или публичный каталог."
+  ],
+  "verification_targets": [
+    "Browser: порядок шагов, 1/2/3+, неравный набор, lock/unlock, типовой и ручной prompt, замена reference с тем же count, гонка fetch/manual edit, Recast empty и HTTP failure.",
+    "Browser/API: отдельные JPEG в двух наборах и группе; incomplete/invalid отклонены, полный набор создаёт simulated/controlled real-ready; startRequestId повторяем и права сохранены.",
+    "Проверить сохранность тестового кеша при reset, старого результата/active test, legacy retry и используемых другими snapshots медиа. Проверить prompt HTTP 200, пустой файл и cache headers."
+  ],
+  "anti_goals": [
+    "Перегенерация каталога 813 prompts, сериализация JPEG в Web Storage, отдельный cache-service, обязательное восстановление после закрытия браузера."
+  ],
+  "runtime_context": {
+    "forbidden_scope": [
+      "linux_digiCamControl/",
+      "Commit/push/deploy, production-данные, реальные платные fal-вызовы и SMTP-отправки"
+    ],
+    "stop_conditions": [
+      "Необходимость изменить принятое продуктовое поведение или выполнить неавторизованное внешнее действие: остановить только зависимую часть и сообщить владельцу."
+    ]
+  }
+}

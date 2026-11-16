@@ -1,0 +1,109 @@
+{
+  "id": "TASK-019-T2-FT-002-W16",
+  "title": "Завершить управляемую фотосессию с паузой, пересъёмками и явной передачей",
+  "status": "planned",
+  "wave": "W16",
+  "feature": "FT-002",
+  "reqs": [
+    "REQ-001",
+    "REQ-004",
+    "REQ-005",
+    "REQ-006"
+  ],
+  "depends_on": [
+    "TASK-018-T2-FT-001-W15"
+  ],
+  "touched_files": [
+    "src/client/capture/",
+    "src/shared/capture.ts",
+    "tests/camera.test.ts",
+    "tests/camera.spec.ts",
+    "tests/capture.spec.ts",
+    "tests/transfer.spec.ts",
+    "tests/transfer.test.ts"
+  ],
+  "tier": "T2",
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "camera-transfer-unit",
+      "command": "node --import tsx --test tests/camera.test.ts tests/transfer.test.ts",
+      "required": true
+    },
+    {
+      "name": "capture-browser",
+      "command": "npm run test:ui -- tests/camera.spec.ts tests/capture.spec.ts tests/transfer.spec.ts",
+      "required": true
+    }
+  ],
+  "verify": [],
+  "docs": [
+    ".memory-bank/analysis/slot-setup-plan.md",
+    "docs/slot-setup/matrix.md"
+  ],
+  "evidence_required": [
+    "Browser assertions на счётчики shutter/upload/finalize, порядок/байты кадров и состояния кнопок; скриншоты узкого/широкого экрана.",
+    "Подтверждённые camera/transfer error+retry, partial resume и две независимые сессии; явное ограничение: аппаратная камера и живой fal не проверены."
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-002-photo-session.md#FT-002-AC-001",
+    ".memory-bank/features/FT-002-photo-session.md#FT-002-AC-002",
+    ".memory-bank/features/FT-002-photo-session.md#FT-002-AC-003"
+  ],
+  "normative_inputs": [
+    ".memory-bank/constitution.md",
+    "docs/slot-setup/matrix.md",
+    ".memory-bank/analysis/slot-setup-plan.md",
+    ".memory-bank/contracts/http-api.md",
+    ".memory-bank/domains/core-domain.md",
+    ".memory-bank/states/lifecycle-map.md"
+  ],
+  "purpose": "Позволить оператору подготовить людей и принять окончательную серию до отправки, сохранив надёжный retry передачи.",
+  "success_outcome": "Камера проходит сохранённый план людей/группы с образцом во время countdown; Pause/Continue, Restart и пересъёмка последнего работают до явного завершения. Передача начинается только по кнопке и повторяется без новых снимков.",
+  "constraints": [
+    "Использовать общую машинную матрицу src/shared/slot-setup-matrix.json; не дублировать формулы лимитов в UI/server. Принятые API-трактовки не ужесточать для перестраховки.",
+    "Проверки только представительной выборки setup/промптов и существенных границ. Не перебирать все 813 файлов, не запускать check:slot-prompts как обязательную проверку.",
+    "Новые или существенно изменённые модули, использующие матрицу, ссылаются на docs/slot-setup/matrix.md в Module contract. Актуализировать затронутые канонические контракты вместе с реализацией.",
+    "Владеет управлением съёмкой/отсчётом/образцом FT-002 AC-001, камерным и клиентским восстановлением AC-002 и завершением/следующим посетителем AC-003. План, серверный intake и загрузка образцов проверены зависимостями; сохранить их регрессии.",
+    "Перед вторым человеком ждать готовности; позиции индивидов последовательны, группа всегда использует пятый образец. Показывать образец во время всего 3–2–1; Live View зеркальный, JPEG неизменён, режим без превью сохранён.",
+    "Pause останавливает отсчёт; Continue начинает полные 3–2–1. Одновременно допускается только один camera.capture; во время shutter/ожидания JPEG нельзя второй спуск, retake/restart или изменение позиции.",
+    "Restart фотосессия очищает локальную серию и возвращает к первому кадру с ожиданием запуска. Перефоткать последнее заменяет последнюю завершённую позицию и сохраняет остальные, также ожидая готовности.",
+    "После последнего JPEG показать review; только «Завершить фотосессию» передаёт принятые Blobs в PhotoSession upload/finalize. До кнопки нет upload/submit, после неё нет локальной пересъёмки, доступен retry передачи тех же Blobs.",
+    "При восстановлении частично загруженной серии учитывать acceptedPoseIndices и сохранять безопасный путь дозавершения; не терять принятые позиции и не финализировать незаметно старые кадры после новой пересъёмки. Restart съёмки не равен retry загрузки.",
+    "Освобождать object URLs и отменять countdown при retake/restart/unmount; поздний таймер не запускает shutter после ухода. Номер выдаётся только после принятого finalize; следующий посетитель не ждёт видео.",
+    "Локальные browser-проверки используют управляемую камеру и реальный test backend. Аппаратная Windows/Canon/digiCamControl приёмка остаётся TASK-005; отсутствие её здесь не объявлять PASS.",
+    "Решение оператора 2026-11-16: KISS, без IndexedDB для JPEG. Повтор передачи работает из RAM; после reload при потере недостающих кадров явно остановить продолжение этой сессии. Допустим только небольшой маркер начала передачи, без байтов фото в Web Storage."
+  ],
+  "invariants": [
+    "До явного завершения все пересъёмки локальны; после начала передачи повтор не снимает новые JPEG.",
+    "Каждый полученный JPEG привязан к одной текущей позиции; поздние ответы не сдвигают чужую сессию.",
+    "Два посетителя имеют раздельные наборы/номера и могут проходить съёмку последовательно при незавершённой генерации первого."
+  ],
+  "verification_targets": [
+    "Управляемый browser: pause на 3/2/1 и full countdown continue; restart после нескольких фото; retake на границе участников и после последнего; ожидание второго человека; group и no-preview.",
+    "Удержать camera.capture в ожидании JPEG и проверить запрет второго shutter/retake/restart; уйти со страницы и проверить отсутствие позднего shutter.",
+    "До Finish assert нет photo upload/finalize; после Finish ошибка передачи/retry сохраняет исходные Blobs в текущей вкладке и не снимает снова. После reload принятые сервером позиции сохраняются; потеря недостающих локальных Blobs даёт явную остановку, без скрытой пересъёмки/finalize. Два последовательных посетителя.",
+    "Финальные npm run check, npm run build и затронутые unit/API/browser; узкий/широкий экран с одновременно видимыми образцом, отсчётом и контролами."
+  ],
+  "anti_goals": [
+    "Пересъёмка после начала передачи, новый протокол загрузки без необходимости, изменение digiCamControl, заявление о аппаратной приёмке по мокам."
+  ],
+  "runtime_context": {
+    "forbidden_scope": [
+      "linux_digiCamControl/",
+      "Commit/push/deploy, production-данные, реальные платные fal-вызовы и SMTP-отправки"
+    ],
+    "stop_conditions": [
+      "Необходимость изменить принятое продуктовое поведение или выполнить неавторизованное внешнее действие: остановить только зависимую часть и сообщить владельцу."
+    ]
+  }
+}

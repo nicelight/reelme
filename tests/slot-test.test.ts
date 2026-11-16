@@ -1,4 +1,4 @@
-/** Manual slot-test acceptance uses ordinary admin/capture APIs, real private
+/** Legacy manual slot-test acceptance uses ordinary admin/capture APIs, real private
  * files/SQLite and injected provider transport. No camera or paid calls. */
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
@@ -6,13 +6,13 @@ import { randomUUID } from 'node:crypto';
 import { readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp from 'sharp';
-import { fixture, imageBytes, multipart, videoBytes } from './helpers.js';
+import { fixture, imageBytes, multipart, videoBytes, seedLegacySlot } from './helpers.js';
 import { openDatabase } from '../src/server/db.js';
 import { readSession } from '../src/server/sessions/index.js';
 import { createGenerationWorker, type GenerationOptions } from '../src/server/sessions/generation.js';
 import { publishReady } from '../src/server/sessions/receive.js';
 import { createEventCleanup } from '../src/server/sessions/cleanup.js';
-import type { SlotInput, Slot } from '../src/shared/scenarios.js';
+import { normalizeSlotForEditor, type SlotInput } from '../src/shared/scenarios.js';
 import type { CaptureStatus } from '../src/shared/capture.js';
 const installation = { authorization: `Bearer ${'a'.repeat(43)}` };
 async function setup(t: TestContext) {
@@ -25,8 +25,7 @@ async function setup(t: TestContext) {
   const input: SlotInput = { description: 'Ручной тест сюжета', visible: false, simulateGeneration: true, testPhotoId: photo.id,
     thumbnailId: thumb.id, mode: 'P2V', model: 'kling/v4/reference-to-video', referenceIds: [], prompt: '@Element1 walks', resolution: '720p', duration: 3 };
   async function save(value: SlotInput = input, id?: string) {
-    const res = await f.app.inject({ method: id ? 'PUT' : 'POST', url: `/api/admin/slots${id ? '/' + id : ''}`, headers: admin, payload: value });
-    assert.equal(res.statusCode, id ? 200 : 201, res.body); return res.json<Slot>();
+    return seedLegacySlot(db, value, id);
   }
   const send = (slotId: string, startRequestId = randomUUID()) => f.app.inject({ method: 'POST', url: `/api/admin/slots/${slotId}/test-generations`, headers: admin, payload: { startRequestId } });
   const get = async (slotId: string, id: string) => (await f.app.inject({ url: `/api/admin/slots/${slotId}/sessions/${id}`, headers: admin })).json<CaptureStatus>();
@@ -35,7 +34,7 @@ async function setup(t: TestContext) {
   return { f, db, admin, operator, jpeg, photo, thumb, input, save, send, get, photos, worker };
 }
 
-test('manual hidden-slot tests own 1/4 photos, snapshot-only fixture and idempotent real/simulated processing; camera stays separate', async t => {
+test('legacy manual hidden-slot tests own 1/4 photos, snapshot-only fixture and idempotent real/simulated processing; camera stays separate', async t => {
   const h = await setup(t); const { f, db } = h;
   const slot = await h.save(); const key = randomUUID();
   const response = await h.send(slot.id, key); assert.equal(response.statusCode, 201, response.body);
@@ -80,7 +79,7 @@ test('manual hidden-slot tests own 1/4 photos, snapshot-only fixture and idempot
   assert.equal((await f.app.inject({ url: `/api/catalog/${slot.id}/media/${h.photo.id}`, headers: installation })).statusCode, 404);
 });
 
-test('manual request retry, concurrent preparation and partial restart retain the original fixture; preparation failure is terminal', async t => {
+test('legacy manual request retry, concurrent preparation and partial restart retain the original fixture; preparation failure is terminal', async t => {
   const h = await setup(t); const { f, db } = h; const slot = await h.save(); const key = randomUUID();
   const results = await Promise.all([h.send(slot.id, key), h.send(slot.id, key)]);
   assert.deepEqual(results.map(r => r.statusCode).sort(), [201,409]);
@@ -135,7 +134,7 @@ test('test settings and routes validate JPEG/size, saved slot/body, account/orig
   assert.equal((await h.send(randomUUID())).statusCode, 404);
   for (const bad of [h.thumb.id, h.photo.id]) {
     if (bad === h.photo.id) db.prepare('UPDATE slot_media SET size=? WHERE id=?').run(20 * 1024 * 1024 + 1, bad);
-    const saved = await f.app.inject({ method: 'PUT', url: `/api/admin/slots/${slot.id}`, headers: h.admin, payload: { ...h.input, testPhotoId: bad } });
+    const saved = await f.app.inject({ method: 'PUT', url: `/api/admin/slots/${slot.id}`, headers: h.admin, payload: { ...normalizeSlotForEditor(h.input), testPhotoId: bad } });
     assert.equal(saved.statusCode, 400); assert.equal(saved.json().code, 'INVALID_PHOTO');
   }
   for (const [bytes, mime] of [[Buffer.from('bad jpeg'), 'image/jpeg'], [await imageBytes(), 'image/jpeg']] as const) {

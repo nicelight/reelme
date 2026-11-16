@@ -1,0 +1,2 @@
+PASS: 11 model metadata objects match generator literals; captureVariants unchanged; prompt assets untouched.
+Generator not executed; no prompt-file enumeration or content scan.

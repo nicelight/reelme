@@ -1,5 +1,5 @@
 <script lang="ts">
-  /** Manual admin test control. Only an explicit click starts work. Keep an
+  /** Module contract: manual admin test control. Source: docs/slot-setup/matrix.md. Only an explicit click starts work. Keep an
    * uncertain request ID across retry/reload; polling reads a known session and
    * never generates. One sequential polling loop refreshes test status and the last
    * retained real video; it stops at the terminal test. The server owns preparation. */
@@ -7,8 +7,8 @@
   import type { LastSlotVideo } from '../../shared/scenarios';
   import type { CaptureStatus, SessionState } from '../../shared/capture';
   import { api, ApiError } from './api';
-  let { slotId, hasPhoto, dirty, disabled, onError }: {
-    slotId: string | null; hasPhoto: boolean; dirty: boolean; disabled: boolean; onError: (error: unknown) => void;
+  let { slotId, hasPhotos, dirty, disabled, showControls = true, onError }: {
+    slotId: string | null; hasPhotos: boolean; dirty: boolean; disabled: boolean; showControls?: boolean; onError: (error: unknown) => void;
   } = $props();
   let posting = $state(false);
   let requestId = $state<string | null>(null);
@@ -69,7 +69,7 @@
     return () => { stopped = true; clearTimeout(timer); };
   });
   async function send() {
-    if (!slotId || disabled || dirty || !hasPhoto || posting) return;
+    if (!slotId || disabled || dirty || !hasPhotos || posting) return;
     posting = true; error = '';
     requestId ??= crypto.randomUUID(); remember();
     try {
@@ -85,10 +85,12 @@
 </script>
 
 <div class="slot-test">
-  <button type="button" class="quiet" disabled={disabled || posting || !slotId || dirty || !hasPhoto} onclick={send}>{posting ? 'Подготавливаем тест…' : requestId ? 'Повторить запрос тестовой генерации' : 'Отправить тестовую генерацию'}</button>
-  {#if !slotId || dirty}<p class="hint">Сначала сохраните сюжет и тестовую фотографию.</p>
-  {:else if !hasPhoto}<p class="hint">Добавьте и сохраните тестовую фотографию JPEG.</p>{/if}
+  <div hidden={!showControls}>
+  <button type="button" class="quiet" disabled={disabled || posting || !slotId || dirty || !hasPhotos} onclick={send}>{posting ? 'Подготавливаем тест…' : requestId ? 'Повторить запрос тестовой генерации' : 'Отправить тестовую генерацию'}</button>
+  {#if !slotId || dirty}<p class="hint">Сначала сохраните сюжет и полный набор тестовых фотографий.</p>
+  {:else if !hasPhotos}<p class="hint">Добавьте и сохраните отдельный JPEG для каждого кадра.</p>{/if}
   {#if requestId && !posting}<p class="hint">Ответ на прошлый запуск не подтверждён. Повтор использует тот же запрос.</p>{/if}
+  </div>
   {#if status}
     <div aria-live="polite" class="test-result">
       <strong>Тест № {status.number} · {labels[status.state]}</strong>
@@ -112,6 +114,7 @@
   </section>
 </div>
 <style>
+  [hidden] { display:none; }
   .slot-test { margin-top:20px; }
   .test-result { margin-top:16px; padding:16px; background:var(--surface); border:1px solid var(--line); border-radius:8px; }
   .test-result p { margin-top:8px; }

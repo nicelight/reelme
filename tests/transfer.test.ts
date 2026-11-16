@@ -21,6 +21,7 @@ async function setup(f: Fixture) {
   const ids: string[] = [];
   for (const count of [1, 4]) {
     const response = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: { cookie, origin: f.config.origin }, payload: {
+      participants: 1, photosPerParticipant: count, orientation: 'landscape', ...(count === 4 ? { aspectRatio: '16:9' } : {}),
       description: `Сюжет ${count} фото`, visible: true, thumbnailId: thumbnail.id, referenceIds: [],
       ...(count === 1 ? { mode: 'V2V', model: 'minimax/h3-max/recast', videoId: clip.id, resolution: '768P', recastShotsConfirmed: true }
         : { mode: 'P2V', model: 'kling/v4/reference-to-video', resolution: '720p', duration: 5, prompt: 'Visitor @Element1' }),

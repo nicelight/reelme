@@ -1,7 +1,8 @@
 /** Module contract: Scenarios removes only candidate materials no longer referenced
  * by a current slot or another saved session. Sessions supplies the event being
  * deleted; this module reads snapshots but never writes session-owned records.
- * Synchronous unlink/check/delete prevents a slot save interleaving with unlink. */
+ * Synchronous unlink/check/delete prevents a slot save interleaving with unlink.
+ * Source: docs/slot-setup/matrix.md; active test arrays and snapshot sources are retained. */
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DB } from '../db.js';
@@ -9,7 +10,7 @@ import type { SlotSnapshot } from '../../shared/capture.js';
 import type { Slot } from '../../shared/scenarios.js';
 export function materialIds(value: Slot | SlotSnapshot): string[] {
   const generation = 'generation' in value ? value.generation : value;
-  return [value.thumbnailId, value.demoId, value.testPhotoId, generation.videoId, ...(generation.referenceIds ?? [])].filter((id): id is string => !!id);
+  return [value.thumbnailId, value.demoId, value.testPhotoId, ...(value.testPhotoIds ?? []), generation.videoId, ...(generation.referenceIds ?? [])].filter((id): id is string => !!id);
 }
 export function removeUnusedMaterials(db: DB, dataDir: string, candidates: string[], deletingDate: string) {
   const used = new Set<string>();

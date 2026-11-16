@@ -1,6 +1,7 @@
 /** Module contract: composes Fastify, Access, Scenarios and Sessions with private storage.
  * Public assets and scoped provider capabilities are served; capture-loader reads the current manifest
- * and imports cloud assets without changing localhost origin. No device APIs here.
+ * and imports cloud assets without changing localhost origin. Stable prompt text assets
+ * revalidate on every reuse. Source: docs/slot-setup/matrix.md. No device APIs here.
  */
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
@@ -78,6 +79,8 @@ export async function createApp(config: Config, options: { now?: () => number; l
     app.addHook('onClose', async () => { await worker.stop(); });
   }
   await app.register(fastifyStatic, { root: join(config.clientDir, 'assets'), prefix: '/assets/', decorateReply: false, immutable: true, maxAge: '1y', index: false });
+  // Stable prompt filenames must revalidate; empty Recast files are valid assets.
+  await app.register(fastifyStatic, { root: join(config.clientDir, 'slot-prompts'), prefix: '/slot-prompts/', decorateReply: false, immutable: false, maxAge: 0, index: false, setHeaders: response => { response.header('Cache-Control', 'no-cache'); } });
   app.get('/', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
   app.get('/admin', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
   app.get('/capture-loader.js', async (_request, reply) => {

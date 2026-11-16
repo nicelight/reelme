@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp from 'sharp';
-import { fixture, imageBytes, videoBytes } from './helpers.js';
+import { fixture, imageBytes, videoBytes, seedLegacySlot } from './helpers.js';
 import { openDatabase } from '../src/server/db.js';
 import { createGenerationWorker, type GenerationOptions } from '../src/server/sessions/generation.js';
 import { publishReady } from '../src/server/sessions/receive.js';
@@ -21,8 +21,8 @@ async function setup(t: TestContext) {
   const bytes = await videoBytes(f.root, 1);
   let now = Date.UTC(2026,0,1,1);
   async function slot(simulateGeneration = false) {
-    const res = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: admin, payload: { ...input, simulateGeneration } });
-    assert.equal(res.statusCode, 201, res.body); return res.json().id as string;
+    // Retained results deliberately include still-supported raw legacy slots.
+    return seedLegacySlot(db, { ...input, simulateGeneration }).id;
   }
   async function start(id: string) {
     const res = await f.app.inject({ method: 'POST', url: `/api/admin/slots/${id}/test-generations`, headers: admin, payload: { startRequestId: randomUUID() } });
@@ -52,7 +52,7 @@ test('submitted/ready times follow actual retry, confirmed-ID restart, queue/dow
   h.setTime(base + 90_000); await publishReady(h.db, h.f.config.dataDir, id, () => h.now);
   assert.equal(h.times(id).ready_at, base + 30_000);
   // Same slot, new simulated snapshot: neither success nor its timestamps may overwrite the real result.
-  assert.equal((await h.f.app.inject({ method: 'PUT', url: `/api/admin/slots/${slot}`, headers: h.admin, payload: { ...h.input, simulateGeneration: true } })).statusCode, 200);
+  seedLegacySlot(h.db, { ...h.input, simulateGeneration: true }, slot);
   const simulated = await h.start(slot); let forbidden = 0;
   const reject = async (): Promise<never> => { forbidden++; throw new Error('Forbidden transport'); };
   w = h.worker({ client: { submit: reject, status: reject, result: reject }, download: reject }); await w.runOnce(); await w.stop();

@@ -1,9 +1,11 @@
-/** Module contract: installation-facing catalog/capture DTOs and the fixed photo
+/** Module contract: installation-facing catalog/capture DTOs and saved photo
  * plan. Catalog exposes visitor content, never editor prompts/provider settings.
  * Start identity/date/number/plan survive retries; state reflects current progress.
  * The number is displayed only after finalized confirmation (FT-002).
- * This module performs no camera operations. */
+ * This module performs no camera operations. Source: docs/slot-setup/matrix.md. */
 import type { Mode, SlotInput } from './scenarios.js';
+import type { SlotParticipants } from './slot-prompt-selection.js';
+import type { GuideNumber } from './slot-setup.js';
 export interface CatalogItem {
   id: string;
   description: string;
@@ -20,8 +22,12 @@ export interface CatalogPage {
 }
 export interface Pose {
   index: number;
-  key: 'front' | 'up-left' | 'down-right' | 'profile-left';
+  key: 'front' | 'up-left' | 'down-right' | 'profile-left' | 'smile' | 'look-down' | 'group';
   instruction: string;
+  /** Absent only on legacy session positions. */
+  participant?: SlotParticipants;
+  guideNumber?: GuideNumber;
+  guideMediaId?: string;
 }
 export const photoPoses: readonly Pose[] = [
   { index: 0, key: 'front', instruction: 'Смотрите прямо в объектив' },
@@ -51,10 +57,23 @@ export const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
 export interface SlotSnapshot {
   /** Only manual tests retain their immutable source for retry; never a model input. */
   testPhotoId?: string;
+  /** New manual tests keep one source per saved pose, in the same order. */
+  testPhotoIds?: string[];
   slotId: string;
   description: string;
   thumbnailId: string;
   demoId?: string;
-  expectedPhotos: 1 | 4;
-  generation: Omit<SlotInput, 'description' | 'thumbnailId' | 'visible' | 'demoId' | 'testPhotoId'>;
+  expectedPhotos: number;
+  /** Absence identifies a legacy snapshot; do not normalize it on read. */
+  posePlan?: Pose[];
+  generation: Omit<SlotInput, 'description' | 'thumbnailId' | 'visible' | 'demoId' | 'testPhotoId' | 'testPhotoIds'>;
+}
+/** Always return a copy; saved plans never follow later guide/catalog edits. */
+export function snapshotPosePlan(snapshot: SlotSnapshot): Pose[] {
+  if (snapshot.posePlan !== undefined) {
+    if (!Array.isArray(snapshot.posePlan) || snapshot.posePlan.length !== snapshot.expectedPhotos || snapshot.posePlan.length < 1 || snapshot.posePlan.length > 8 || snapshot.posePlan.some((pose, index) => pose.index !== index)) throw new Error('Invalid saved capture plan');
+    return snapshot.posePlan.map(pose => ({ ...pose }));
+  }
+  if (snapshot.expectedPhotos !== 1 && snapshot.expectedPhotos !== 4) throw new Error('Invalid legacy photo count');
+  return photoPoses.slice(0, snapshot.expectedPhotos).map(pose => ({ ...pose }));
 }

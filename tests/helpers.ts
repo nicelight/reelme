@@ -2,12 +2,21 @@ import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
 import { createApp } from '../src/server/app.js';
-import { openDatabase } from '../src/server/db.js';
+import { openDatabase, type DB } from '../src/server/db.js';
 import { digest, hashPassword } from '../src/server/access/credentials.js';
-import type { Media } from '../src/shared/scenarios.js';
+import { legacySlotSchema, type Media, type Slot } from '../src/shared/scenarios.js';
+
+/** Historical fixtures cannot be created through the new strict save contract.
+ * Seed only the old schema explicitly; application POST/PUT always remain strict. */
+export function seedLegacySlot(db: DB, input: unknown, id = randomUUID()): Slot {
+  const config = legacySlotSchema.parse(input);
+  db.prepare('INSERT INTO slots(id,config) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET config=excluded.config').run(id, JSON.stringify(config));
+  return { ...config, id };
+}
 
 export async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'reelme-test-'));

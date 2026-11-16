@@ -1,6 +1,7 @@
 <script lang="ts">
   /** Module contract: uploads a new immutable material and previews protected
-   * media. Replacing/removing a selection never deletes an existing file. */
+   * media. Replacing/removing a selection never deletes an existing file.
+   * Source: docs/slot-setup/matrix.md. Each test position uploads its own material. */
   import { api, mediaUrl } from './api';
   import { MAX_PHOTO_BYTES } from '../../shared/capture';
   import type { Media } from '../../shared/scenarios';

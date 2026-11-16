@@ -1,3 +1,5 @@
+/** Module contract: isolated browser servers and media fixtures; no real fal or camera.
+ * Landscape source supports the two-orientation editor. Source: docs/slot-setup/matrix.md. */
 import { test as base, expect } from '@playwright/test';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -46,7 +48,7 @@ export const test = base.extend<{ app: App; capturePort: number; runGeneration: 
     try {
       await sharp({ create: { width: 512, height: 512, channels: 3, background: '#d0b8ff' } }).png().toFile(image);
       await sharp(image).jpeg().toFile(jpeg);
-      execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=purple:s=512x512:d=5:r=24', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video], { stdio: 'pipe' });
+      execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=purple:s=640x360:d=5:r=24', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video], { stdio: 'pipe' });
       await new Promise<void>((resolve, reject) => { capture.once('error', reject); capture.listen(capturePort, resolve); });
       env.CAPTURE_TEST_ORIGIN = `http://localhost:${(capture.address() as import('node:net').AddressInfo).port}`;
       await start();

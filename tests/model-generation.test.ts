@@ -1,5 +1,8 @@
 /** Ten additional endpoints through the real worker/files, with a controlled
- * fal SDK HTTP transport. No external generation or CDN upload is performed. */
+ * fal SDK HTTP transport. No external generation or CDN upload is performed. Source: docs/slot-setup/matrix.md. */
+import { buildPosePlan, defaultSlotSetup } from '../src/shared/slot-setup.js';
+import { slotSetupMatrix } from '../src/shared/slot-prompt-selection.js';
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -79,7 +82,7 @@ test('ten model inputs, snapshot isolation and reusable P2V URLs yield decoded s
   }
   for (const endpoint of endpoints) {
     const model = models.find(model => model.id === endpoint)!;
-    const input: SlotInput = { description: model.name, visible: true, simulateGeneration: false, thumbnailId: referenceIds[0], mode: model.mode, model: endpoint,
+    const input: SlotInput = { ...defaultSlotSetup(model.id, model.mode), description: model.name, visible: true, simulateGeneration: false, thumbnailId: referenceIds[0], mode: model.mode, model: endpoint,
       referenceIds: model.mode === 'P2V' ? referenceIds : [], prompt: promptFor(endpoint),
       ...(model.resolutions.length ? { resolution: model.resolutions.at(-1) } : {}),
       ...(model.mode === 'P2V' ? { duration: 10, demoId: videoId } : { videoId }),
@@ -91,7 +94,7 @@ test('ten model inputs, snapshot isolation and reusable P2V URLs yield decoded s
   }
   const old = sessions.find(s => s.input.model === 'kling/v4/reference-to-video')!;
   await capture(old.slotId, old.input);
-  const changed: SlotInput = { ...old.input, model: 'google/gemini-omni-flash/v1.2/reference-to-video', prompt: 'Changed prompt <IMAGE_REF_0>', resolution: '4k', duration: 15, referenceIds: [referenceIds[2]] };
+  const changed: SlotInput = { ...old.input, model: 'google/gemini-omni-flash/v1.2/reference-to-video', prompt: 'Changed prompt <IMAGE_REF_0>', resolution: '1080p', duration: 15, referenceIds: [referenceIds[2]] };
   const update = await f.app.inject({ method: 'PUT', url: `/api/admin/slots/${old.slotId}`, headers: admin, payload: changed });
   assert.equal(update.statusCode, 200, update.body);
   await capture(old.slotId, changed);
@@ -167,16 +170,16 @@ test('ten model inputs, snapshot isolation and reusable P2V URLs yield decoded s
 test('model prompt limits reject oversized saved settings and incomplete photo sets', () => {
   for (const endpoint of endpoints) {
     const model = models.find(m => m.id === endpoint)!;
-    const input = { description: 'test', visible: true, simulateGeneration: false, thumbnailId: randomUUID(), mode: model.mode, model: endpoint, referenceIds: [], prompt: 'valid',
+    const input = { ...defaultSlotSetup(model.id, model.mode), description: 'test', visible: true, simulateGeneration: false, thumbnailId: randomUUID(), mode: model.mode, model: endpoint, referenceIds: [], prompt: 'valid',
       ...(model.resolutions.length ? { resolution: model.defaultResolution } : {}),
       ...(model.mode === 'P2V' ? { duration: 10 } : { videoId: randomUUID() }),
       ...(endpoint.startsWith('minimax/') ? { promptExpansionMode: 'disabled' as const } : {}),
     };
-    const limit = endpoint.startsWith('fal-ai/kling-video/') ? 2500 : endpoint.startsWith('fal-ai/vidu/') ? 5000 : 10000;
+    const limit = slotSetupMatrix.models.find(model => model.id === endpoint)!.promptMaxLength;
     assert.equal(slotSchema.safeParse({ ...input, prompt: 'x'.repeat(limit) }).success, true, endpoint);
     assert.equal(slotSchema.safeParse({ ...input, prompt: 'x'.repeat(limit + 1) }).success, false, endpoint);
     assert.equal(slotSchema.safeParse({ ...input, prompt: '' }).success, false, endpoint);
     const { description, thumbnailId, visible: _, ...generation } = slotSchema.parse(input);
-    assert.throws(() => buildModelInput({ slotId: randomUUID(), description, thumbnailId, expectedPhotos: 4, generation }, { photos: ['https://test/one'], video: 'https://test/video', references: [] }));
+    assert.throws(() => buildModelInput({ slotId: randomUUID(), description, thumbnailId, expectedPhotos: 4, posePlan: buildPosePlan(slotSchema.parse(input)), generation }, { photos: ['https://test/one'], video: 'https://test/video', references: [] }));
   }
 });

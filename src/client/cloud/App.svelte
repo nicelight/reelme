@@ -2,15 +2,15 @@
   /** Module contract: account entry, shared archive, operator display and admin-only scenario editor. Model
    * changes remove incompatible fields; API remains the authority for access,
    * validation and persistence. Manual tests call Sessions; camera and generation
-   * processing remain outside this editor. */
+   * processing remain outside this editor. Source: docs/slot-setup/matrix.md. */
   import { onMount } from 'svelte';
-  import { models, recastId, blankSlot, slotSchema, titleFrom, videoProblem } from '../../shared/scenarios';
-  import type { Media, Mode, Slot, SlotInput } from '../../shared/scenarios';
+  import { models, blankSlot, slotSchema, titleFrom, videoProblem } from '../../shared/scenarios';
+  import type { Media, Slot, SlotInput } from '../../shared/scenarios';
   import { api, ApiError, mediaUrl } from './api';
   import Archive from './Archive.svelte';
   import Display from './Display.svelte';
   import MediaField from './MediaField.svelte';
-  import SlotTest from './SlotTest.svelte';
+  import SlotEditor from './SlotEditor.svelte';
 
   let archive = $state(false);
   let ready = $state(false);
@@ -27,6 +27,8 @@
   let draft = $state<SlotInput>(blankSlot());
   let baseline = $state(JSON.stringify(blankSlot()));
   let videoMedia = $state<Media | undefined>();
+  let editorCanSave = $state(false);
+  const photoCaches = new Map<string, Record<string, string>>();
   let theme = $state<'light' | 'dark'>('light');
   const currentModel = $derived(models.find(model => model.id === draft.model)!);
   const dirty = $derived(JSON.stringify(draft) !== baseline);
@@ -64,13 +66,13 @@
     busy = true;
     try {
       await api('/auth/logout', { method: 'POST' });
-      role = null; archive = false; slots = []; selectedId = null; draft = blankSlot(); baseline = JSON.stringify(draft); notice = ''; error = ''; videoMedia = undefined;
+      role = null; archive = false; slots = []; selectedId = null; slotSelection++; photoCaches.clear(); draft = blankSlot(); baseline = JSON.stringify(draft); notice = ''; error = ''; videoMedia = undefined;
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
   function fresh() {
     if (!canLeave()) return;
-    selectedId = null; draft = blankSlot(); baseline = JSON.stringify(draft); videoMedia = undefined; error = ''; notice = '';
+    selectedId = null; slotSelection++; draft = blankSlot(); baseline = JSON.stringify(draft); videoMedia = undefined; error = ''; notice = '';
   }
   async function openSlot(id: string) {
     if (!canLeave()) return;
@@ -82,22 +84,9 @@
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
-  function changeModel(id: string) {
-    const model = models.find(item => item.id === id)!;
-    draft.model = model.id;
-    draft.resolution = model.defaultResolution;
-    draft.prompt = model.prompt ? (draft.prompt ?? '') : undefined;
-    draft.duration = model.mode === 'P2V' ? 10 : undefined;
-    draft.recastShotsConfirmed = model.id === recastId ? false : undefined;
-    draft.promptExpansionMode = model.id === 'minimax/h3-max/reference-to-video' ? 'disabled' : undefined;
-    error = ''; notice = '';
-  }
-  function changeMode(mode: Mode) {
-    const common = { description: draft.description, thumbnailId: draft.thumbnailId, visible: draft.visible, simulateGeneration: draft.simulateGeneration, testPhotoId: draft.testPhotoId };
-    draft = { ...blankSlot(mode), ...common }; videoMedia = undefined; error = ''; notice = '';
-  }
   async function save(event: SubmitEvent) {
     event.preventDefault(); error = ''; notice = '';
+    if (!editorCanSave) { error = 'Зафиксируйте настройки и дождитесь готового промпта.'; return; }
     if (!draft.thumbnailId) { error = 'Добавьте изображение сюжета.'; return; }
     const result = slotSchema.safeParse(draft);
     if (!result.success) { error = result.error.issues.map(issue => issue.message).join('. '); return; }
@@ -193,44 +182,13 @@
             <label class="checkbox-label"><input type="checkbox" bind:checked={draft.visible} />Отображать клиенту</label>
           </section>
 
-          <section class="form-section">
-            <div class="section-heading"><span>02</span><h3>Генерация</h3></div>
-            <label for="mode">Режим</label><select id="mode" value={draft.mode} onchange={event => changeMode(event.currentTarget.value as Mode)}><option value="V2V">Video2Video — на основе видео</option><option value="P2V">Photo2Video — на основе фото</option></select>
-            <label for="model">Модель</label><select id="model" value={draft.model} onchange={event => changeModel(event.currentTarget.value)}>{#each models.filter(model => model.mode === draft.mode) as model}<option value={model.id}>{model.name}</option>{/each}</select>
-            <div class="materials">
-              {#if draft.mode === 'V2V'}
-                <MediaField label="Исходное видео" kind="video" id={draft.videoId} hint={`MP4 или MOV · ${currentModel.minSeconds}–${currentModel.maxSeconds} с${currentModel.maxVideoMB ? ` · до ${currentModel.maxVideoMB} MB` : ''}`} onUploaded={media => { draft.videoId = media.id; videoMedia = media; draft.recastShotsConfirmed = currentModel.id === recastId ? false : undefined; }} onError={fail} onBusy={uploadBusy} />
-                {#if sourceProblem}<p class="error" role="alert">{sourceProblem}</p>{/if}
-                {#if currentModel.id === recastId}<label class="checkbox-label shot-confirmation"><input type="checkbox" bind:checked={draft.recastShotsConfirmed} />Подтверждаю: каждый непрерывный кадр длится не более 15 секунд</label><p class="hint">Проверьте монтаж видео перед сохранением.</p>{/if}
-              {:else}
-                <div class="references-heading"><h4>Фото сюжета</h4><p class="hint">До трёх общих референсов. Фото посетителя добавятся во время съёмки.</p></div>
-                <div class="references">
-                  {#each [0, 1, 2].slice(0, Math.min(draft.referenceIds.length + 1, 3)) as index}
-                    <MediaField label={`Референс ${index + 1}`} kind="image" id={draft.referenceIds[index]} optional onUploaded={media => { const refs = [...draft.referenceIds]; refs[index] = media.id; draft.referenceIds = refs.filter(Boolean); }} onRemove={() => draft.referenceIds = draft.referenceIds.filter((_, position) => position !== index)} onError={fail} onBusy={uploadBusy} />
-                  {/each}
-                </div>
-                <MediaField label="Демовидео" kind="video" id={draft.demoId} optional hint="Показывается гостям как пример. В генерацию не передаётся." onUploaded={media => draft.demoId = media.id} onRemove={() => draft.demoId = undefined} onError={fail} onBusy={uploadBusy} />
-              {/if}
-            </div>
-            <label for="prompt">Промпт{#if !currentModel.prompt}<span class="optional">не используется</span>{/if}</label>
-            <textarea id="prompt" rows="5" disabled={!currentModel.prompt || formDisabled} value={draft.prompt ?? ''} oninput={event => draft.prompt = event.currentTarget.value} placeholder={currentModel.prompt ? 'Опишите сцену, движение и образ посетителя…' : 'Recast переносит образ посетителя без промпта'} required={currentModel.prompt} maxlength="10000" aria-describedby="prompt-hint"></textarea>
-            <p class="hint model-hint" id="prompt-hint">{currentModel.hint}</p>
-            <div class="parameter-grid">
-              {#if currentModel.resolutions.length}<div><label for="resolution">Разрешение</label><select id="resolution" bind:value={draft.resolution}>{#each currentModel.resolutions as resolution}<option value={resolution}>{resolution}</option>{/each}</select></div>{:else}<p class="hint resolution-note">Разрешение задаёт модель.</p>{/if}
-              {#if draft.mode === 'P2V'}<div><label for="duration">Длительность, с</label><input id="duration" type="number" bind:value={draft.duration} min={currentModel.minSeconds} max={currentModel.maxSeconds} step={currentModel.id === 'minimax/h3-max/reference-to-video' ? '0.01' : '1'} /><p class="hint">От {currentModel.minSeconds} до {currentModel.maxSeconds} секунд</p></div>{/if}
-            </div>
-          </section>
-          <section class="form-section">
-            <div class="section-heading"><span>03</span><h3>Тестирование</h3></div>
-            <label class="checkbox-label"><input type="checkbox" bind:checked={draft.simulateGeneration} />Отправлять на фейковую генерацию</label>
-            <p class="hint">Проверяет фотографии и подготовку запроса без обращения к fal. Видео не создаётся.</p>
-            <MediaField label="Тестовая фотография (JPEG)" kind="image" jpegOnly id={draft.testPhotoId} optional hint="До 20 MiB и 40 мегапикселей. Используется только для ручного теста; съёмка продолжает работать с камерой." onUploaded={media => draft.testPhotoId = media.id} onRemove={() => draft.testPhotoId = undefined} onError={fail} onBusy={uploadBusy} />
-            {#key `${selectedId}:${slotSelection}`}<SlotTest slotId={selectedId} hasPhoto={!!draft.testPhotoId} {dirty} disabled={formDisabled} onError={fail} />{/key}
-          </section>
+          {#key slotSelection}
+            <SlotEditor bind:draft bind:videoMedia bind:canSave={editorCanSave} slotId={selectedId} cacheKey={selectedId ?? `draft:${slotSelection}`} {photoCaches} disabled={formDisabled} {dirty} {sourceProblem} onError={fail} onBusy={uploadBusy} />
+          {/key}
         </fieldset>
         <div class="editor-footer">
           <div aria-live="polite">{#if error}<p class="error" role="alert">{error}</p>{:else if notice}<p class="success" role="status">{notice}</p>{:else}<p class="hint">{uploads ? 'Проверяем материалы…' : 'Изменения применятся после сохранения.'}</p>{/if}</div>
-          <button class="primary" type="submit" disabled={formDisabled}>{busy ? 'Сохраняем…' : 'Сохранить сюжет'}</button>
+          <button class="primary" type="submit" disabled={formDisabled || !editorCanSave}>{busy ? 'Сохраняем…' : 'Сохранить сюжет'}</button>
         </div>
       </form>
     </section>

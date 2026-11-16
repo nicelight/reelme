@@ -5,7 +5,9 @@
  * transactions. A verified local result stays preparing until the issuance callback
  * owns ready; standalone generation has no authority to publish capabilities.
  * Deletion blocks new work and publication; late local output is discarded.
- * Errors retain the session/photos; public errors are fixed safe messages. */
+ * Errors retain the session/photos; public errors are fixed safe messages.
+ * Source: docs/slot-setup/matrix.md. Completeness follows the saved capture plan. */
+import { snapshotPosePlan } from '../../shared/capture.js';
 import { open, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { sessionAvailable } from './availability.js';
@@ -75,7 +77,8 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
         const photos = db.prepare('SELECT pose_index,path FROM capture_photos WHERE session_id=? ORDER BY pose_index').all(id) as { pose_index: number; path: string }[];
         let payload: Record<string, unknown>;
         try {
-          if (photos.length !== session.snapshot.expectedPhotos || photos.some((photo, index) => photo.pose_index !== index)) throw new Error('Incomplete or unordered photos');
+          const plan = snapshotPosePlan(session.snapshot);
+          if (photos.length !== plan.length || photos.some((photo, index) => photo.pose_index !== plan[index].index)) throw new Error('Incomplete or unordered photos');
           const paths = [...photos.map(photo => photo.path), ...[input.videoId, ...input.referenceIds].filter((value): value is string => !!value).map(mediaId => readMedia(db, mediaId).path)];
           for (const path of paths) {
             const file = await open(join(dataDir, 'media', path), 'r');

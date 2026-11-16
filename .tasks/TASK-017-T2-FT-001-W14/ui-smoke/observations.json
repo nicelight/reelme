@@ -1,0 +1,18 @@
+{
+  "compatibleUpperValuesPreserved": true,
+  "incompatibleRecastFramesCleared": true,
+  "manualPromptPreservedOnSameCountReplacement": true,
+  "recastEmptyEditable": true,
+  "boundVideoRetainedOnUnlock": true,
+  "wide": [
+    1440,
+    1000
+  ],
+  "narrow": [
+    375,
+    812
+  ],
+  "horizontalOverflow": false,
+  "pageErrors": [],
+  "cameraOrPaidProviderInvocations": false
+}

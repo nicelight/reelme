@@ -1,0 +1,136 @@
+{
+  "id": "TASK-016-T2-FT-001-W13",
+  "title": "Согласовать план съёмки, snapshots и входы всех моделей",
+  "status": "done",
+  "wave": "W13",
+  "feature": "FT-001",
+  "reqs": [
+    "REQ-001",
+    "REQ-002",
+    "REQ-004",
+    "REQ-006",
+    "REQ-007"
+  ],
+  "depends_on": [
+    "TASK-002-T2-FT-001-W2",
+    "TASK-004-T2-FT-002-W3",
+    "TASK-007-T2-FT-003-W5"
+  ],
+  "touched_files": [
+    "src/shared/scenarios.ts",
+    "src/shared/capture.ts",
+    "src/shared/slot-prompt-selection.ts",
+    "src/shared/slot-setup.ts",
+    "src/server/db.ts",
+    "src/server/scenarios/",
+    "src/server/sessions/",
+    "tests/scenarios.test.ts",
+    "tests/capture.test.ts",
+    "tests/model-generation.test.ts",
+    "tests/simulation.test.ts"
+  ],
+  "tier": "T2",
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "capture-model-api",
+      "command": "node --import tsx --test tests/scenarios.test.ts tests/capture.test.ts tests/model-generation.test.ts tests/simulation.test.ts",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-16",
+      "stage": "implementation",
+      "result": "PASS",
+      "summary": "Новый строгий setup из общей JSON-матрицы, сохранённый posePlan до восьми кадров, корректные отдельные Elements/групповые ordinary inputs и точные параметры всех 11 endpoint. Raw legacy slots и snapshots остаются на старом 1/4 пути до нового save; admin projection не мигрирует данные. V2V draft сохраняется без ролика, но не попадает в каталог и не запускается. SQLite CHECK расширен сохраняющей миграцией.",
+      "checks": [
+        "npm run check: PASS, 0 errors / 0 warnings; npm run build: PASS.",
+        "node --import tsx --test tests/scenarios.test.ts tests/capture.test.ts tests/model-generation.test.ts tests/simulation.test.ts tests/api.test.ts tests/slot-setup.test.ts: PASS, 30/30.",
+        "npm test: PASS, 85/85 (62 top-level); полный вывод текущего запуска /tmp/reelme-task016-tests-final.log.",
+        "tests/slot-setup.test.ts: реальные uploads и перехваченные submit payload всех 11 endpoint; 2 Elements и правильный порядок JPEG, плоские списки, group без Elements, Recast с/без prompt, 0..7 intake, отказ вне плана и finalize неполного набора.",
+        "Миграция старого CHECK: сохранены строки capture_photos, provider tokens, provider request_id, snapshot text и байты; foreign_key_check пуст, старый HTTP provider URL работает после двух открытий; новая позиция 7 принимается.",
+        "Legacy manual test/retry и retained result fixtures явно посеяны в старом формате; новые POST/PUT не ослаблены ради совместимости тестов. git diff --check: PASS."
+      ],
+      "evidence": [
+        "tests/slot-setup.test.ts",
+        "tests/model-generation.test.ts",
+        "tests/capture.test.ts",
+        "tests/simulation.test.ts",
+        "tests/slot-test.test.ts",
+        "tests/slot-results.test.ts"
+      ],
+      "limitations": [
+        "UI не менялся. Новый многокадровый manual test пока явно отклоняет одиночный legacy testPhotoId; distinct testPhotoIds и editor принадлежат TASK-017. Legacy manual retries и одиночный новый Recast test сохранены.",
+        "Админские изображения ракурсов и импорт template video подключаются в TASK-018; общий plan уже имеет guideNumber/guideMediaId.",
+        "Не запускались browser QA, реальные fal/SMTP, аппаратная камера, commit/push/deploy. 813 prompt files не перебирались.",
+        "Промежуточные failures: старые API fixtures не содержали обязательный setup/использовали теперь исключённые разрешения; fixtures обновлены. Проверка повреждённого snapshot потребовала сохранить semantic validation новых входов; исправлено до итоговых PASS."
+      ],
+      "handoff": "Root просмотрел изменения миграции, snapshots, payload и существенные assertions; TASK-016 закрыта, TASK-017 готова к выполнению. Канонические HTTP/domain/lifecycle/integration контракты обновлены."
+    }
+  ],
+  "docs": [
+    ".memory-bank/analysis/slot-setup-plan.md",
+    "docs/slot-setup/matrix.md"
+  ],
+  "evidence_required": [
+    "Успешные typecheck и релевантные unit/API assertions с перехваченными payload; подтверждённые роли/порядок всех endpoint.",
+    "Доказательство миграции старой БД, foreign_key_check и доступности прежнего provider URL; старый snapshot не переписан."
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-001-scenarios.md#FT-001-AC-001",
+    ".memory-bank/features/FT-001-scenarios.md#FT-001-AC-002",
+    ".memory-bank/features/FT-002-photo-session.md#FT-002-AC-001",
+    ".memory-bank/features/FT-002-photo-session.md#FT-002-AC-002",
+    ".memory-bank/features/FT-003-video-generation.md#FT-003-AC-001",
+    ".memory-bank/features/FT-003-video-generation.md#FT-003-AC-002"
+  ],
+  "normative_inputs": [
+    ".memory-bank/constitution.md",
+    "docs/slot-setup/matrix.md",
+    ".memory-bank/analysis/slot-setup-plan.md",
+    ".memory-bank/contracts/http-api.md",
+    ".memory-bank/domains/core-domain.md",
+    ".memory-bank/states/lifecycle-map.md"
+  ],
+  "purpose": "Убрать расхождение между настройкой слота, числом принимаемых кадров и фактическими входами модели.",
+  "success_outcome": "Новые настройки 1/2/группа и 1–4 кадра валидируются общим расчётом; новая сессия хранит конкретный план до восьми кадров, и fal получает правильные роли/порядок/параметры. Начатые старые сессии сохраняют прежний смысл.",
+  "constraints": [
+    "Использовать общую машинную матрицу src/shared/slot-setup-matrix.json; не дублировать формулы лимитов в UI/server. Принятые API-трактовки не ужесточать для перестраховки.",
+    "Проверки только представительной выборки setup/промптов и существенных границ. Не перебирать все 813 файлов, не запускать check:slot-prompts как обязательную проверку.",
+    "Новые или существенно изменённые модули, использующие матрицу, ссылаются на docs/slot-setup/matrix.md в Module contract. Актуализировать затронутые канонические контракты вместе с реализацией.",
+    "Владеет серверной/setup-частью FT-001 AC-001/002, snapshot/приёмом плана FT-002 AC-001/002 и новыми входами FT-003 AC-001/002; интерфейс редактора, тестовые назначения, админские образцы и управление камерой — следующие задачи.",
+    "Расширить SlotInput людьми, кадрами, ориентацией/ratio; конкретный capture plan строится общим чистым кодом из строки матрицы. Для Kling индивиды дают отдельные Elements по 2–4 фото; группа — ordinary images; Recast — 1/2 участника по одному кадру.",
+    "Сохранить точный posePlan в новых snapshots и число expectedPhotos; API receipt/status возвращают сохранённый план. Проверка позиции, полноты, simulation и generation используют его. Старые snapshots без плана читаются как прежние 1/4 кадра со старыми позами и модельным смыслом, без массового переписывания.",
+    "Снять SQLite CHECK capture_photos.pose_index BETWEEN 0 AND 3 сохраняющей миграцией. Не терять capture_photos, provider_media FK/токены, принятые JPEG и работающие provider URLs. Повторный старт БД идемпотентен.",
+    "Сохранить длительности/файловые ограничения существующего каталога; разрешать только реальные resolution/aspect_ratio из матрицы и точные регистр/тип API. Recast prompt необязателен: пустой не отправляется, непустой передаётся. V2V допускает references согласно endpoint.",
+    "Старые слоты при открытии редактора имеют 1 человека и прежние 1/4 кадра; raw legacy-слот до первого нового сохранения запускается со старым snapshot/payload. Неподдерживаемое старое качество отображается явно; новое сохранение проходит актуальную валидацию. Legacy testPhotoId ещё не доказывает полный новый тестовый набор.",
+    "DTO: participants, photosPerParticipant, orientation, aspectRatio?; snapshot.posePlan?: Pose[] с participant/guideNumber/guideMediaId?. Legacy определяется отсутствием posePlan, не проходит новую матрицу. Новый V2V draft допускает отсутствие videoId при сохранении, но start/test должны отклонять запуск; каталог не позволяет его начать."
+  ],
+  "invariants": [
+    "Изменение слота/каталога после start не меняет план и входы начатой сессии.",
+    "Число файлов, роль участника и порядок поз совпадают в snapshot, intake, simulation и model payload; P2V demo не попадает в payload.",
+    "Подтверждённый provider request_id и существующие URL не меняются миграцией/повторным запуском."
+  ],
+  "verification_targets": [
+    "Локальные перехваченные payload всех 11 endpoint, включая два Elements, group, Recast с/без prompt и точные output-параметры; это 11 технических примеров, без полного перебора prompt assets.",
+    "Выборочные бюджеты и граничные inputs, невалидный прямой save в обход UI; загрузка позиции 7 и отказ позиции вне snapshot; finalize только после полного плана.",
+    "Старая SQLite с фото/provider tokens и snapshots: миграция и повторное открытие сохраняют FK/байты/URL; старый план и новый план после редактирования различимы и неизменны."
+  ],
+  "anti_goals": [
+    "Новый workflow engine, runtime-разбор Markdown, распознавание лиц, платные вызовы для приёмки."
+  ],
+  "runtime_context": {
+    "forbidden_scope": [
+      "linux_digiCamControl/",
+      "Commit/push/deploy, production-данные, реальные платные fal-вызовы и SMTP-отправки"
+    ],
+    "stop_conditions": [
+      "Необходимость изменить принятое продуктовое поведение или выполнить неавторизованное внешнее действие: остановить только зависимую часть и сообщить владельцу."
+    ]
+  }
+}

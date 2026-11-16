@@ -5,6 +5,10 @@
   "models": [
     {
       "key": "recast",
+      "capabilities": {
+        "peopleLimit": 4,
+        "photosPerPerson": 1
+      },
       "id": "minimax/h3-max/recast",
       "mode": "V2V",
       "referenceStrategy": "recast",
@@ -43,6 +47,13 @@
     },
     {
       "key": "kling-o1-edit",
+      "capabilities": {
+        "combinedReferenceLimit": 4,
+        "photosPerElement": {
+          "min": 2,
+          "max": 4
+        }
+      },
       "id": "fal-ai/kling-video/o1/video-to-video/edit",
       "mode": "V2V",
       "referenceStrategy": "elements",
@@ -179,6 +190,13 @@
     },
     {
       "key": "kling-o3-edit",
+      "capabilities": {
+        "combinedReferenceLimit": 4,
+        "photosPerElement": {
+          "min": 2,
+          "max": 4
+        }
+      },
       "id": "fal-ai/kling-video/o3/pro/video-to-video/edit",
       "mode": "V2V",
       "referenceStrategy": "elements",
@@ -315,6 +333,15 @@
     },
     {
       "key": "kling-v4-edit",
+      "capabilities": {
+        "elementLimit": 7,
+        "ordinaryImageLimit": 10,
+        "assetLimit": 15,
+        "photosPerElement": {
+          "min": 2,
+          "max": 4
+        }
+      },
       "id": "kling/v4/video-to-video/edit",
       "mode": "V2V",
       "referenceStrategy": "elements",
@@ -528,6 +555,15 @@
     },
     {
       "key": "kling-v4-flash-edit",
+      "capabilities": {
+        "elementLimit": 7,
+        "ordinaryImageLimit": 10,
+        "assetLimit": 15,
+        "photosPerElement": {
+          "min": 2,
+          "max": 4
+        }
+      },
       "id": "kling/v4/flash/video-to-video",
       "mode": "V2V",
       "referenceStrategy": "elements",
@@ -735,6 +771,15 @@
     },
     {
       "key": "kling-v4-reference",
+      "capabilities": {
+        "elementLimit": 7,
+        "ordinaryImageLimit": 10,
+        "assetLimit": 15,
+        "photosPerElement": {
+          "min": 2,
+          "max": 4
+        }
+      },
       "id": "kling/v4/reference-to-video",
       "mode": "P2V",
       "referenceStrategy": "elements",
@@ -948,6 +993,13 @@
     },
     {
       "key": "kling-o3-reference",
+      "capabilities": {
+        "combinedReferenceLimit": 7,
+        "photosPerElement": {
+          "min": 2,
+          "max": 4
+        }
+      },
       "id": "fal-ai/kling-video/o3/pro/reference-to-video",
       "mode": "P2V",
       "referenceStrategy": "elements",
@@ -1118,6 +1170,15 @@
     },
     {
       "key": "kling-v4-flash-reference",
+      "capabilities": {
+        "elementLimit": 7,
+        "ordinaryImageLimit": 10,
+        "assetLimit": 15,
+        "photosPerElement": {
+          "min": 2,
+          "max": 4
+        }
+      },
       "id": "kling/v4/flash/reference-to-video",
       "mode": "P2V",
       "referenceStrategy": "elements",
@@ -1330,6 +1391,9 @@
     },
     {
       "key": "h3-reference",
+      "capabilities": {
+        "ordinaryImageLimit": 9
+      },
       "id": "minimax/h3-max/reference-to-video",
       "mode": "P2V",
       "referenceStrategy": "flat",
@@ -1543,6 +1607,9 @@
     },
     {
       "key": "vidu-q4-reference",
+      "capabilities": {
+        "ordinaryImageLimit": 12
+      },
       "id": "fal-ai/vidu/q4/reference-to-video",
       "mode": "P2V",
       "referenceStrategy": "flat",
@@ -1791,6 +1858,9 @@
     },
     {
       "key": "gemini-omni-reference",
+      "capabilities": {
+        "ordinaryImageLimit": 10
+      },
       "id": "google/gemini-omni-flash/v1.2/reference-to-video",
       "mode": "P2V",
       "referenceStrategy": "flat",

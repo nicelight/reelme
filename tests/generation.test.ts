@@ -23,7 +23,7 @@ async function setup(t: TestContext) {
   const thumb = await f.upload(cookie, await imageBytes());
   const bytes = await videoBytes(f.root, 5);
   const clip = await f.upload(cookie, bytes, 'video/mp4', 'clip.mp4');
-  const input = { description: 'Recast fixture', visible: true, thumbnailId: thumb.id, referenceIds: [], mode: 'V2V', model: endpoint, videoId: clip.id, resolution: '768P', recastShotsConfirmed: true };
+  const input = { participants: 1, photosPerParticipant: 1, orientation: 'landscape', description: 'Recast fixture', visible: true, thumbnailId: thumb.id, referenceIds: [], mode: 'V2V', model: endpoint, videoId: clip.id, resolution: '768P', recastShotsConfirmed: true };
   const response = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: { cookie, origin: f.config.origin }, payload: input });
   assert.equal(response.statusCode, 201, response.body);
   return { f, cookie, input, slotId: response.json().id as string, bytes };

@@ -24,7 +24,7 @@ test('video limits include boundary values and provider file size limits', () =>
 });
 
 test('P2V permits optional demo and fractional H3 duration, rejects unexpected provider settings', () => {
-  const slot = { description: '  Первые   три слова и ещё  ', visible: true, thumbnailId: randomUUID(), mode: 'P2V', model: 'minimax/h3-max/reference-to-video', prompt: 'Image 1 visits Image 5', promptExpansionMode: 'disabled', duration: 0.92, resolution: '768P' };
+  const slot = { participants: 1, photosPerParticipant: 4, orientation: 'landscape', aspectRatio: '16:9', description: '  Первые   три слова и ещё  ', visible: true, thumbnailId: randomUUID(), mode: 'P2V', model: 'minimax/h3-max/reference-to-video', prompt: 'Image 1 visits Image 5', promptExpansionMode: 'disabled', duration: 0.92, resolution: '768P' };
   assert.equal(slotSchema.safeParse(slot).success, true);
   assert.equal(slotSchema.safeParse({ ...slot, demoId: randomUUID() }).success, true);
   for (const change of [{ duration: 0.91 }, { duration: 15.01 }, { promptExpansionMode: 'enabled' }, { promptExpansionMode: undefined }, { role: 'admin' }, { model: 'unknown' }]) assert.equal(slotSchema.safeParse({ ...slot, ...change }).success, false);

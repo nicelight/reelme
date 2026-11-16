@@ -24,6 +24,12 @@ export interface SlotSetupModel {
   orientationMode: 'source-video' | 'aspect-ratio';
   aspectRatios: { landscape: string[]; portrait: string[] };
   promptMaxLength: number;
+  /** API capacities, distinct from the finite participant choices of this UI. */
+  capabilities: {
+    peopleLimit?: number; photosPerPerson?: number; ordinaryImageLimit?: number;
+    elementLimit?: number; combinedReferenceLimit?: number; assetLimit?: number;
+    photosPerElement?: { min: number; max: number };
+  };
   captureVariants: CaptureVariant[];
 }
 export interface SlotSetupMatrix {

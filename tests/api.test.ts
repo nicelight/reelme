@@ -1,3 +1,5 @@
+/** Admin contracts, including accepted setup choices. Source: docs/slot-setup/matrix.md. */
+import { defaultSlotSetup } from '../src/shared/slot-setup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -79,9 +81,9 @@ const cases: Array<[string, 'V2V' | 'P2V', string | undefined, number]> = [
   ['kling/v4/reference-to-video', 'P2V', '1080p', 30],
   ['fal-ai/kling-video/o3/pro/reference-to-video', 'P2V', undefined, 15],
   ['kling/v4/flash/reference-to-video', 'P2V', '720p', 20],
-  ['minimax/h3-max/reference-to-video', 'P2V', '480P', 15],
-  ['fal-ai/vidu/q4/reference-to-video', 'P2V', '4K', 16],
-  ['google/gemini-omni-flash/v1.2/reference-to-video', 'P2V', '4k', 15],
+  ['minimax/h3-max/reference-to-video', 'P2V', '768P', 15],
+  ['fal-ai/vidu/q4/reference-to-video', 'P2V', '1080p', 16],
+  ['google/gemini-omni-flash/v1.2/reference-to-video', 'P2V', '1080p', 15],
 ];
 
 test('all eleven models save; invalid model settings and wrong media are rejected', async t => {
@@ -97,11 +99,11 @@ test('all eleven models save; invalid model settings and wrong media are rejecte
   for (const [model, mode, resolution, max] of cases) {
     await t.test(model, async () => {
       const recast = model === 'minimax/h3-max/recast';
-      const input: SlotInput = { description: 'Первые три слова описания сюжета', visible: true, simulateGeneration: false, thumbnailId: image.id, model, mode, referenceIds: [], ...(resolution ? { resolution } : {}), ...(recast ? { recastShotsConfirmed: true } : { prompt: 'Transform the visitor' }), ...(mode === 'V2V' ? { videoId: video.id } : { duration: max }), ...(model === 'minimax/h3-max/reference-to-video' ? { promptExpansionMode: 'disabled' } : {}) };
+      const input: SlotInput = { ...defaultSlotSetup(model, mode), description: 'Первые три слова описания сюжета', visible: true, simulateGeneration: false, thumbnailId: image.id, model, mode, referenceIds: [], ...(resolution ? { resolution } : {}), ...(recast ? { recastShotsConfirmed: true } : { prompt: 'Transform the visitor' }), ...(mode === 'V2V' ? { videoId: video.id } : { duration: max }), ...(model === 'minimax/h3-max/reference-to-video' ? { promptExpansionMode: 'disabled' } : {}) };
       const saved = (await save(input, 201)).json<Slot>();
       const read = await f.app.inject({ url: `/api/admin/slots/${saved.id}`, headers });
       assert.equal(read.statusCode, 200); assert.deepEqual(read.json(), saved);
-      await save({ ...input, prompt: recast ? 'Forbidden prompt' : '' }, 400);
+      await save({ ...input, prompt: recast ? 'x'.repeat(2001) : '' }, 400);
       await save({ ...input, resolution: 'not-a-resolution' }, 400);
       await save({ ...input, mode: mode === 'V2V' ? 'P2V' : 'V2V' }, 400);
       await save(mode === 'P2V' ? { ...input, duration: max + 1 } : { ...input, videoId: short.id }, 400);
@@ -109,9 +111,9 @@ test('all eleven models save; invalid model settings and wrong media are rejecte
       if (recast) await save({ ...input, recastShotsConfirmed: false }, 400);
     });
   }
-  const base = { description: 'P2V без демо', visible: false, thumbnailId: image.id, model: 'kling/v4/reference-to-video', mode: 'P2V', resolution: '720p', prompt: '@Element1 visits @Image1', duration: 10, referenceIds: [image.id, image.id, image.id] };
+  const base = { participants: 1, photosPerParticipant: 4, orientation: 'landscape', aspectRatio: '16:9', description: 'P2V без демо', visible: false, thumbnailId: image.id, model: 'kling/v4/reference-to-video', mode: 'P2V', resolution: '720p', prompt: '@Element1 visits @Image1', duration: 10, referenceIds: [image.id, image.id, image.id] };
   await save(base, 201);
-  await save({ ...base, referenceIds: [image.id, image.id, image.id, image.id] }, 400);
+  await save({ ...base, referenceIds: Array(11).fill(image.id) }, 400);
   await save({ ...base, thumbnailId: video.id }, 400);
   await save({ ...base, thumbnailId: randomUUID() }, 400);
   await save({ ...base, demoId: image.id }, 400);
@@ -133,7 +135,7 @@ test('real file validation, immutable replacement and restart preserve old media
   }
   const old = await f.upload(cookie, bytes); const replacement = await f.upload(cookie, bytes);
   assert.notEqual(old.id, replacement.id);
-  const input = { description: 'Сохранённый сюжет после перезапуска', visible: true, simulateGeneration: false, thumbnailId: old.id, mode: 'P2V', model: 'kling/v4/reference-to-video', referenceIds: [old.id], prompt: 'A visitor', duration: 10, resolution: '720p' };
+  const input = { participants: 1, photosPerParticipant: 4, orientation: 'landscape', aspectRatio: '16:9', description: 'Сохранённый сюжет после перезапуска', visible: true, simulateGeneration: false, thumbnailId: old.id, mode: 'P2V', model: 'kling/v4/reference-to-video', referenceIds: [old.id], prompt: 'A visitor', duration: 10, resolution: '720p' };
   const created = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers, payload: input });
   assert.equal(created.statusCode, 201, created.body);
   const id = created.json().id;

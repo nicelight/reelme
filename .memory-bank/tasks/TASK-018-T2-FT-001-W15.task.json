@@ -1,0 +1,108 @@
+{
+  "id": "TASK-018-T2-FT-001-W15",
+  "title": "Связать исходник слота и админские образцы ракурсов с неизменными медиа",
+  "status": "planned",
+  "wave": "W15",
+  "feature": "FT-001",
+  "reqs": [
+    "REQ-002",
+    "REQ-004",
+    "REQ-007",
+    "REQ-018"
+  ],
+  "depends_on": [
+    "TASK-017-T2-FT-001-W14"
+  ],
+  "touched_files": [
+    "media/template-videos/readme_media.md",
+    "src/client/cloud/",
+    "src/shared/capture.ts",
+    "src/shared/scenarios.ts",
+    "src/server/scenarios/",
+    "src/server/sessions/",
+    "src/server/app.ts",
+    "src/server/db.ts",
+    "tests/scenarios.test.ts",
+    "tests/capture.test.ts",
+    "tests/cleanup.test.ts",
+    "tests/editor.spec.ts"
+  ],
+  "tier": "T2",
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "materials-api",
+      "command": "node --import tsx --test tests/scenarios.test.ts tests/capture.test.ts tests/cleanup.test.ts",
+      "required": true
+    },
+    {
+      "name": "materials-browser",
+      "command": "npm run test:ui -- tests/editor.spec.ts",
+      "required": true
+    }
+  ],
+  "verify": [],
+  "docs": [
+    ".memory-bank/analysis/slot-setup-plan.md",
+    "docs/slot-setup/matrix.md"
+  ],
+  "evidence_required": [
+    "API assertions прав/Range/идентичности/cleanup и browser видимой привязки/страницы пяти поз.",
+    "Подтверждение отсутствия образцов и P2V demo в модельных входах; локальные fixture MP4 явно отделены от отсутствующих реальных роликов."
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-001-scenarios.md#FT-001-AC-001",
+    ".memory-bank/features/FT-001-scenarios.md#FT-001-AC-003",
+    ".memory-bank/features/FT-001-scenarios.md#FT-001-AC-004",
+    ".memory-bank/features/FT-002-photo-session.md#FT-002-AC-001",
+    ".memory-bank/features/FT-003-video-generation.md#FT-003-AC-002"
+  ],
+  "normative_inputs": [
+    ".memory-bank/constitution.md",
+    "docs/slot-setup/matrix.md",
+    ".memory-bank/analysis/slot-setup-plan.md",
+    ".memory-bank/contracts/http-api.md",
+    ".memory-bank/domains/core-domain.md",
+    ".memory-bank/states/lifecycle-map.md"
+  ],
+  "purpose": "Показывать тот исходный ролик, который действительно получает модель, и закреплять согласованные образцы поз за начатой съёмкой.",
+  "success_outcome": "Администратор видит состояние связанного по slot ID/ориентации исходника и плеер, управляет пятью образцами на отдельной странице; сессия сохраняет конкретные media IDs независимо от последующих замен.",
+  "constraints": [
+    "Использовать общую машинную матрицу src/shared/slot-setup-matrix.json; не дублировать формулы лимитов в UI/server. Принятые API-трактовки не ужесточать для перестраховки.",
+    "Проверки только представительной выборки setup/промптов и существенных границ. Не перебирать все 813 файлов, не запускать check:slot-prompts как обязательную проверку.",
+    "Новые или существенно изменённые модули, использующие матрицу, ссылаются на docs/slot-setup/matrix.md в Module contract. Актуализировать затронутые канонические контракты вместе с реализацией.",
+    "Владеет фиксированной привязкой/плеером FT-001 AC-001/003, admin-only редактированием AC-004 и загрузкой/фиксацией образцов FT-002 AC-001. Отсчёт и показ образца в камере — TASK-019.",
+    "Реальных роликов в media/template-videos пока нет. Файлы <slot-id>__landscape.mp4 / <slot-id>__portrait.mp4; новый слот получает стабильный draft ID до подготовки файла, создание сохраняет его. Не подставлять случайный ролик. Черновик без исходника сохраняется, запуск объясняет неготовность.",
+    "Импортировать выбранный файл через существующие проверки media/ffprobe в immutable storage; slot.videoId и snapshot используют конкретный media ID. Проверять реальную ориентацию/совместимость endpoint; плеер и генерация используют один исходник. P2V demo остаётся демонстрацией.",
+    "Добавить отдельную админскую страницу и admin-only конфигурацию пяти образцов: главный; улыбка с наклоном одним плечом; профиль; взгляд вниз на обувь оператора; групповое фото. Замена всегда новый media ID, проверенный как изображение.",
+    "Snapshot каждой позиции содержит выбранный пример либо отсутствие файла; установка читает закреплённый образец защищённо без admin credentials. Образцы никогда не идут в fal. При отсутствии — текст и честный placeholder, без SVG с прежней другой позой.",
+    "Очистка учитывает текущие образцы и все snapshot-ссылки, а также связанные исходники. Изменение файлов в исходной папке, конфигурации поз или ориентации слота не меняет начатую сессию.",
+    "Интерфейсы: optional id в POST slots envelope; POST /api/admin/slots/:id/template-video {orientation,model}->Media. Nullable template_slot_id/template_orientation в slot_media связывают импорт с UUID/ориентацией; save проверяет provenance, start не импортирует автоматически. GET /api/admin/capture-guides и PUT /api/admin/capture-guides/:number {mediaId:UUID|null}; installation GET /api/capture/sessions/:id/guides/:number читает только saved posePlan. Детали — согласованные интерфейсы плана."
+  ],
+  "invariants": [
+    "Плеер V2V воспроизводит тот же immutable media ID, который сохранён для генерации.",
+    "Новый источник/образец не перезаписывает файл старой сессии; cleanup сохраняет все живые ссылки.",
+    "Образцы доступны установке только через принятую защищённую выдачу и отсутствуют в provider payload."
+  ],
+  "verification_targets": [
+    "Изолированные временные MP4: стабильный draft ID, импорт по имени, missing/wrong orientation/incompatible source, Range-плеер и совпадение media ID с payload; без подкладки тестовых роликов в рабочую media/template-videos.",
+    "Admin-only CRUD конфигурации поз; защищённое чтение образца установкой, пять назначений/placeholder; replacement после старта сохраняет старый snapshot.",
+    "Cleanup после замены pose/video и удаления другого мероприятия сохраняет живые источники; новые snapshots выбирают новую версию."
+  ],
+  "anti_goals": [
+    "Создание случайных роликов, новое хранилище версий/реестр шаблонов, crop/upscale/поворот, автоматическое распознавание поз."
+  ],
+  "runtime_context": {
+    "forbidden_scope": [
+      "linux_digiCamControl/",
+      "Commit/push/deploy, production-данные, реальные платные fal-вызовы и SMTP-отправки"
+    ],
+    "stop_conditions": [
+      "Необходимость изменить принятое продуктовое поведение или выполнить неавторизованное внешнее действие: остановить только зависимую часть и сообщить владельцу."
+    ]
+  }
+}

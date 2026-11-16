@@ -1,229 +1,240 @@
+/** Module contract: browser acceptance for the sequential slot editor and manual
+ * tests against the real isolated backend. Only representative setup/prompt paths
+ * are exercised; provider transport is controlled. Source: docs/slot-setup/matrix.md. */
 import { test, expect } from './browser-fixture';
-import { mkdir, writeFile } from 'node:fs/promises';
+import type { Page } from '@playwright/test';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import sharp from 'sharp';
 import { openDatabase } from '../src/server/db.js';
 test.use({ capturePort: 0 });
-const artifacts = process.env.REELME_BROWSER_ARTIFACTS || '.tasks/TASK-001-T3-FT-001-W1';
-// Independent expectations from the accepted model reference (not imported from UI rules).
-const expectedModels = [
-  ['V2V', 'minimax/h3-max/recast', ['768P', '1080P'], 'Один главный персонаж'],
-  ['V2V', 'fal-ai/kling-video/o1/video-to-video/edit', [], '@Element1'],
-  ['V2V', 'fal-ai/kling-video/o3/pro/video-to-video/edit', [], '@Element1'],
-  ['V2V', 'kling/v4/video-to-video/edit', ['720p', '1080p'], '@Element1'],
-  ['V2V', 'kling/v4/flash/video-to-video', ['720p'], '@Element1'],
-  ['P2V', 'kling/v4/reference-to-video', ['720p', '1080p'], '@Element1'],
-  ['P2V', 'fal-ai/kling-video/o3/pro/reference-to-video', [], '@Element1'],
-  ['P2V', 'kling/v4/flash/reference-to-video', ['720p'], '@Element1'],
-  ['P2V', 'minimax/h3-max/reference-to-video', ['480P', '768P', '1080P'], 'Image 5–7'],
-  ['P2V', 'fal-ai/vidu/q4/reference-to-video', ['540p', '720p', '1080p', '2K', '4K'], '[@reference_image_5]'],
-  ['P2V', 'google/gemini-omni-flash/v1.2/reference-to-video', ['360p', '720p', '1080p', '4k'], '<IMAGE_REF_4>'],
-] as const;
+const artifacts = process.env.REELME_BROWSER_ARTIFACTS || '.tasks/TASK-017-T2-FT-001-W14';
+const h3 = 'minimax/h3-max/reference-to-video';
+const kling = 'kling/v4/reference-to-video';
+async function login(page: Page, origin: string, password: string, role = 'admin') {
+  await page.goto(origin + '/admin');
+  await page.getByLabel('Логин').fill(role); await page.getByLabel('Пароль', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await expect(page.getByRole('heading', { name: role === 'admin' ? 'Сюжеты' : 'Ваша история — здесь.', exact: false })).toBeVisible();
+}
+async function setup(page: Page, mode: 'P2V' | 'V2V', model: string, people: string, count: string) {
+  await page.getByLabel('Режим', { exact: true }).selectOption(mode);
+  await page.getByLabel('Модель', { exact: true }).selectOption(model);
+  await page.getByLabel('Участники', { exact: true }).selectOption(people);
+  await page.locator('#photos-per-person').selectOption(count);
+  const resolution = page.locator('#resolution');
+  if (await resolution.count() && !await resolution.inputValue()) await resolution.selectOption({ index: 1 });
+  const ratio = page.locator('#aspect-ratio');
+  if (await ratio.count() && !await ratio.inputValue()) await ratio.selectOption({ index: 1 });
+}
+async function lock(page: Page) {
+  await page.getByRole('button', { name: 'Зафиксировать выбор', exact: true }).click();
+  await expect(page.getByText('Загружаем готовый промпт…', { exact: true })).toBeHidden();
+  await expect(page.locator('#prompt')).toBeVisible();
+}
+async function openTests(page: Page) {
+  const button = page.getByRole('button', { name: 'Открыть тесты', exact: true });
+  await expect(button).toBeVisible(); await button.click();
+}
+async function upload(page: Page, label: string, file: string) {
+  await page.getByLabel(label, { exact: true }).setInputFiles(file);
+  await expect(page.getByLabel('Заменить: ' + label, { exact: true })).toBeVisible();
+  await expect(page.getByText('Загружаем и проверяем файл…')).toHaveCount(0);
+}
+async function save(page: Page) {
+  await page.getByRole('button', { name: 'Сохранить сюжет', exact: true }).click();
+  await expect(page.getByText('Сюжет сохранён.', { exact: true })).toBeVisible();
+}
 
-test('admin saves both modes, reopens after restart, model rules, access and local capture', async ({ page, app }) => {
-  const errors: string[] = [];
-  const consoleErrors: string[] = [];
-  const badResponses: string[] = [];
-  page.on('pageerror', error => errors.push(error.message));
-  page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text() + ' ' + (message.location().url ? new URL(message.location().url).pathname : '')); });
-  page.on('response', response => {
-    if (response.status() >= 400 && !(response.url().endsWith('/api/auth/session') && response.status() === 401)) badResponses.push(`${response.status()} ${new URL(response.url()).pathname}`);
-  });
-  page.on('dialog', dialog => dialog.accept());
-  await mkdir(artifacts, { recursive: true });
-  await page.goto(app.origin + '/admin');
-  await expect(page.getByLabel('Логин')).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Редактор сюжета' })).toHaveCount(0);
-  async function login(username: string) {
-    await page.getByLabel('Логин').fill(username);
-    await page.getByLabel('Пароль', { exact: true }).fill(app.password);
-    await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  }
-  await login('admin');
-  const simulation = page.getByLabel('Отправлять на фейковую генерацию', { exact: true });
-  await expect(simulation).not.toBeChecked();
-  const save = page.getByRole('button', { name: 'Сохранить сюжет', exact: true });
-  await expect(save).toBeVisible();
-  await save.click();
-  await expect(page.getByRole('alert')).toContainText('Добавьте изображение');
-  await page.getByLabel('Изображение сюжета', { exact: true }).setInputFiles(app.image);
-  await expect(page.getByLabel('Заменить: Изображение сюжета')).toBeVisible();
-  await page.getByLabel('Описание', { exact: true }).fill('Прогулка по ночному Токио');
-  await save.click();
-  await expect(page.getByRole('alert')).toContainText('Загрузите исходное видео');
-  await page.getByLabel('Исходное видео', { exact: true }).setInputFiles(app.video);
-  await expect(page.getByLabel('Заменить: Исходное видео')).toBeVisible();
-  await page.getByLabel('Подтверждаю:', { exact: false }).check();
-  await expect(page.locator('#prompt')).toBeDisabled();
-  await save.click();
-  await expect(page.getByRole('status')).toHaveText('Сюжет сохранён.');
-  await expect(page.locator('.slot-list strong')).toHaveText('Прогулка по ночному');
-  await expect(page.locator('.slot-list img')).toHaveJSProperty('naturalWidth', 512);
-  const v2vImage = await page.locator('.slot-list img').getAttribute('src');
-  await page.locator('.slot-list').getByLabel('Отображать клиенту').uncheck();
-  await expect(page.getByRole('status')).toContainText('скрыт');
-  await page.getByRole('button', { name: 'Новый сюжет', exact: true }).click();
-  await page.getByLabel('Изображение сюжета', { exact: true }).setInputFiles(app.image);
-  await expect(page.getByLabel('Заменить: Изображение сюжета')).toBeVisible();
-  await page.getByLabel('Описание', { exact: true }).fill('Полет над облаками заката');
+test('sequential setup exposes real capacities, locks fields, saves both modes and preserves the source on unlock', async ({ page, app }) => {
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message)); page.on('dialog', dialog => dialog.accept());
+  await mkdir(artifacts, { recursive: true }); await login(page, app.origin, app.password);
+  await expect(page.getByLabel('Участники', { exact: true })).toHaveCount(0);
+  await expect(page.locator('#prompt')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Сохранить сюжет', exact: true })).toBeDisabled();
   await page.getByLabel('Режим', { exact: true }).selectOption('P2V');
-  await page.getByLabel('Референс 1', { exact: true }).setInputFiles(app.image);
-  await expect(page.getByLabel('Заменить: Референс 1')).toBeVisible();
-  for (const index of [2, 3]) {
-    await page.getByLabel(`Референс ${index}`, { exact: true }).setInputFiles(app.image);
-    await expect(page.getByLabel(`Заменить: Референс ${index}`)).toBeVisible();
-  }
-  await expect(page.getByLabel('Референс 4', { exact: true })).toHaveCount(0);
-  await save.click();
-  await expect(page.getByRole('alert')).toContainText('Введите промпт');
-  await page.locator('#prompt').fill('Посетитель @Element1 летит среди облаков @Image1');
-  await simulation.check();
-  await save.click();
-  await expect(page.getByRole('status')).toHaveText('Сюжет сохранён.');
-  await expect(page.locator('.slot-list li')).toHaveCount(2);
-  await app.restart();
-  await page.reload();
-  await page.getByRole('button', { name: /Полет над облаками/ }).click();
-  await expect(page.getByLabel('Описание', { exact: true })).toHaveValue('Полет над облаками заката');
-  await expect(simulation).toBeChecked();
-  await simulation.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: `${artifacts}/editor-simulation-saved.png`, fullPage: true });
-  await expect(page.getByLabel('Заменить: Референс 1')).toBeVisible();
-  await expect(page.getByLabel('Заменить: Референс 2')).toBeVisible();
-  await expect(page.getByLabel('Заменить: Референс 3')).toBeVisible();
-  await expect(page.getByLabel('Демовидео', { exact: true })).toBeVisible();
-  await expect(page.locator('.media-preview video')).toHaveCount(0);
-  await page.getByRole('button', { name: /Прогулка по ночному/ }).click();
-  await expect(page.getByLabel('Заменить: Исходное видео')).toBeVisible();
-  await expect(simulation).not.toBeChecked();
-  await expect(page.locator('.slot-list li').filter({ hasText: 'Прогулка по ночному' }).getByLabel('Отображать клиенту')).not.toBeChecked();
-  expect((await page.request.get(app.origin + v2vImage)).status()).toBe(200);
-  await page.screenshot({ path: `${artifacts}/browser-desktop.png`, fullPage: true });
-  for (const [mode, id, resolutions, hint] of expectedModels) {
-    await page.getByLabel('Режим', { exact: true }).selectOption(mode);
-    await page.getByLabel('Модель', { exact: true }).selectOption(id);
-    if (id === 'minimax/h3-max/recast') await expect(page.locator('#prompt')).toBeDisabled();
-    else { await expect(page.locator('#prompt')).toBeEnabled(); await expect(page.locator('#prompt')).toHaveAttribute('required', ''); }
-    if (resolutions.length) expect(await page.locator('#resolution option').allTextContents()).toEqual([...resolutions]);
-    else await expect(page.locator('#resolution')).toHaveCount(0);
-    await expect(page.locator('#prompt-hint')).toContainText(hint);
-  }
-  await page.setViewportSize({ width: 375, height: 812 });
-  await expect(save).toBeVisible();
+  await page.getByLabel('Модель', { exact: true }).selectOption(h3);
+  await expect(page.getByLabel('Возможности модели')).toContainText('Обычные изображения: до 9');
+  await expect(page.locator('#photos-per-person')).toHaveCount(0);
+  await page.getByLabel('Участники', { exact: true }).selectOption('2');
+  await page.locator('#photos-per-person').selectOption('4');
+  await expect(page.getByLabel('Распределение фотографий')).toContainText('Фото камеры: 8. Elements: 0. Дополнительные фото: 1');
+  expect(await page.locator('#resolution option').allTextContents()).toEqual(['Выберите разрешение', '768P', '1080P']);
+  expect(await page.locator('#aspect-ratio option').allTextContents()).toEqual(['Выберите соотношение', '16:9', '4:3', '21:9']);
+  await lock(page);
+  await expect(page.locator('#model')).toBeDisabled(); await expect(page.locator('#participants')).toBeDisabled();
+  await expect(page.locator('#mode')).toHaveValue('P2V'); await expect(page.locator('#model')).toHaveValue(h3); await expect(page.locator('#participants')).toHaveValue('2'); await expect(page.locator('#photos-per-person')).toHaveValue('4');
+  await expect(page.locator('#prompt')).toHaveValue(await readFile('public/slot-prompts/h3-reference/people-2__photos-4__refs-0.md', 'utf8'));
+  await page.getByRole('button', { name: 'Сохранить сюжет', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Добавьте изображение');
+  await upload(page, 'Изображение сюжета', app.image); await page.getByLabel('Описание', { exact: true }).fill('Групповой портрет для гостей');
+  await upload(page, 'Референс 1', app.image);
+  await expect(page.getByLabel('Референс 2', { exact: true })).toHaveCount(0);
+  await expect(page.locator('#prompt')).toHaveValue(await readFile('public/slot-prompts/h3-reference/people-2__photos-4__refs-1.md', 'utf8'));
+  await save(page); await expect(page.locator('.slot-list strong')).toHaveText('Групповой портрет для');
+  await app.restart(); await page.reload(); await page.getByRole('button', { name: /Групповой портрет для/ }).click();
+  await expect(page.locator('#model')).toBeDisabled(); await expect(page.getByLabel('Заменить: Референс 1')).toBeVisible();
+  await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+  await expect(page.getByLabel('Описание', { exact: true })).toHaveValue('Групповой портрет для гостей');
+  await expect(page.locator('#prompt')).toHaveCount(0);
+  await page.getByLabel('Ориентация', { exact: true }).selectOption('portrait');
+  expect(await page.locator('#aspect-ratio option').allTextContents()).toEqual(['Выберите соотношение', '9:16', '3:4']);
+  await lock(page); await expect(page.getByLabel('Референс 1', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Заменить: Референс 1')).toHaveCount(0);
+  await save(page);
+  // Recast's deliberately empty file is success; a missing source is a saved draft.
+  await page.getByRole('button', { name: 'Новый сюжет', exact: true }).click();
+  await setup(page, 'V2V', 'minimax/h3-max/recast', '1', '1');
+  await expect(page.locator('#participants option[value="group"]')).toBeDisabled();
+  await expect(page.locator('#photos-per-person option[value="2"]')).toBeDisabled();
+  await lock(page); await expect(page.locator('#prompt')).toBeEditable(); await expect(page.locator('#prompt')).toHaveValue('');
+  await expect(page.getByText('РЕКОМЕНДУЕТСЯ ОСТАВИТЬ ПРОМПТ ПУСТЫМ!', { exact: true })).toBeVisible();
+  await upload(page, 'Изображение сюжета', app.image); await page.getByLabel('Описание', { exact: true }).fill('Исходный ролик для портрета'); await save(page);
+  const catalogueBefore = await page.request.get(app.origin + '/api/catalog', { headers: { authorization: `Bearer ${app.installationKey}` } });
+  expect((await catalogueBefore.json()).total).toBe(1);
+  await upload(page, 'Исходное видео', app.video); await page.getByLabel('Подтверждаю:', { exact: false }).check(); await save(page);
+  const source = await page.locator('.materials video').getAttribute('src');
+  await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click(); await lock(page);
+  await expect(page.locator('.materials video')).toHaveAttribute('src', source!);
+  await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+  await page.getByLabel('Модель', { exact: true }).selectOption('fal-ai/kling-video/o1/video-to-video/edit');
+  await page.getByLabel('Участники', { exact: true }).selectOption('2');
+  await expect(page.locator('#photos-per-person option[value="1"]')).toBeDisabled();
+  await page.locator('#photos-per-person').selectOption('4');
+  await expect(page.getByLabel('Распределение фотографий')).toContainText('Фото камеры: 8. Elements: 2. Дополнительные фото: 2');
+  await expect(page.locator('#resolution')).toHaveCount(0); await lock(page);
+  await expect(page.locator('.materials video')).toHaveAttribute('src', source!); await upload(page, 'Референс 1', app.image); await save(page);
+  await page.screenshot({ path: join(artifacts, 'editor-desktop.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+  await setup(page, 'P2V', 'kling/v4/flash/reference-to-video', '1', '2');
+  await expect(page.getByLabel('Возможности модели')).toContainText('доступно 3 (max 7)');
+  await expect(page.locator('#resolution option[value="1080p"]')).toBeDisabled();
+  await lock(page); await page.setViewportSize({ width: 375, height: 812 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: `${artifacts}/browser-mobile.png`, fullPage: true });
-  await page.getByRole('button', { name: 'Выйти', exact: true }).click();
-  await login('operator');
-  await expect(page.getByRole('heading', { name: 'Ваша история — здесь.' })).toBeVisible();
+  await page.screenshot({ path: join(artifacts, 'editor-mobile.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+  await setup(page, 'P2V', 'fal-ai/vidu/q4/reference-to-video', '2', '3');
+  await page.getByLabel('Разрешение', { exact: true }).selectOption('1080p');
+  await page.getByLabel('Длительность, с', { exact: true }).fill('6'); await page.getByLabel('Длительность, с', { exact: true }).blur();
+  await page.getByLabel('Модель', { exact: true }).selectOption('google/gemini-omni-flash/v1.2/reference-to-video');
+  await expect(page.locator('#participants')).toHaveValue('2'); await expect(page.locator('#photos-per-person')).toHaveValue('3');
+  await expect(page.locator('#resolution')).toHaveValue('1080p'); await expect(page.locator('#duration')).toHaveValue('6');
+  await expect(page.getByRole('button', { name: 'Зафиксировать выбор', exact: true })).toBeEnabled();
+  await page.getByLabel('Режим', { exact: true }).selectOption('V2V');
+  await page.getByLabel('Модель', { exact: true }).selectOption('minimax/h3-max/recast');
+  await expect(page.locator('#participants')).toHaveValue('2'); await expect(page.locator('#photos-per-person')).toHaveValue('');
+  await expect(page.getByRole('button', { name: 'Зафиксировать выбор', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Выйти', exact: true }).click(); await login(page, app.origin, app.password, 'operator');
   await expect(page.getByRole('region', { name: 'Редактор сюжета' })).toHaveCount(0);
-  await page.reload();
-  await expect(page.getByRole('heading', { name: 'Ваша история — здесь.' })).toBeVisible();
-  const assets: string[] = [];
-  page.on('response', response => { if (response.url().startsWith(app.origin + '/assets/')) assets.push(response.url()); });
-  await page.goto(app.captureOrigin + '/reelme.html');
-  await expect(page.getByRole('heading', { name: 'Нужна настройка установки' })).toBeVisible();
-  expect(new URL(page.url()).origin).toBe(app.captureOrigin);
-  expect(assets.some(url => url.endsWith('.js'))).toBe(true);
-  expect(assets.some(url => url.endsWith('.css'))).toBe(true);
-  await page.screenshot({ path: `${artifacts}/browser-capture.png`, fullPage: true });
-  await writeFile(`${artifacts}/browser-observations.json`, JSON.stringify({ pageErrors: errors, consoleErrors, unexpectedHttpErrors: badResponses, modelCount: expectedModels.length, captureOrigin: new URL(page.url()).origin }, null, 2));
+  expect((await page.request.get(app.origin + '/api/admin/slots')).status()).toBe(403);
   expect(errors).toEqual([]);
-  expect(badResponses).toEqual([]);
-  expect(consoleErrors.filter(message => !message.includes('401 (Unauthorized) /api/auth/session') && !message.includes('404 (Not Found) /favicon.ico'))).toEqual([]);
 });
 
-test.describe('manual slot test', () => {
+test('prompt text survives reference changes and stale fetches; real load failures block stale saves', async ({ page, app }) => {
+  page.on('dialog', dialog => dialog.accept()); const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  await login(page, app.origin, app.password); await setup(page, 'P2V', h3, '1', '1');
+  let release: (() => void) | undefined; let held = false;
+  await page.route('**/slot-prompts/**', async route => {
+    if (!held) { held = true; await new Promise<void>(resolve => release = resolve); await route.fulfill({ status: 200, body: 'STALE PROMPT RESPONSE' }); }
+    else await route.continue();
+  });
+  await page.getByRole('button', { name: 'Зафиксировать выбор', exact: true }).click();
+  await expect(page.getByText('Загружаем готовый промпт…', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Сохранить сюжет', exact: true })).toBeDisabled();
+  await page.locator('#prompt').fill('My authored text with Image 1'); release!();
+  await expect(page.locator('#prompt')).toHaveValue('My authored text with Image 1');
+  await upload(page, 'Референс 1', app.image);
+  await expect(page.getByText('Референсы изменены.', { exact: false })).toBeVisible();
+  await expect(page.locator('#prompt')).toHaveValue('My authored text with Image 1');
+  await page.getByLabel('Заменить: Референс 1', { exact: true }).setInputFiles(app.jpeg);
+  await expect(page.getByText('Загружаем и проверяем файл…')).toHaveCount(0);
+  await expect(page.locator('#prompt')).toHaveValue('My authored text with Image 1');
+  await page.locator('.references .media-field').first().getByRole('button', { name: 'Убрать', exact: true }).click();
+  await expect(page.locator('#prompt')).toHaveValue('My authored text with Image 1');
+  // Orientation is an upper setting even when the chosen prompt filename is unchanged.
+  await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+  await page.getByLabel('Ориентация', { exact: true }).selectOption('portrait'); await lock(page);
+  const expected = await readFile('public/slot-prompts/h3-reference/people-1__photos-1__refs-0.md', 'utf8');
+  await expect(page.locator('#prompt')).toHaveValue(expected);
+  // A delayed previous setup response cannot replace the newly selected setup.
+  await page.unroute('**/slot-prompts/**'); let oldHeld = false; let releaseOld: (() => void) | undefined;
+  await page.route('**/slot-prompts/**', async route => {
+    if (!oldHeld) { oldHeld = true; await new Promise<void>(resolve => releaseOld = resolve); await route.fulfill({ status: 200, body: 'OLD SETUP RESPONSE' }); }
+    else await route.continue();
+  });
+  await page.getByRole('button', { name: 'Восстановить готовый промпт', exact: true }).click();
+  await expect(page.getByText('Загружаем готовый промпт…', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+  await page.getByLabel('Разрешение', { exact: true }).selectOption('1080P'); await lock(page); releaseOld!();
+  await expect(page.locator('#prompt')).toHaveValue(expected);
+  await page.unroute('**/slot-prompts/**');
+  await page.route('**/slot-prompts/**', route => route.fulfill({ status: 503, body: 'offline' }));
+  await page.getByRole('button', { name: 'Восстановить готовый промпт', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Не удалось загрузить готовый промпт');
+  await expect(page.getByRole('button', { name: 'Сохранить сюжет', exact: true })).toBeDisabled();
+  await page.unroute('**/slot-prompts/**'); await page.getByRole('button', { name: 'Восстановить готовый промпт', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveCount(0); await expect(page.locator('#prompt')).toHaveValue(expected);
+  await expect(page.getByRole('button', { name: 'Сохранить сюжет', exact: true })).toBeEnabled(); expect(errors).toEqual([]);
+});
+
+test.describe('manual test flow', () => {
   test.use({ runGeneration: true });
-  test('JPEG save, hidden slot, recovered request, simulated and real worker results stay separate from camera', async ({ page, app }) => {
-    const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
-    await page.goto(app.origin + '/admin');
-    await page.getByLabel('Логин').fill('admin'); await page.getByLabel('Пароль', { exact: true }).fill(app.password);
-    await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  test('per-position JPEG cache separates people/group and real results survive resets, failures and simulation', async ({ page, app }) => {
+    test.setTimeout(120_000); await mkdir(artifacts, { recursive: true });
+    const errors: string[] = []; page.on('pageerror', error => errors.push(error.message)); page.on('dialog', dialog => dialog.accept());
+    const files: string[] = []; const bytes: Buffer[] = [];
+    for (let i = 0; i < 6; i++) { files.push(join(app.dataDir, `person-${i}.jpg`)); bytes.push(await sharp({ create: { width: 60 + i, height: 48, channels: 3, background: '#d0b8ff' } }).jpeg().toBuffer()); await writeFile(files[i], bytes[i]); }
+    await login(page, app.origin, app.password); await upload(page, 'Изображение сюжета', app.image);
+    await page.getByLabel('Описание', { exact: true }).fill('Скрытый тестовый сюжет'); await page.locator('.editor').getByLabel('Отображать клиенту').uncheck();
+    await setup(page, 'P2V', kling, '2', '2'); await lock(page); await openTests(page);
+    const labels = ['Человек 1 — кадр 1 (JPEG)', 'Человек 1 — кадр 2 (JPEG)', 'Человек 2 — кадр 1 (JPEG)', 'Человек 2 — кадр 2 (JPEG)'];
     const send = page.getByRole('button', { name: 'Отправить тестовую генерацию', exact: true });
-    const save = page.getByRole('button', { name: 'Сохранить сюжет', exact: true });
-    const simulation = page.getByLabel('Отправлять на фейковую генерацию', { exact: true });
-    await expect(send).toBeDisabled();
-    await page.getByLabel('Изображение сюжета', { exact: true }).setInputFiles(app.image);
-    await expect(page.getByLabel('Заменить: Изображение сюжета')).toBeVisible();
-    await page.getByLabel('Описание', { exact: true }).fill('Скрытый тестовый сюжет');
-    await page.getByLabel('Режим', { exact: true }).selectOption('P2V');
-    await simulation.check();
-    await expect(page.getByLabel('Тестовая фотография (JPEG)', { exact: true })).toHaveAttribute('accept', 'image/jpeg,.jpg,.jpeg');
-    await page.getByLabel('Тестовая фотография (JPEG)', { exact: true }).setInputFiles(app.jpeg);
-    await expect(page.getByLabel('Заменить: Тестовая фотография (JPEG)')).toBeVisible();
-    // Changing generation mode must retain the independent testing configuration.
-    await page.getByLabel('Режим', { exact: true }).selectOption('V2V');
-    await page.getByLabel('Режим', { exact: true }).selectOption('P2V');
-    await expect(simulation).toBeChecked(); await expect(page.getByLabel('Заменить: Тестовая фотография (JPEG)')).toBeVisible();
-    await page.locator('#prompt').fill('@Element1 walks');
-    await page.locator('.editor').getByLabel('Отображать клиенту').uncheck();
-    await expect(send).toBeDisabled(); expect(app.sessionCount()).toBe(0);
-    await save.click(); await expect(page.getByRole('status')).toHaveText('Сюжет сохранён.');
-    await expect(send).toBeEnabled(); expect(app.sessionCount()).toBe(0);
-    await expect(page.getByText('Пока нет готового реального видео.', { exact: true })).toBeVisible();
-    await app.restart(); await page.reload();
-    await page.getByRole('button', { name: /Скрытый тестовый сюжет/ }).click();
-    await expect(page.getByLabel('Заменить: Тестовая фотография (JPEG)')).toBeVisible(); await expect(simulation).toBeChecked();
+    for (let i = 0; i < 4; i++) { await upload(page, labels[i], files[i]); await expect(send).toBeDisabled(); }
+    await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+    await page.getByLabel('Участники', { exact: true }).selectOption('group'); await page.locator('#photos-per-person').selectOption('2'); await lock(page); await openTests(page);
+    await expect(page.getByLabel('Группа — кадр 1 (JPEG)', { exact: true })).toBeVisible(); await expect(page.getByLabel('Группа — кадр 2 (JPEG)', { exact: true })).toBeVisible();
+    await upload(page, 'Группа — кадр 1 (JPEG)', files[4]); await upload(page, 'Группа — кадр 2 (JPEG)', files[5]);
+    await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+    await page.getByLabel('Участники', { exact: true }).selectOption('2'); await page.locator('#photos-per-person').selectOption('2'); await lock(page); await openTests(page);
+    for (const label of labels) await expect(page.getByLabel('Заменить: ' + label, { exact: true })).toBeVisible();
+    await page.getByLabel('Отправлять на фейковую генерацию', { exact: true }).check(); await save(page); await expect(send).toBeEnabled(); expect(app.sessionCount()).toBe(0);
+    const stored = openDatabase(app.dataDir);
+    const row = stored.prepare('SELECT config FROM slots').get() as {config:string}; const saved = JSON.parse(row.config); stored.close();
+    expect(saved.testPhotoIds).toHaveLength(4); expect(new Set(saved.testPhotoIds).size).toBe(4);
+    expect(await page.evaluate(() => JSON.stringify({ ...localStorage }))).not.toMatch(/base64|data:image/);
     let firstId = ''; const requestIds: string[] = []; let loseResponse = true;
     await page.route('**/api/admin/slots/*/test-generations', async route => {
       requestIds.push(route.request().postDataJSON().startRequestId);
-      if (loseResponse) {
-        loseResponse = false;
-        const accepted = await route.fetch(); expect(accepted.status()).toBe(201); firstId = (await accepted.json()).sessionId;
-        await route.abort('connectionreset');
-      } else await route.continue();
+      if (loseResponse) { loseResponse = false; const accepted = await route.fetch(); expect(accepted.status()).toBe(201); firstId = (await accepted.json()).sessionId; await route.abort('connectionreset'); }
+      else await route.continue();
     });
-    await send.click(); await expect(page.getByRole('alert')).toContainText('Ответ не получен');
-    expect(app.sessionCount()).toBe(1);
-    await page.reload(); await page.getByRole('button', { name: /Скрытый тестовый сюжет/ }).click();
+    await send.click(); await expect(page.getByRole('alert')).toContainText('Ответ не получен'); expect(app.sessionCount()).toBe(1);
+    await page.reload(); await page.getByRole('button', { name: /Скрытый тестовый сюжет/ }).click(); await openTests(page);
     await page.getByRole('button', { name: 'Повторить запрос тестовой генерации', exact: true }).click();
-    await expect(page.locator('.test-result')).toContainText('Эмуляция успешна, но fal не отвечает');
-    await expect(page.locator('.test-result')).toContainText('Тестовый режим: fal не вызывался');
-    expect(requestIds[1]).toBe(requestIds[0]); expect(app.sessionCount()).toBe(1);
-    const original = await import('node:fs/promises').then(fs => fs.readFile(app.jpeg));
-    const photos = await app.photos(firstId); expect(photos.map(p => p.pose_index)).toEqual([0,1,2,3]);
-    for (const photo of photos) expect(photo.bytes).toEqual(original);
-    await mkdir(artifacts, { recursive: true });
-    await page.locator('.form-section').last().screenshot({ path: `${artifacts}/slot-test-simulated.png` });
-    await send.click(); await expect(page.locator('.test-result')).toContainText('Тест № 2');
-    expect(app.sessionCount()).toBe(2); expect(requestIds[2]).not.toBe(requestIds[1]);
-    await simulation.uncheck(); await expect(send).toBeDisabled();
-    await save.click(); await expect(page.getByRole('status')).toHaveText('Сюжет сохранён.');
-    await send.click(); await expect(page.locator('.test-result')).toContainText('Тест № 3 · Видео готово');
-    const player = page.getByLabel('Последнее реальное видео сюжета', { exact: true });
-    await expect(player).toBeVisible();
+    await expect(page.locator('.test-result')).toContainText('Эмуляция успешна, но fal не отвечает'); expect(requestIds[1]).toBe(requestIds[0]); expect(app.sessionCount()).toBe(1);
+    const photos = await app.photos(firstId); expect(photos.map(row => row.pose_index)).toEqual([0, 1, 2, 3]);
+    for (const photo of photos) expect(photo.bytes).toEqual(bytes[photo.pose_index]);
+    await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+    await expect(page.locator('.test-result')).toContainText('Эмуляция успешна'); await lock(page); await openTests(page);
+    const simulation = page.getByLabel('Отправлять на фейковую генерацию', { exact: true }); await expect(simulation).not.toBeChecked();
+    await save(page); await send.click(); await expect(page.locator('.test-result')).toContainText('Видео готово');
+    const player = page.getByLabel('Последнее реальное видео сюжета', { exact: true }); await expect(player).toBeVisible();
     await expect.poll(() => player.evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
-    await player.evaluate(node => (node as HTMLVideoElement).play());
-    await expect.poll(() => player.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(0.1);
-    await player.evaluate(node => (node as HTMLVideoElement).pause());
-    const stableVideoUrl = await player.getAttribute('src');
-    await expect(page.locator('.last-video')).toContainText('Отправлено в fal');
-    await expect(page.locator('.last-video')).toContainText('Новосибирск');
-    await expect(page.locator('.last-video')).toContainText('До готового видео');
-    expect(await page.locator('.last-video dd').allTextContents()).not.toContain('Нет данных');
-    await page.locator('.form-section').last().screenshot({ path: `${artifacts}/slot-test-real-ready.png` });
-    await page.locator('#prompt').fill('fail-test'); await save.click(); await expect(page.getByRole('status')).toHaveText('Сюжет сохранён.');
-    await send.click(); await expect(page.locator('.test-result')).toContainText('Тест № 4 · Тест не завершён');
-    await expect(page.locator('.test-result')).toContainText('Сервис отклонил запрос генерации');
-    expect(app.sessionCount()).toBe(4);
-    await expect(player).toHaveAttribute('src', stableVideoUrl!);
-    await page.setViewportSize({ width: 375, height: 812 });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.locator('.form-section').last().screenshot({ path: `${artifacts}/slot-test-failed-mobile.png` });
-    await simulation.check(); await save.click(); await expect(page.getByRole('status')).toHaveText('Сюжет сохранён.');
-    await send.click(); await expect(page.locator('.test-result')).toContainText('Тест № 5 · Эмуляция успешна');
-    await expect(player).toHaveAttribute('src', stableVideoUrl!);
-    // Legacy rows keep the same playable MP4 while both unknown measurements are explicit.
-    const resultId = stableVideoUrl!.split('/').at(-2)!;
-    const db = openDatabase(app.dataDir);
-    try {
-      expect((db.prepare('SELECT opened_at FROM session_delivery WHERE session_id=?').get(resultId) as { opened_at: number | null }).opened_at).toBeNull();
-      db.prepare('UPDATE generation_jobs SET submitted_at=NULL,ready_at=NULL WHERE session_id=?').run(resultId);
-    } finally { db.close(); }
+    await player.evaluate(node => (node as HTMLVideoElement).play()); await expect.poll(() => player.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(0.1); await player.evaluate(node => (node as HTMLVideoElement).pause());
+    const stableUrl = await player.getAttribute('src'); await expect(page.locator('.last-video')).toContainText('Новосибирск'); await expect(page.locator('.last-video')).toContainText('До готового видео');
+    await page.screenshot({ path: join(artifacts, 'slot-test-ready-desktop.png'), fullPage: true });
+    await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click(); await expect(player).toHaveAttribute('src', stableUrl!);
+    await lock(page); await openTests(page); await page.locator('#prompt').fill('fail-test'); await save(page); await send.click();
+    await expect(page.locator('.test-result')).toContainText('Тест не завершён'); await expect(player).toHaveAttribute('src', stableUrl!);
+    await simulation.check(); await save(page); await send.click(); await expect(page.locator('.test-result')).toContainText('Эмуляция успешна'); await expect(player).toHaveAttribute('src', stableUrl!);
+    await page.setViewportSize({ width: 375, height: 812 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: join(artifacts, 'slot-test-ready-mobile.png'), fullPage: true });
+    const resultId = stableUrl!.split('/').at(-2)!; const db = openDatabase(app.dataDir);
+    expect((db.prepare('SELECT opened_at FROM session_delivery WHERE session_id=?').get(resultId) as {opened_at:number|null}).opened_at).toBeNull();
+    db.prepare('UPDATE generation_jobs SET submitted_at=NULL,ready_at=NULL WHERE session_id=?').run(resultId); db.close();
     await page.reload(); await page.getByRole('button', { name: /Скрытый тестовый сюжет/ }).click();
-    await expect(player).toHaveAttribute('src', stableVideoUrl!);
-    await expect(page.locator('.last-video dd')).toHaveText(['Нет данных', 'Нет данных']);
-    await expect.poll(() => player.evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
-    await page.locator('.last-video').screenshot({ path: `${artifacts}/slot-last-video-legacy.png` });
+    await expect(player).toHaveAttribute('src', stableUrl!); await expect(page.locator('.last-video dd')).toHaveText(['Нет данных', 'Нет данных']);
     expect(errors).toEqual([]);
-    await writeFile(`${artifacts}/slot-test-browser-observations.json`, JSON.stringify({ hiddenSlot: true, noAutomaticSessionFromUploadOrSave: true, lostResponseSameRequestAfterReload: requestIds[0] === requestIds[1], sessionCount: app.sessionCount(), photos: photos.length, fixtureBytesEqual: true, simulated: true, realReady: true, actualPlayback: true, safeFailureKeepsVideo: true, simulationKeepsVideo: true, legacyTimesExplicit: true, receiveNotOpened: true, modeChangePreservesTestSettings: true, cameraCalls: 0, externalCalls: 0, pageErrors: errors }, null, 2));
+    await writeFile(join(artifacts, 'editor-observations.json'), JSON.stringify({ distinctJPEGs: photos.length, cacheSeparatedGroupsAndPeople: true, lostResponseRetriedSameId: requestIds[0] === requestIds[1], actualPlayback: true, readySurvivesUnlockFailureSimulation: true, unknownLegacyTimes: true, receiveNotOpened: true, pageErrors: errors }, null, 2));
   });
 });

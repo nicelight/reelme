@@ -65,7 +65,7 @@ test('archive calendar uses saved start identity when photo arrives after Novosi
   f.advance(Date.parse('2026-01-01T16:59:59Z') - Date.UTC(2026, 0, 1));
   const cookie = await f.login(); const thumbnail = await f.upload(cookie, await imageBytes());
   const video = await f.upload(cookie, await videoBytes(f.root, 10), 'video/mp4', 'clip.mp4');
-  const slotResponse = await f.app.inject({ method:'POST', url:'/api/admin/slots', headers:{cookie,origin:f.config.origin}, payload:{description:'История до полуночи',visible:true,thumbnailId:thumbnail.id,mode:'V2V',model:'minimax/h3-max/recast',videoId:video.id,referenceIds:[],resolution:'768P',recastShotsConfirmed:true} });
+  const slotResponse = await f.app.inject({ method:'POST', url:'/api/admin/slots', headers:{cookie,origin:f.config.origin}, payload:{participants:1,photosPerParticipant:1,orientation:'landscape',description:'История до полуночи',visible:true,thumbnailId:thumbnail.id,mode:'V2V',model:'minimax/h3-max/recast',videoId:video.id,referenceIds:[],resolution:'768P',recastShotsConfirmed:true} });
   assert.equal(slotResponse.statusCode,201,slotResponse.body);
   const payload = {startRequestId:randomUUID(),slotId:slotResponse.json().id};
   const start = async (body = payload) => (await f.app.inject({method:'POST',url:'/api/capture/sessions',headers:installation,payload:body})).json<StartReceipt>();

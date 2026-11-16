@@ -1,0 +1,58 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/editor.spec.ts
+
+
+Running 3 tests using 1 worker
+
+(node:1785930) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 tests/editor.spec.ts:44:1 › sequential setup exposes real capacities, locks fields, saves both modes and preserves the source on unlock (6.7s)
+(node:1786261) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 tests/editor.spec.ts:115:1 › prompt text survives reference changes and stale fetches; real load failures block stale saves (3.1s)
+  ✘  3 tests/editor.spec.ts:164:3 › manual test flow › per-position JPEG cache separates people/group and real results survive resets, failures and simulation (2.0m)
+
+
+  1) tests/editor.spec.ts:44:1 › sequential setup exposes real capacities, locks fields, saves both modes and preserves the source on unlock 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 403
+    Received: 401
+
+      109 |   await page.getByRole('button', { name: 'Выйти', exact: true }).click(); await login(page, app.origin, app.password, 'operator');
+      110 |   await expect(page.getByRole('region', { name: 'Редактор сюжета' })).toHaveCount(0);
+    > 111 |   expect((await page.request.get(app.origin + '/api/admin/slots')).status()).toBe(403);
+          |                                                                              ^
+      112 |   expect(errors).toEqual([]);
+      113 | });
+      114 |
+        at /home/serg/Projects/reelme/tests/editor.spec.ts:111:78
+
+    Error Context: .tasks/TASK-017-T2-FT-001-W14/browser-results/editor-sequential-setup-ex-6d0c5-serves-the-source-on-unlock/error-context.md
+
+  2) tests/editor.spec.ts:164:3 › manual test flow › per-position JPEG cache separates people/group and real results survive resets, failures and simulation 
+
+    Test timeout of 120000ms exceeded.
+
+    Error: locator.click: Test timeout of 120000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Повторить запрос тестовой генерации', exact: true })
+
+
+      193 |     await send.click(); await expect(page.getByRole('alert')).toContainText('Ответ не получен'); expect(app.sessionCount()).toBe(1);
+      194 |     await page.reload(); await page.getByRole('button', { name: /Скрытый тестовый сюжет/ }).click(); await openTests(page);
+    > 195 |     await page.getByRole('button', { name: 'Повторить запрос тестовой генерации', exact: true }).click();
+          |                                                                                                  ^
+      196 |     await expect(page.locator('.test-result')).toContainText('Эмуляция успешна, но fal не отвечает'); expect(requestIds[1]).toBe(requestIds[0]); expect(app.sessionCount()).toBe(1);
+      197 |     const photos = await app.photos(firstId); expect(photos.map(row => row.pose_index)).toEqual([0, 1, 2, 3]);
+      198 |     for (const photo of photos) expect(photo.bytes).toEqual(bytes[photo.pose_index]);
+        at /home/serg/Projects/reelme/tests/editor.spec.ts:195:98
+
+    Error Context: .tasks/TASK-017-T2-FT-001-W14/browser-results/editor-manual-test-flow-pe-403c7-ets-failures-and-simulation/error-context.md
+
+  2 failed
+    tests/editor.spec.ts:44:1 › sequential setup exposes real capacities, locks fields, saves both modes and preserves the source on unlock 
+    tests/editor.spec.ts:164:3 › manual test flow › per-position JPEG cache separates people/group and real results survive resets, failures and simulation 
+  1 passed (2.2m)
