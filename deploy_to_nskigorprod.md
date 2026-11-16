@@ -4,6 +4,20 @@
 
 Принято: собирать Docker-образ на локальном компьютере для `linux/amd64`, переносить готовый архив на VPS. На VPS не выполнять `docker build`, `npm ci`, TypeScript/Vite-сборку. Node.js, FFmpeg и нативные зависимости находятся внутри образа; ОС контейнера не обязана совпадать с AlmaLinux хоста. Существующий Caddy остаётся системным сервисом.
 
+## Первый деплой 16 ноября — в процессе
+
+По команде оператора начат первый деплой. Локально собирается
+`reelme:20261116-e979835-deploy1`: код `e979835` плюс изменения Dockerfile/.dockerignore
+для поставки промптов. Compose задаёт `TEMPLATE_VIDEOS_DIR=/data/template-videos`.
+DNS A уже отвечает `46.8.200.99` в режиме DNS only; Caddy получил доверенный
+сертификат. Отдельный блок домена добавлен через validate/reload; исходный файл
+сохранён в `/root/reelme-deploy-20261116/Caddyfile.before`. Старые блоки сохранены,
+PID Caddy/FRP не изменились; исходный ответ обоих старых сайтов — 502.
+
+На VPS создан закрытый `/etc/reelme/app.env` для первоначального setup; fal/SMTP
+не настроены. Пароли подготовлены в локальном закрытом файле вне Git.
+Контейнер приложения пока не запущен: HTTPS нового домена временно отвечает 502.
+
 ## Сервер и исходное состояние
 
 | Параметр | Проверено |
@@ -53,8 +67,8 @@
 ## Файлы поставки и память
 
 - [Dockerfile](Dockerfile): multi-stage build, Node 22.23.5, production dependencies и FFmpeg в итоговом Debian Bookworm образе. Сборка запускает `npm run check` и `npm run build`.
-- [.dockerignore](.dockerignore): разрешает только исходники и build manifests; `.env`, Git, локальные данные и `node_modules` не отправляются в build context.
-- [deploy/compose.yaml](deploy/compose.yaml): только `image`, без `build`, `pull_policy: never`, порт `127.0.0.1:3000`, непривилегированный UID, read-only rootfs, отдельный writable `/data`, SELinux `:Z`, tmpfs `/tmp`, ротация логов, healthcheck.
+- [.dockerignore](.dockerignore): разрешает исходники, build manifests и `public/slot-prompts`; `.env`, Git, локальные данные и `node_modules` не отправляются в build context.
+- [deploy/compose.yaml](deploy/compose.yaml): только `image`, без `build`, `pull_policy: never`, порт `127.0.0.1:3000`, непривилегированный UID, read-only rootfs, отдельный writable `/data`, `TEMPLATE_VIDEOS_DIR=/data/template-videos`, SELinux `:Z`, tmpfs `/tmp`, ротация логов, healthcheck.
 - [deploy/app.env.example](deploy/app.env.example): шаблон server-only credentials. Compose читает значения буквально (`format: raw`): без shell-кавычек, по одной строке на значение.
 
 По указанию оператора от 16 ноября **дополнительные ограничения ресурсов контейнера не задаются**: удалены `mem_limit`, `memswap_limit`, `pids_limit` и явный размер tmpfs `/tmp`; CPU quota не устанавливается. Действуют обычные пределы хоста/ядра (в том числе стандартный размер tmpfs), swap доступен по политике ОС. Изоляция, непривилегированный UID и read-only rootfs сохранены. Исторический smoke выше проводился с прежним лимитом 1 GiB; текущая конфигурация его не содержит. Для оценки фактического потребления включён сбор ниже.
@@ -183,7 +197,7 @@ docker compose logs --tail 50
 
 ### 3. DNS и Caddy
 
-Оператор задаёт A-запись `reelme.natureonzoom.win` → `46.8.200.99`. AAAA добавлять только при проверенном маршруте IPv6 к этому же серверу. Перед выпуском сертификата проверить публичный DNS и доступность TCP 80/443. DNS здесь автоматически не меняется.
+Оператор задаёт в Cloudflare A-запись: Name `reelme`, IPv4 `46.8.200.99`, Proxy status **DNS only** (серое облако), TTL Auto. HTTPS обслуживает Caddy напрямую. AAAA добавлять только при проверенном маршруте IPv6 к этому же серверу. Перед выпуском сертификата проверить публичный DNS и доступность TCP 80/443. DNS здесь автоматически не меняется.
 
 В существующий `/etc/caddy/Caddyfile` добавить **отдельный блок**, сохранив оба старых домена и FRP-маршрут:
 
@@ -210,6 +224,10 @@ journalctl -u caddy --since '5 minutes ago' --no-pager
 Не заменять reload на restart. Если validate не прошёл, не перезагружать службу; вернуть файл из свежей копии. При проблеме после reload вернуть эту же копию, снова validate и reload. Не использовать для этого устаревшую копию от подготовки, если конфигурация с тех пор менялась.
 
 Проверить старые домены и FRP после подключения ReelMe. При SELinux AVC изучить `ausearch -m AVC -ts recent`; не отключать SELinux целиком. Существующий Caddy уже настроен на upstream через loopback, но доступ именно к контейнеру ещё требует проверки после развёртывания.
+
+Каталог подготовленных роликов на хосте — `/srv/reelme-data/template-videos`,
+в контейнере — `/data/template-videos`. Владелец 989:988; имена и правила импорта —
+[инструкция](media/template-videos/readme_media.md). Каталог не публикуется как static.
 
 ### 4. Приёмка
 

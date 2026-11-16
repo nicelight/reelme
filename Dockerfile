@@ -6,6 +6,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY tsconfig*.json vite.config.ts index.html ./
 COPY src ./src
+COPY public/slot-prompts ./public/slot-prompts
 RUN npm run check && npm run build && npm prune --omit=dev
 
 FROM node:22.23.5-bookworm-slim AS runtime

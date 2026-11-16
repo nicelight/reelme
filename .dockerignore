@@ -6,3 +6,6 @@
 !index.html
 !src/
 !src/**
+!public/
+!public/slot-prompts/
+!public/slot-prompts/**

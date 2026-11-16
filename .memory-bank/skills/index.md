@@ -68,3 +68,25 @@ status: active
 - Readiness doctor: mb-doctor
 - Review: /review-feat-plan, /review-tasks-plan
 - Maintenance: mb-garden
+
+## Frontend skills (Codex, project-local)
+
+Установлены 2026-11-16 в `.agents/skills/`; существующие DevRails skills сохранены.
+Все четыре применяются в существующем стеке ReelMe: без добавления React,
+UI-фреймворков и motion-библиотек. JSX/Motion-примеры адаптировать к CSS/WAAPI.
+Скиллы не заменяют проектные правила, согласование границ, проверки и разрешение на commit/publish.
+
+| Имя вызова | Каталог | Источник / версия |
+| --- | --- | --- |
+| `$impeccable` | `.agents/skills/impeccable/` | [pbakaus/impeccable](https://github.com/pbakaus/impeccable), npm installer 4.9.2; skill 4.9.1; engine 0.1.24; project scope, Codex only |
+| `$animate` | `.agents/skills/animate/` | [emilkowalski/skills](https://github.com/emilkowalski/skills/tree/64eb3deb9a5fbfa041faf783e0bc3fd635872e9c/skills/animate), `64eb3deb9a5fbfa041faf783e0bc3fd635872e9c` |
+| `$optimize-web-animations` | `.agents/skills/optimize-web-animations/` | [MengTo/Skills](https://github.com/MengTo/Skills/tree/3cc93458c4949c39a04e938ea7892a1d6d3d40bf/agent-skills/codex/optimize-web-animations), `3cc93458c4949c39a04e938ea7892a1d6d3d40bf` |
+| `$prototype` | `.agents/skills/prototype/` | [mattpocock/skills](https://github.com/mattpocock/skills/tree/5863806dd4e15c63174bee4e7515a4256792ecfa/skills/engineering/prototype), `5863806dd4e15c63174bee4e7515a4256792ecfa` |
+
+- Impeccable: одна точка входа; внутренние команды, например `$impeccable audit`, не отдельные skills. Не создавать дублирующие shortcuts без необходимости. `init` и `document` при установке не выполняются: продуктовый контекст уже хранится в Memory Bank.
+- Impeccable runtime: официальный установщик создал `.codex/hooks.json`; для автоматических hooks требуется одобрение в Codex через `/hooks`. Engine проверен командой `scripts/impeccable engine-probe` → `impeccable-engine 0.1.24`; бинарник находится в `~/.impeccable/bin/0.1.24/`, в проекте сохраняются launcher и checksums. На другой машине первый запуск требует загрузки engine. CLI скачан через npx cache, зависимость приложения не добавлена. Установлены также лицензия и NOTICE.
+- Animate: `RECIPES.md` и лицензия включены. `pick-ui-library` и `choreograph` включены как справочные документы в `references/` (с рецептами choreography), без дополнительных зарегистрированных skills. Локальная адаптация: ссылки на эти документы, снятие их skill frontmatter, ограничение стека ReelMe. Другие упомянутые автором skills для аудита/React Native не установлены.
+- Optimize: включены `references/browser-profiling.md`, `agents/openai.yaml`, полный `demo/` и лицензия. Измерения требуют доступного браузерного инструмента и работающей страницы; установка не доказывает производительность приложения. В каталоге Codex отображается также как **Web Performance Audit**.
+- Prototype: включены `UI.md`, `LOGIC.md`, `agents/openai.yaml` и лицензия. Примеры UI следуют существующему стеку; commit прототипа в отдельную ветку выполняется только при разрешении оператора.
+
+Проверка установки: наличие frontmatter с именами, вспомогательных файлов и локальных ссылок; сверка исходных файлов с upstream и контроль сохранности прежних skills. Приложение и его зависимости в этой задаче не изменяются; дизайн, прототипирование и профилирование не запускаются.
