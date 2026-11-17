@@ -48,6 +48,26 @@ Preserve tooling conventions, public paths, exports, and executable identities.
 Use descriptive names suited to the existing project. Rename files only when
 needed for the requested outcome.
 
+## ReelMe project map
+
+- `src/client/cloud/`: Svelte admin panel, operator screen, archive and public delivery.
+- `src/client/capture/`: installation UI and camera flow.
+- `src/server/`: Fastify API, SQLite, media and generation workers;
+  `src/shared/`: shared contracts and slot setup rules.
+- [Slot setup matrix](docs/slot-setup/matrix.md): accepted model capabilities,
+  capture plans and prompt rules; consult before changing the slot editor.
+- [DESIGN.md](DESIGN.md): approved results-screen design, not a universal admin
+  theme. Prototype directories retain references; production entry points are
+  defined in `vite.config.ts` and client `main.ts` files.
+- [README.md](README.md): launch instructions and project documentation.
+
+Use `npm run check` for Svelte/TypeScript checks, `npm run build` for production
+builds, `npm test` for server/shared tests, and `npm run test:ui -- tests/<name>.spec.ts`
+for a relevant browser flow. Select checks for the changed behavior. Browser
+fixtures and local simulations do not prove real camera, fal, SMTP or VPS operation.
+Use the task index and individual task records for current progress; historical
+run summaries can describe an older queue.
+
 ## Memory and execution
 
 Keep Memory Bank maximally compact: only facts, accepted decisions and their

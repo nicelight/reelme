@@ -67,7 +67,7 @@ python3 linux_digiCamControl/linux_digicamcontrol.py serve --camera /dev/video0 
 
 Тестовая страница — `http://localhost:5513/reelme-test.html`. Для CaptureClient
 нужно передать `--web-root` с каталогом настроенного `reelme.html` по инструкции
-[локальной страницы съёмки](../../README.md#локальная-страница-съёмки), сохранив origin
+[локальной страницы съёмки](../../docs/MANUAL.md#локальная-страница-съёмки), сохранив origin
 `http://localhost:5513`. Для V4L2 поддержаны `LiveViewWnd_Show`, `/liveview.jpg`
 и `LiveView_Capture`: один FFmpeg получает кадры, съёмка сохраняет следующий кадр,
 не старое превью. `LiveViewWnd_Hide`/`Close` освобождает камеру; без запросов
