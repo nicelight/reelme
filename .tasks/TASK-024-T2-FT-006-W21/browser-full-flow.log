@@ -1,0 +1,12 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/test-video.spec.ts
+
+
+Running 1 test using 1 worker
+
+(node:507269) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/test-video.spec.ts:17:1 › saved test-video mode: camera → ordinary worker → visible QR → playable download → SMTP attachment (21.5s)
+
+  1 passed (23.5s)

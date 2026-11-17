@@ -9,3 +9,5 @@
 !public/
 !public/slot-prompts/
 !public/slot-prompts/**
+!public/test-videos/
+!public/test-videos/**

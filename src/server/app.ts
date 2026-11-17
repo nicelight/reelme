@@ -65,7 +65,7 @@ export async function createApp(config: Config, options: { now?: () => number; l
   });
   const generation = options.generation ?? (config.falKey ? { client: createFalTransport(config.falKey), secret: config.falKey } : {});
   if (generation !== false) {
-    const worker = createGenerationWorker(db, config.dataDir, config.origin, app.log, { ...generation, now: options.now ?? generation.now, publishReady: publish, deleteOutput });
+    const worker = createGenerationWorker(db, config.dataDir, config.origin, app.log, { testVideoDir: join(config.clientDir, 'test-videos'), ...generation, now: options.now ?? generation.now, publishReady: publish, deleteOutput });
     app.addHook('onReady', async () => { worker.start(); });
     app.addHook('onClose', async () => { await worker.stop(); });
   }

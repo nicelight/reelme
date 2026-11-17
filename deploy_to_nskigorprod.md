@@ -8,9 +8,11 @@
 
 Контейнер `reelme-app-1` запущен из `reelme:20261116-e979835-deploy1`, порт
 127.0.0.1:3000. Setup создал admin/operator и installation key; первоначальные
-пароли удалены из серверного app.env. Пароли находятся у оператора локально в
-`/home/serg/.local/share/reelme/production-access-20261116.txt` (0600, вне Git).
-Ключ установки — `/srv/reelme-data/installation-key.txt` на сервере.
+пароли удалены из серверного app.env. Локальная копия production-паролей и ключа
+установки хранится в `/home/serg/Projects/reelme/.env` (0600, вне Git).
+Исходные файлы в `/home/serg/.local/share/reelme/` сохранены как резервные копии.
+Ключ установки — `/srv/reelme-data/installation-key.txt` на сервере; `INSTALLATION_KEY`
+в локальном `.env` хранит его копию и не импортируется при локальном setup.
 
 Образ собран локально: свежие check (0 ошибок/предупреждений) и build, затем
 скомпилированное приложение поверх локального `reelme:prep-20261114` с Node 22.23.5

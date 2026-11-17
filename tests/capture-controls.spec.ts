@@ -19,7 +19,7 @@ async function freeze(page: Page) {
   await page.clock.pauseAt(new Date('2026-11-16T12:00:01Z'));
 }
 
-test('pause 3/2/1, restart, last retakes, person boundary, pending JPEG and guide visibility', async ({ page, app }) => {
+test('pause 5/2/1, restart, last retakes, person boundary, pending JPEG and guide visibility', async ({ page, app }) => {
   test.setTimeout(120_000); await mkdir(artifacts, { recursive: true });
   const admin = await apiRequest.newContext({ baseURL: app.origin, extraHTTPHeaders: { Origin: app.origin } });
   await admin.post('/api/auth/login', { data: { username: 'admin', password: app.password } });
@@ -56,7 +56,7 @@ test('pause 3/2/1, restart, last retakes, person boundary, pending JPEG and guid
   await expect(page.locator('.pose-guide img')).toHaveJSProperty('naturalWidth', 512);
   const receipt = await page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!).receipt);
   await page.getByRole('button', { name: 'Начать съёмку' }).click();
-  for (const [elapsed, digit] of [[0,'3'],[1000,'2'],[2000,'1']] as const) {
+  for (const [elapsed, digit] of [[0,'5'],[1000,'2'],[2000,'1']] as const) {
     if (elapsed) await page.clock.runFor(elapsed);
     await expect(page.locator('.live .countdown strong')).toHaveText(digit);
     await expect(page.locator('.pose .countdown strong')).toHaveText(digit);
@@ -72,9 +72,9 @@ test('pause 3/2/1, restart, last retakes, person boundary, pending JPEG and guid
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: `${artifacts}/controls-countdown-mobile.png`, fullPage: true });
   await page.setViewportSize({ width: 1280, height: 900 });
-  const expose = async () => { await page.clock.runFor(3000); await expect(page.getByText('Кадр снят ✓', { exact: true })).toBeVisible(); };
-  const advance = () => page.clock.runFor(1500);
-  await expose(); await advance();
+  const expose = async (seconds = 5) => { await page.clock.runFor(seconds * 1000); await expect(page.getByText('Кадр снят ✓', { exact: true })).toBeVisible(); };
+  const advance = () => page.clock.runFor(1000);
+  await expose(3); await advance();
   await page.getByRole('button', { name: 'Переснять предыдущий кадр' }).click();
   expect(shutters).toBe(1); await expect(page.locator('.progress strong')).toHaveText('1 из 4');
   await expect(page.locator('.thumbnail.filled')).toHaveCount(0);
@@ -89,7 +89,7 @@ test('pause 3/2/1, restart, last retakes, person boundary, pending JPEG and guid
   await expect(page.getByText('Подготовьте второго человека')).toBeVisible();
   await page.getByRole('button', { name: 'Начать заново', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Начать заново', exact: true }).click();
-  await expect(page.locator('.live .countdown strong')).toHaveText('3');
+  await expect(page.locator('.live .countdown strong')).toHaveText('5');
   await page.getByRole('button', { name: 'Пауза', exact: true }).click();
   await expect(page.locator('.capture-progress')).toHaveText('Снято: 0 из 4');
   await page.clock.runFor(5000); expect(shutters).toBe(4);
@@ -116,7 +116,7 @@ test('pause 3/2/1, restart, last retakes, person boundary, pending JPEG and guid
   const savedPhotos = await app.photos(receipt.sessionId);
   for (const [index, frame] of [5,6,7,9].entries()) expect(savedPhotos[index].bytes).toEqual(frames[frame]);
   expect(apiWrites).toHaveLength(5); expect(pageErrors).toEqual([]);
-  await writeFile(`${artifacts}/controls-observations.json`, JSON.stringify({ pauseDigits: [3,2,1], restartWait: true, retakeBoundaryAndLast: true, finalFrames: [5,6,7,9], pendingRetryShutters: 1, noSubmitBeforeFinish: true, guideVisible: true, pageErrors }));
+  await writeFile(`${artifacts}/controls-observations.json`, JSON.stringify({ pauseDigits: [5,2,1], restartWait: true, retakeBoundaryAndLast: true, finalFrames: [5,6,7,9], pendingRetryShutters: 1, noSubmitBeforeFinish: true, guideVisible: true, pageErrors }));
   await admin.dispose();
 });
 
@@ -151,7 +151,7 @@ test('group uses guide 5; lost local transfer after reload stops even before fir
     await expect(page.getByText('Образец №5 ещё не загружен')).toBeVisible();
     const id = await page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!).receipt.sessionId); sessions.push(id);
     await page.getByRole('button', { name: 'Начать съёмку' }).click();
-    for (let i = 0; i < 2; i++) { await page.clock.runFor(3000); await expect(page.getByText('Кадр снят ✓', { exact: true })).toBeVisible(); await page.clock.runFor(1500); }
+    for (let i = 0; i < 2; i++) { await page.clock.runFor(5000); await expect(page.getByText('Кадр снят ✓', { exact: true })).toBeVisible(); await page.clock.runFor(1000); }
     await page.getByRole('button', { name: 'Завершить фотосессию' }).click();
     await expect(page.getByRole('alert')).toContainText('снятые кадры сохранены');
     const accepted = await app.photos(id); expect(accepted).toHaveLength(position);
@@ -168,7 +168,7 @@ test('group uses guide 5; lost local transfer after reload stops even before fir
   await page.getByRole('button', { name: 'Сюжет 1: Групповой снимок', exact: true }).click();
   await page.getByRole('button', { name: 'Выбрать этот сюжет' }).click();
   await page.getByRole('button', { name: 'Начать съёмку' }).click();
-  await expect(page.locator('.live .countdown strong')).toHaveText('3');
+  await expect(page.locator('.live .countdown strong')).toHaveText('5');
   const before = shutters; await page.goto(local + '#setup'); await page.clock.runFor(5000); expect(shutters).toBe(before);
   await writeFile(`${artifacts}/reload-loss-observations.json`, JSON.stringify({ sessions, acceptedCounts: [0,1], reloadNewShutters: 0, leavingCountdownNewShutters: 0, noIndexedDB: true, groupGuide: 5 }));
   await admin.dispose();
@@ -232,7 +232,7 @@ test('production session view: pending pause, dialog person boundary, confirmed 
   const stagger = await page.locator('.rim-breath').evaluateAll(elements => elements.map(element => element.getAnimations()[0]?.effect?.getTiming().delay));
   expect(stagger).toEqual([0, 200, 400]);
   await page.getByRole('button', { name: 'Начать съёмку', exact: true }).click();
-  await page.clock.runFor(1000); await expect(page.locator('.countdown strong')).toHaveText(['2', '2']);
+  await page.clock.runFor(1000); await expect(page.locator('.countdown strong')).toHaveText(['4', '4']);
   await page.screenshot({ path: `${artifacts}/production-countdown.png`, fullPage: true });
   await page.getByRole('button', { name: 'Начать заново', exact: true }).click();
   await page.clock.runFor(5000); expect(shutters).toBe(0);
@@ -243,7 +243,9 @@ test('production session view: pending pause, dialog person boundary, confirmed 
   await expect(page.getByRole('button', { name: 'Выбрать другой сценарий' })).toBeDisabled();
   await page.clock.runFor(1000); expect(shutters).toBe(1); await expect(page.locator('.thumbnail.filled')).toHaveCount(0);
   hold = false; await page.clock.runFor(500);
-  await expect(page.locator('.thumbnail.filled')).toHaveCount(1); await expect(page.getByText('Съёмка на паузе', { exact: true })).toBeVisible();
+  await expect(page.locator('.thumbnail.filled')).toHaveCount(1);
+  await expect(page.locator('.captured-frame')).toBeVisible(); await page.clock.runFor(1000);
+  await expect(page.getByText('Съёмка на паузе', { exact: true })).toBeVisible();
   await expect(page.locator('.live-preview')).toBeVisible(); await expect(page.locator('.captured-frame')).toHaveCount(0);
   await page.clock.runFor(5000); expect(shutters).toBe(1);
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click(); await page.clock.runFor(3000);
@@ -253,6 +255,7 @@ test('production session view: pending pause, dialog person boundary, confirmed 
   await page.getByRole('button', { name: 'Отмена', exact: true }).click();
   await expect(page.locator('.progress strong')).toHaveText('3 из 4');
   await expect(page.locator('.participant-label')).toHaveText('Человек 2');
+  await page.clock.runFor(1000); // The interrupted confirmation keeps its original photo hold.
   await expect(page.locator('.live-preview')).toBeVisible();
   await page.clock.runFor(5000); expect(shutters).toBe(2);
   await expect(page.getByRole('button', { name: 'Продолжить', exact: true })).toBeVisible();

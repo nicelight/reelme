@@ -5,7 +5,7 @@
  * saved test JPEGs, copied by position through the same intake/finalize. Legacy
  * tests retain their single-source retry; new plans never duplicate it.
  * Test retries retain their original source; concurrent preparation is rejected. Photo bytes are written and
- * decoded before a short DB transaction publishes one position. Finalize changes
+ * decoded without image statistics before a short DB transaction publishes one position. Finalize changes
  * capturing to submit_pending once, only for a complete set; later photo writes
  * are refused, including uploads that started before finalize or event deletion. No camera/fal calls; generation errors are a safe projection from Sessions.
  * Source: docs/slot-setup/matrix.md. New session plans are immutable snapshots. */
@@ -15,7 +15,7 @@ import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { FastifyInstance } from 'fastify';
-import sharp from 'sharp';
+import { inspectJpeg } from './jpeg.js';
 import { z } from 'zod';
 import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
@@ -65,11 +65,7 @@ function requireCapturing(db: DB, sessionId: string, poseIndex: number) {
 }
 async function inspectPhoto(path: string) {
   try {
-    const image = sharp(path, { limitInputPixels: 40_000_000, failOn: 'warning' });
-    const meta = await image.metadata();
-    if (meta.format !== 'jpeg' || !meta.width || !meta.height || (meta.pages ?? 1) > 1) throw new Error();
-    await image.stats();
-    return { width: meta.width, height: meta.height };
+    return await inspectJpeg(path, 40_000_000);
   } catch { throw new HttpError(400, 'INVALID_PHOTO', 'Нужен корректный JPEG до 40 мегапикселей'); }
 }
 export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, access: Access, now: () => number) {

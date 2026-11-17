@@ -17,10 +17,10 @@
   import brand from '../story/assets/reelme-mark.png';
   import '../story/assets/fonts.css';
   import './session.css';
-  let { receipt, installationKey, position, phase, countdown, preview, previewEnabled, confirmed, thumbnails,
+  let { receipt, installationKey, position, phase, countdown, preview, previewEnabled, confirmed, confirming, thumbnails,
     error, pendingCapture, cameraLocked, pauseAfterCapture, onrun, onpause, onretake, onrestart, onfinish, onscenario, onstoppreview }: {
     receipt: StartReceipt; installationKey: string; position: number; phase: CapturePhase;
-    countdown: number; preview: string; previewEnabled: boolean; confirmed: string; thumbnails: PhotoThumbnail[];
+    countdown: number; preview: string; previewEnabled: boolean; confirmed: string; confirming: boolean; thumbnails: PhotoThumbnail[];
     error: string; pendingCapture: boolean; cameraLocked: boolean; pauseAfterCapture: boolean;
     onrun: () => void; onpause: () => void; onretake: () => void; onrestart: () => void; onfinish: () => void;
     onscenario: () => void; onstoppreview: () => void;
@@ -30,7 +30,7 @@
   const count = $derived(receipt.posePlan.length);
   const story = $derived(receipt.story);
   const title = $derived(story?.description.trim().split(/\s+/).slice(0,3).join(' ') || 'Выбранный сюжет');
-  const active = $derived(phase === 'countdown' || phase === 'confirmation' || (phase === 'camera' && !pauseAfterCapture));
+  const active = $derived(phase === 'countdown' || ((phase === 'confirmation' || phase === 'camera') && !pauseAfterCapture));
   const playLabel = $derived(active ? 'Пауза' : phase === 'ready' && thumbnails.length === 0 ? 'Начать съёмку' : 'Продолжить');
   const date = $derived(new Date(`${receipt.date}T12:00:00`).toLocaleDateString('ru-RU', {day:'numeric',month:'long',year:'numeric'}));
   let dialog = $state<HTMLDialogElement>();
@@ -86,7 +86,8 @@
     </section>
     <section class="live framed viewfinder" aria-label="Предпросмотр камеры" aria-busy={phase==='camera'}>
       <div class="live-surface">
-        {#if confirmed && (phase==='confirmation' || phase==='review')}<img class="captured-frame" src={confirmed} alt="Снятый кадр"/>
+        {#if phase==='camera'}<div class="capture-white" aria-hidden="true"></div>
+        {:else if confirmed && confirming}<img class="captured-frame" src={confirmed} alt="Снятый кадр"/>
         {:else if preview}<img class="live-preview" src={preview} alt="Зеркальное превью камеры" onerror={onstoppreview}/>
         {:else}<div class="fallback preview-fallback">{@render icon('person')}<h2>{previewEnabled?'Подключаем превью…':'Съёмка без превью'}</h2><p>Повторите образец позы и смотрите в камеру</p></div>{/if}
         {@render corners()}
@@ -94,7 +95,7 @@
         {#if phase==='error'}<div class="notice error" role="alert"><h2>Не удалось получить кадр</h2><p>{error}</p>{#if pendingCapture}<p>Ожидается текущий JPEG. Новый спуск и пересъёмки пока недоступны.</p>{/if}<button onclick={onrun}>Повторить</button></div>{/if}
         {#if phase==='review'}<div class="notice complete">{@render icon('check')}<h2>Отлично! Все кадры готовы</h2><p>Можно переснять последний кадр или завершить серию</p><button onclick={onfinish}>Завершить фотосессию</button></div>{/if}
         {@render counter(true)}
-        {#if phase==='camera'}<div class="flash" aria-hidden="true"></div><div class="capture-status" role="status">{pauseAfterCapture?'Получаем снимок… Затем — пауза.':'Получаем снимок…'}</div>{:else if phase==='confirmation'}<div class="capture-status" role="status">Кадр снят ✓</div>{/if}
+        {#if phase==='camera'}<div class="capture-status" role="status">{pauseAfterCapture?'Получаем снимок… Затем — пауза.':'Получаем снимок…'}</div>{:else if phase==='confirmation'}<div class="capture-status" role="status">Кадр снят ✓</div>{/if}
         {#if previewEnabled && phase!=='camera' && !['error','review','complete'].includes(phase)}<button class="preview-toggle" onclick={onstoppreview}>Продолжить без превью</button>{/if}
       </div>{@render rim()}
     </section>

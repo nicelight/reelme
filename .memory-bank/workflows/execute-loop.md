@@ -78,6 +78,8 @@ label is sufficient. Omit empty fields, symbol/import inventories, change logs,
 and implementation recipes. Section comments are useful only for non-obvious
 semantic boundaries; simple functions need no repetitive contracts.
 
+When a race fix establishes or changes a module-wide guarantee, state the ordering or synchronization invariant in the module header. Explain conflicting interleavings only when needed to clarify that guarantee; a generic "race-safe" claim is insufficient.
+
 Accepted requirements and specs govern intended behavior; the header captures
 their file-local implications and local invariants. Link existing governing
 specs where useful rather than copying them or creating a spec just for a header.

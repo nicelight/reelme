@@ -11,6 +11,7 @@ import type { ArchiveEvent, EventGallery } from '../../shared/events.js';
 import { HttpError } from '../errors.js';
 import { readMedia, sendMedia } from '../scenarios/media.js';
 import { eventDate } from './index.js';
+import { isTestVideo } from '../../shared/scenarios.js';
 
 interface Row {
   id: string; number: number; snapshot: string; state: string;
@@ -51,6 +52,7 @@ export function registerEvents(app: FastifyInstance, db: DB, dataDir: string, ac
       const snapshot = JSON.parse(row.snapshot) as SlotSnapshot;
       const base = `/api/events/${date}/${row.id}`;
       return { id: row.id, number: row.number, description: snapshot.description,
+        ...(isTestVideo(snapshot.generation) ? { testVideo: true as const } : {}),
         thumbnailUrl: `${base}/thumbnail`, videoUrl: hasVideo(row) ? `${base}/video` : null };
     }) };
   });

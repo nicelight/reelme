@@ -1,7 +1,9 @@
 /** Module contract: public scenario DTOs and the finite, accepted model rules.
  * Shared by editor/server; no credentials, provider calls or storage. Materials
  * are immutable IDs; demo media is separate from generation inputs.
- * Source: docs/slot-setup/matrix.md. Legacy snapshots retain the previous input contract.
+ * Simulation without an output is the legacy input-only check; output=video opts
+ * a new session into local video delivery. Legacy snapshots keep their meaning.
+ * Source: docs/slot-setup/matrix.md.
  */
 import { z } from 'zod';
 import { slotSetupMatrix } from './slot-prompt-selection.js';
@@ -35,7 +37,7 @@ const id = z.string().uuid();
 /** Read only: accepted snapshots and raw slots written before configurable plans. */
 export const legacySlotSchema = z.object({
   description: z.string().trim().min(1, 'Добавьте описание').max(5000),
-  visible: z.boolean(), thumbnailId: id, simulateGeneration: z.boolean().default(false), testPhotoId: id.optional(),
+  visible: z.boolean(), thumbnailId: id, simulateGeneration: z.boolean().default(false), simulationOutput: z.literal('video').optional(), testPhotoId: id.optional(),
   mode: z.enum(['V2V', 'P2V']), model: z.string(),
   videoId: id.optional(), referenceIds: z.array(id).max(3).default([]), demoId: id.optional(),
   prompt: z.string().trim().max(10000).optional(),
@@ -45,6 +47,7 @@ export const legacySlotSchema = z.object({
   promptExpansionMode: z.literal('disabled').optional(),
 }).strict().superRefine((slot, ctx) => {
   const fail = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message });
+  if (slot.simulationOutput && !slot.simulateGeneration) fail('simulationOutput', 'Тестовое видео требует режима эмуляции');
   const model = legacyModels.find(m => m.id === slot.model);
   if (!model || model.mode !== slot.mode) { fail('model', 'Модель не соответствует режиму'); return; }
   if (model.prompt && !slot.prompt) fail('prompt', 'Введите промпт');
@@ -67,7 +70,7 @@ export const legacySlotSchema = z.object({
 /** New saves and new-plan input preparation share one strict contract. */
 const slotFields = z.object({
   description: z.string().trim().min(1).max(5000), visible: z.boolean(), thumbnailId: id,
-  simulateGeneration: z.boolean().default(false), testPhotoId: id.optional(), testPhotoIds: z.array(id).max(8).optional(),
+  simulateGeneration: z.boolean().default(false), simulationOutput: z.literal('video').optional(), testPhotoId: id.optional(), testPhotoIds: z.array(id).max(8).optional(),
   mode: z.enum(['V2V', 'P2V']), model: z.string(),
   participants: z.union([z.literal(1), z.literal(2), z.literal('group')]),
   photosPerParticipant: z.number().int().min(1).max(4),
@@ -78,6 +81,7 @@ const slotFields = z.object({
 }).strict();
 export const slotSchema = slotFields.superRefine((slot, ctx) => {
   const fail = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message });
+  if (slot.simulationOutput && !slot.simulateGeneration) fail('simulationOutput', 'Тестовое видео требует режима эмуляции');
   const timing = models.find(model => model.id === slot.model && model.mode === slot.mode);
   if (!timing) { fail('model', 'Модель не соответствует режиму'); return; }
   let setup;
@@ -111,6 +115,9 @@ export function normalizeSlotForEditor<T extends SlotInput>(slot: T, orientation
   return { ...defaultSlotSetup(slot.model, slot.mode, orientation), ...slot } as T & ConfiguredSlotInput;
 }
 export type Slot = SlotInput & { id: string };
+export function isTestVideo(input: { simulateGeneration?: boolean; simulationOutput?: string }) {
+  return input.simulateGeneration === true && input.simulationOutput === 'video';
+}
 /** Admin-only projection of a retained real result. Unknown legacy times stay null. */
 export interface LastSlotVideo {
   sessionId: string; videoUrl: string; submittedAt: number | null; readyAt: number | null; elapsedMs: number | null;

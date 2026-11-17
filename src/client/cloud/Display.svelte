@@ -224,7 +224,7 @@
 {#if !publicScreen && issues.length}
   <section class="operator-issues" aria-label="Сообщения обработки">
     {#each issues as item (item.id)}
-      <p data-issue-session={item.number}><strong>№ {String(item.number).padStart(3, '0')}</strong> — {item.simulation?.message ?? item.error}{#if item.simulation?.detail} <span>{item.simulation.detail}</span>{/if}</p>
+      <p data-issue-session={item.number}><strong>№ {String(item.number).padStart(3, '0')}</strong> — {item.simulation?.message ?? item.error}{#if item.simulation?.detail}<span> · {item.simulation.detail}</span>{/if}</p>
     {/each}
   </section>
 {/if}

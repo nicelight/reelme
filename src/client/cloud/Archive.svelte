@@ -58,7 +58,7 @@
             <img src={session.thumbnailUrl} alt={session.description} />
             {#if session.videoUrl}<span class="archive-play" aria-hidden="true">▶</span>{/if}
           </button>
-          <div class="archive-caption"><h2>№ {session.number}</h2><p>{session.description}</p>{#if !session.videoUrl}<span class="hint">Готового видео пока нет</span>{/if}</div>
+          <div class="archive-caption"><h2>№ {session.number}</h2><p>{session.description}</p>{#if session.testVideo}<span class="hint">Тестовое видео · без fal</span>{/if}{#if !session.videoUrl}<span class="hint">Готового видео пока нет</span>{/if}</div>
         </article>
       {/each}
     </div>

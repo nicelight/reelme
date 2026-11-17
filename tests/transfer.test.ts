@@ -9,6 +9,7 @@ import sharp from 'sharp';
 import { fixture, imageBytes, videoBytes, multipart } from './helpers.js';
 import { openDatabase } from '../src/server/db.js';
 import type { CaptureStatus, StartReceipt } from '../src/shared/capture.js';
+import { jpegFixtures } from './jpeg-fixture.js';
 
 const installation = { authorization: `Bearer ${'a'.repeat(43)}`, origin: 'http://localhost:5513' };
 type Fixture = Awaited<ReturnType<typeof fixture>>;
@@ -167,4 +168,21 @@ test('an upload already in flight cannot change a finalized photo or hold a DB t
   assert.equal(late.code, 409, late.body); assert.equal(JSON.parse(late.body).code, 'CAPTURE_CLOSED');
   assert.deepEqual(stored(f, a.sessionId), before); await assertBytes(f, a.sessionId, [original]);
   assert.equal((await readdir(directory)).length, 1, 'rejected replacement removed');
+});
+
+test('large JPEG intake accepts original bytes and rejects late-body damage without replacing the accepted pose', async t => {
+  const f = await fixture(); t.after(() => f.close());
+  const { ids } = await setup(f); const session = await start(f, ids[0]);
+  const sample = await jpegFixtures();
+  assert.equal((await upload(f, session.sessionId, 0, sample.valid)).statusCode, 200);
+  const accepted = stored(f, session.sessionId);
+  assert.equal(accepted[0].width, sample.width); assert.equal(accepted[0].height, sample.height);
+  assert.deepEqual(await readFile(join(f.config.dataDir, 'media', accepted[0].path)), sample.valid);
+  for (const bytes of Object.values(sample.broken)) {
+    const response = await upload(f, session.sessionId, 0, bytes);
+    assert.equal(response.statusCode, 400); assert.equal(response.json().code, 'INVALID_PHOTO');
+    assert.deepEqual(stored(f, session.sessionId), accepted);
+  }
+  assert.equal((await readdir(join(f.config.dataDir, 'media', 'sessions', session.sessionId))).length, 1);
+  assert.equal((await finalize(f, session.sessionId)).statusCode, 200);
 });

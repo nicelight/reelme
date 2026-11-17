@@ -4,5 +4,6 @@ export interface ArchiveEvent { date: string; photoBytes: number; videoBytes: nu
 export interface ArchiveSession {
   id: string; number: number; description: string; thumbnailUrl: string;
   videoUrl: string | null;
+  testVideo?: true;
 }
 export interface EventGallery { date: string; sessions: ArchiveSession[] }

@@ -10,6 +10,7 @@ import { publishReady, readyCard } from '../src/server/sessions/receive.js';
 import { createApp } from '../src/server/app.js';
 import type { ReceiveStatus } from '../src/shared/receive.js';
 import QRCode from 'qrcode';
+import { jpegFixtures } from './jpeg-fixture.js';
 
 type Row = { receive_token: string; download_token: string; opened_at: number | null; email_confirmed_at: number | null; email: string | null; email_state: string };
 test('ready capabilities survive restart, isolate two sessions and serve the original photo/verified video', async t => {
@@ -165,6 +166,22 @@ test('QR preparation precedes ready publication and repeated publication preserv
   assert.deepEqual(db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(session.id), row);
   assert.deepEqual(await readFile(qrPath), qr);
   assert.equal((db.prepare('SELECT ready_at FROM generation_jobs WHERE session_id=?').get(session.id) as { ready_at: number }).ready_at, 123);
+});
+
+test('late JPEG body damage in saved frame or photo prevents publication despite readable metadata', async t => {
+  const f = await fixture(); t.after(() => f.close());
+  const db = openDatabase(f.config.dataDir); t.after(() => db.close());
+  const video = await videoBytes(f.root, 1); const sample = await jpegFixtures();
+  for (const [index, kind] of ['frame', 'photo'].entries()) {
+    const session = await preparedSession(f.config.dataDir, video, index + 1);
+    const photo = db.prepare('SELECT path FROM capture_photos WHERE session_id=?').get(session.id) as { path: string };
+    const relative = kind === 'frame' ? session.frame_path : photo.path;
+    await writeFile(join(f.config.dataDir, 'media', relative), sample.broken.earlyEnd);
+    if (kind === 'frame') db.prepare('UPDATE generation_jobs SET frame_size=? WHERE session_id=?').run(sample.broken.earlyEnd.length, session.id);
+    await publishReady(db, f.config.dataDir, session.id, f.config.origin);
+    assert.equal((db.prepare('SELECT state FROM capture_sessions WHERE id=?').get(session.id) as { state: string }).state, 'failed');
+    assert.equal(db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(session.id), undefined);
+  }
 });
 
 test('application generation callback publishes newly prepared results without email or another submit', async t => {

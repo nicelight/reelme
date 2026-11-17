@@ -1,4 +1,5 @@
 /** Publishes ready and its tokens only after video, frame, photo and saved QR exist.
+ * Saved JPEGs must decode completely; their statistics are not needed for publication.
  * Receive/download tokens grant access only to their session and intended media.
  * Opening and email confirmation are separate events; retries preserve their first times.
  * Deleting events cannot publish or issue capabilities. */
@@ -8,7 +9,7 @@ import { readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import sharp from 'sharp';
+import { inspectJpeg } from './jpeg.js';
 import QRCode from 'qrcode';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
@@ -55,8 +56,8 @@ export async function publishReady(db: DB, dataDir: string, sessionId: string, o
     const photo = db.prepare('SELECT path FROM capture_photos WHERE session_id=? AND pose_index=0').get(sessionId) as { path: string } | undefined;
     if (!photo || !row.video_size || !row.frame_size || (await stat(video)).size !== row.video_size || (await stat(frame)).size !== row.frame_size) throw new Error('Missing files');
     await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-xerror', '-protocol_whitelist', 'file,pipe', '-format_whitelist', 'mov', '-i', video, '-map', '0:v:0', '-f', 'null', '-'], { timeout: 120_000, maxBuffer: 2 * 1024 * 1024 });
-    await sharp(frame, { failOn: 'warning' }).stats();
-    await sharp(join(dataDir, 'media', photo.path), { failOn: 'warning' }).stats();
+    await inspectJpeg(frame);
+    await inspectJpeg(join(dataDir, 'media', photo.path));
     const tokens = db.prepare('SELECT receive_token,download_token FROM session_delivery WHERE session_id=?').get(sessionId) as Pick<Delivery, 'receive_token' | 'download_token'> | undefined;
     const receiveToken = tokens?.receive_token ?? randomBytes(32).toString('base64url');
     const downloadToken = tokens?.download_token ?? randomBytes(32).toString('base64url');

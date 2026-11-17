@@ -1,0 +1,12 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/editor.spec.ts -g per-position JPEG --output=/tmp/reelme-test-video-editor-results
+
+
+Running 1 test using 1 worker
+
+(node:508022) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/editor.spec.ts:185:3 › manual test flow › per-position JPEG cache separates people/group and real results survive resets, failures and simulation (17.1s)
+
+  1 passed (19.1s)

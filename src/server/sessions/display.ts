@@ -14,6 +14,7 @@ import { eventDate } from './index.js';
 import { readyCard } from './receive.js';
 import { sendMedia } from '../scenarios/media.js';
 import { pageDurationOptions, stageLabels, type DisplaySettings, type DisplaySession, type TodayDisplay } from '../../shared/display.js';
+import { isTestVideo } from '../../shared/scenarios.js';
 
 interface Row {
   id: string; number: number; state: string; snapshot: string; error_code: string | null; email: string | null;
@@ -35,12 +36,16 @@ function projection(row: Row): DisplaySession {
     : row.error_code === 'INPUT_PREPARATION_FAILED' ? 'Не удалось подготовить фотографии или материалы сюжета. Обратитесь к сотруднику.'
     : row.error_code === 'FAL_NOT_CONFIGURED' ? 'Сервис генерации не настроен. Обратитесь к сотруднику.'
     : 'Не удалось создать видео. Обратитесь к сотруднику.';
-  const simulation: DisplaySession['simulation'] = JSON.parse(row.snapshot).generation?.simulateGeneration === true && row.state !== 'capturing'
-    ? { status: row.state === 'simulated' ? 'passed' : row.state === 'failed' ? 'failed' : 'pending',
-      message: row.state === 'simulated' ? 'Эмуляция успешна, но fal не отвечает' : row.state === 'failed' ? 'Эмуляция не завершена' : 'Подготовка тестовой генерации',
+  const generation = JSON.parse(row.snapshot).generation ?? {};
+  const testVideo = isTestVideo(generation);
+  const simulation: DisplaySession['simulation'] = generation.simulateGeneration === true && row.state !== 'capturing'
+    ? { status: row.state === 'simulated' || row.state === 'ready' ? 'passed' : row.state === 'failed' ? 'failed' : 'pending',
+      message: testVideo ? row.state === 'ready' ? 'Тестовое видео готово' : row.state === 'failed' ? 'Тестовое видео не подготовлено' : 'Подготовка тестового видео'
+        : row.state === 'simulated' ? 'Проверка входных данных пройдена' : row.state === 'failed' ? 'Проверка входных данных не пройдена' : 'Проверка входных данных',
       detail: row.state === 'failed' ? failure : 'Тестовый режим: fal не вызывался' } : null;
   return { id: row.id, number: row.number, stage, simulation, readyAt: row.state === 'ready' ? row.ready_at : null,
-    label: stage === 6 ? `Видео отправлено на ${maskEmail(row.email ?? '')}` : row.state === 'failed' ? 'Генерация не завершена' : stageLabels[stage as 0 | 1 | 2 | 3 | 4 | 5],
+    label: stage === 6 ? `Видео отправлено на ${maskEmail(row.email ?? '')}` : row.state === 'failed' ? 'Генерация не завершена'
+      : testVideo && (stage === 1 || stage === 2) ? 'Подготовка тестового видео' : stageLabels[stage as 0 | 1 | 2 | 3 | 4 | 5],
     error: row.state === 'failed' ? failure
       : row.email_state === 'failed' ? 'Письмо не подтверждено. Откройте форму и повторите отправку.' : null,
     hideAt: row.email_confirmed_at === null ? null : row.email_confirmed_at + 180_000,

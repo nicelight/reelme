@@ -200,7 +200,7 @@ test.describe('manual test flow', () => {
     await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
     await page.getByLabel('Участники', { exact: true }).selectOption('2'); await page.locator('#photos-per-person').selectOption('2'); await lock(page); await openTests(page);
     for (const label of labels) await expect(page.getByLabel('Заменить: ' + label, { exact: true })).toBeVisible();
-    await page.getByLabel('Отправлять на фейковую генерацию', { exact: true }).check(); await save(page); await expect(send).toBeEnabled(); expect(app.sessionCount()).toBe(0);
+    await page.getByLabel('Режим генерации', { exact: true }).selectOption('inputs'); await save(page); await expect(send).toBeEnabled(); expect(app.sessionCount()).toBe(0);
     const stored = openDatabase(app.dataDir);
     const row = stored.prepare('SELECT config FROM slots').get() as {config:string}; const saved = JSON.parse(row.config); stored.close();
     expect(saved.testPhotoIds).toHaveLength(4); expect(new Set(saved.testPhotoIds).size).toBe(4);
@@ -214,12 +214,12 @@ test.describe('manual test flow', () => {
     await send.click(); await expect(page.getByRole('alert')).toContainText('Ответ не получен'); expect(app.sessionCount()).toBe(1);
     await page.reload(); await page.getByRole('button', { name: /Скрытый тестовый сюжет/ }).click(); await openTests(page);
     await page.getByRole('button', { name: 'Повторить запрос тестовой генерации', exact: true }).click();
-    await expect(page.locator('.test-result')).toContainText('Эмуляция успешна, но fal не отвечает'); expect(requestIds[1]).toBe(requestIds[0]); expect(app.sessionCount()).toBe(1);
+    await expect(page.locator('.test-result')).toContainText('Проверка входных данных пройдена'); expect(requestIds[1]).toBe(requestIds[0]); expect(app.sessionCount()).toBe(1);
     const photos = await app.photos(firstId); expect(photos.map(row => row.pose_index)).toEqual([0, 1, 2, 3]);
     for (const photo of photos) expect(photo.bytes).toEqual(bytes[photo.pose_index]);
     await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
-    await expect(page.locator('.test-result')).toContainText('Эмуляция успешна'); await lock(page); await openTests(page);
-    const simulation = page.getByLabel('Отправлять на фейковую генерацию', { exact: true }); await expect(simulation).not.toBeChecked();
+    await expect(page.locator('.test-result')).toContainText('Проверка входных данных пройдена'); await lock(page); await openTests(page);
+    const simulation = page.getByLabel('Режим генерации', { exact: true }); await expect(simulation).toHaveValue('fal');
     await save(page); await send.click(); await expect(page.locator('.test-result')).toContainText('Видео готово');
     const player = page.getByLabel('Последнее реальное видео сюжета', { exact: true }); await expect(player).toBeVisible();
     await expect.poll(() => player.evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
@@ -229,7 +229,7 @@ test.describe('manual test flow', () => {
     await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click(); await expect(player).toHaveAttribute('src', stableUrl!);
     await lock(page); await openTests(page); await page.locator('#prompt').fill('fail-test'); await save(page); await send.click();
     await expect(page.locator('.test-result')).toContainText('Тест не завершён'); await expect(player).toHaveAttribute('src', stableUrl!);
-    await simulation.check(); await save(page); await send.click(); await expect(page.locator('.test-result')).toContainText('Эмуляция успешна'); await expect(player).toHaveAttribute('src', stableUrl!);
+    await simulation.selectOption('inputs'); await save(page); await send.click(); await expect(page.locator('.test-result')).toContainText('Проверка входных данных пройдена'); await expect(player).toHaveAttribute('src', stableUrl!);
     await page.setViewportSize({ width: 375, height: 812 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: join(artifacts, 'slot-test-ready-mobile.png'), fullPage: true });
     const resultId = stableUrl!.split('/').at(-2)!; const db = openDatabase(app.dataDir);

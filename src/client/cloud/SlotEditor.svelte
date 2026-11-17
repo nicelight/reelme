@@ -73,7 +73,7 @@
   function cancelPrompt() { requestRevision++; controller?.abort(); controller = undefined; promptLoading = false; }
   function resetLower() {
     cancelPrompt(); draft.referenceIds = []; draft.demoId = undefined; draft.prompt = '';
-    draft.simulateGeneration = false; draft.testPhotoIds = undefined; draft.testPhotoId = undefined;
+    draft.simulateGeneration = false; draft.simulationOutput = undefined; draft.testPhotoIds = undefined; draft.testPhotoId = undefined;
     // The fixed V2V source survives unlocking. Its compatibility is checked on save.
     manualPrompt = false; promptError = ''; referenceNotice = ''; setupError = '';
   }
@@ -268,8 +268,19 @@
   {#if locked}
     <div class="section-heading"><span>03</span><h3>Тесты</h3><button type="button" class="quiet small" aria-expanded={testsOpen} onclick={() => testsOpen = !testsOpen}>{testsOpen ? 'Свернуть тесты' : 'Открыть тесты'}</button></div>
     <div hidden={!testsOpen}>
-      <label class="checkbox-label"><input type="checkbox" bind:checked={draft.simulateGeneration} />Отправлять на фейковую генерацию</label>
-      <p class="hint">Проверяет фотографии и подготовку запроса без обращения к fal. Видео не создаётся.</p>
+      <label for="generation-mode">Режим генерации</label>
+      <select id="generation-mode" value={!draft.simulateGeneration ? 'fal' : draft.simulationOutput === 'video' ? 'video' : 'inputs'} onchange={event => {
+        draft.simulateGeneration = event.currentTarget.value !== 'fal';
+        draft.simulationOutput = event.currentTarget.value === 'video' ? 'video' : undefined;
+      }}>
+        <option value="fal">fal.ai — реальная генерация</option>
+        <option value="inputs">Только проверка входных данных</option>
+        <option value="video">Тестовое видео — полный проход без fal</option>
+      </select>
+      {#if !draft.simulateGeneration}<p class="hint">Запрос отправляется в fal.ai. Генерация платная.</p>
+      {:else if draft.simulationOutput === 'video'}<p class="hint">После проверки фотографий и запроса возвращается тестовый ролик. Экран результатов, QR, скачивание и отправка email работают как обычно. Письмо отправляется через настроенный SMTP.</p>
+      {:else}<p class="hint">Проверяются фотографии, материалы и подготовка запроса. fal не вызывается; видео, QR и письмо не создаются.</p>{/if}
+      <p class="hint">Сохранённый режим действует на новые фотосессии с камерой и на запуск теста. Уже начатые сессии не меняются.</p>
       <div class="test-photos">
         {#each plan as pose (positionKey(pose))}
           <MediaField label={pose.participant === 'group' ? `Группа — кадр ${pose.index + 1} (JPEG)` : `Человек ${pose.participant} — кадр ${pose.guideNumber} (JPEG)`} kind="image" jpegOnly id={photoCache[positionKey(pose)]} optional hint={pose.instruction} onUploaded={media => assignPhoto(pose, media.id)} onRemove={() => assignPhoto(pose)} {onError} {onBusy} />

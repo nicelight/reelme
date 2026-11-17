@@ -1,7 +1,8 @@
 /** Module contract: manual and retention deletion share this restartable Sessions
  * path. Persist deleting before I/O; all readers/workers honor that marker. Own
  * session directories and records are removed; Scenarios owns pruning materials.
- * fal errors are logged without URLs/secrets and never prevent local cleanup. */
+ * Test-video results are local only and never enter fal deletion. fal errors are
+ * logged without URLs/secrets and never prevent local cleanup. */
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FastifyBaseLogger } from 'fastify';
@@ -21,7 +22,8 @@ export function createEventCleanup(db: DB, dataDir: string, log: FastifyBaseLogg
   async function clean(date: string) {
     if (!db.prepare('SELECT 1 FROM events WHERE date=? AND deleting=1').get(date)) return;
     const sessions = db.prepare('SELECT id,snapshot FROM capture_sessions WHERE event_date=?').all(date) as { id: string; snapshot: string }[];
-    const outputs = db.prepare('SELECT DISTINCT g.result_url FROM generation_jobs g JOIN capture_sessions s ON s.id=g.session_id WHERE s.event_date=? AND g.result_url IS NOT NULL').all(date) as { result_url: string }[];
+    const outputs = db.prepare(`SELECT DISTINCT g.result_url FROM generation_jobs g JOIN capture_sessions s ON s.id=g.session_id
+      WHERE s.event_date=? AND g.result_url IS NOT NULL AND COALESCE(json_extract(s.snapshot,'$.generation.simulateGeneration'),0)=0`).all(date) as { result_url: string }[];
     for (const output of outputs) await deleteKnownOutput(output.result_url, log, options.deleteOutput);
     for (const session of sessions) await rm(join(dataDir, 'media', 'sessions', session.id), { recursive: true, force: true });
     removeUnusedMaterials(db, dataDir, sessions.flatMap(s => materialIds(JSON.parse(s.snapshot))), date);

@@ -12,16 +12,23 @@ import Database from 'better-sqlite3';
 
 type StoredPhoto = { session_id: string; pose_index: number; path: string; size: number; width: number; height: number; bytes: Buffer };
 type App = { photos: (sessionId: string) => Promise<StoredPhoto[]>; origin: string; dataDir: string; captureOrigin: string; password: string; image: string; jpeg: string; video: string; templateVideosDir: string; prepareTemplate: (slotId: string, orientation?: 'landscape' | 'portrait', file?: string) => Promise<void>; installationKey: string; sessionCount: () => number; restart: () => Promise<void> };
-export const test = base.extend<{ app: App; capturePort: number; runGeneration: boolean }>({
+export const test = base.extend<{ app: App; capturePort: number; runGeneration: boolean; testVideoOnly: boolean; smtpPort: number }>({
   capturePort: [5513, { option: true }],
   runGeneration: [false, { option: true }],
-  app: [async ({ capturePort, runGeneration }, use) => {
+  testVideoOnly: [false, { option: true }],
+  smtpPort: [0, { option: true }],
+  app: [async ({ capturePort, runGeneration, testVideoOnly, smtpPort }, use) => {
     const dir = await mkdtemp(join(tmpdir(), 'reelme-browser-'));
-    const port = 3197;
+    // Find a free port; IPC readiness below also detects any bind race instead
+    // of accepting an HTTP response from another task's server.
+    const probe = createServer();
+    await new Promise<void>((resolve, reject) => { probe.once('error', reject); probe.listen(0, '127.0.0.1', resolve); });
+    const port = (probe.address() as import('node:net').AddressInfo).port;
+    await new Promise<void>(resolve => probe.close(() => resolve()));
     const origin = `http://localhost:${port}`;
     const password = randomUUID();
     const templateVideosDir = join(dir, 'templates');
-    const env = { ...process.env, TEMPLATE_VIDEOS_DIR: templateVideosDir, RUN_GENERATION: String(runGeneration), FIXTURE_VIDEO: join(dir, 'fixture.mp4'), CAPTURE_TEST_ORIGIN: '', FAL_KEY: '', SMTP_HOST: '', SMTP_PORT: '', SMTP_USER: '', SMTP_PASSWORD: '', SMTP_FROM: '', APP_ORIGIN: origin, HOST: '127.0.0.1', PORT: String(port), DATA_DIR: dir, ADMIN_PASSWORD: password, OPERATOR_PASSWORD: password };
+    const env = { ...process.env, TEMPLATE_VIDEOS_DIR: templateVideosDir, RUN_GENERATION: String(runGeneration), TEST_VIDEO_ONLY: String(testVideoOnly), EMAIL_TEST_SMTP_PORT: String(smtpPort), FIXTURE_VIDEO: join(dir, 'fixture.mp4'), CAPTURE_TEST_ORIGIN: '', FAL_KEY: '', SMTP_HOST: '', SMTP_PORT: '', SMTP_USER: '', SMTP_PASSWORD: '', SMTP_FROM: '', APP_ORIGIN: origin, HOST: '127.0.0.1', PORT: String(port), DATA_DIR: dir, ADMIN_PASSWORD: password, OPERATOR_PASSWORD: password };
     const image = join(dir, 'fixture.png');
     const jpeg = join(dir, 'fixture.jpg');
     const video = join(dir, 'fixture.mp4');
@@ -43,13 +50,15 @@ export const test = base.extend<{ app: App; capturePort: number; runGeneration: 
     }
     async function start() {
       execFileSync(process.execPath, ['--import', 'tsx', 'src/server/setup.ts'], { env, stdio: 'pipe' });
-      child = spawn(process.execPath, ['--import', 'tsx', 'tests/browser-server.ts'], { env, stdio: 'ignore' });
-      for (let i = 0; i < 100; i++) {
-        if (child.exitCode !== null) throw new Error('Browser fixture server exited');
-        try { if ((await fetch(origin)).ok) return; } catch {}
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-      throw new Error('Browser fixture server did not start');
+      child = spawn(process.execPath, ['--import', 'tsx', 'tests/browser-server.ts'], { env, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+      await new Promise<void>((resolve, reject) => {
+        const current = child!;
+        const ready = (message: unknown) => { if ((message as { ready?: string })?.ready === origin) { cleanup(); resolve(); } };
+        const failed = () => { cleanup(); reject(new Error('Browser fixture server exited before listening')); };
+        const timer = setTimeout(() => { cleanup(); reject(new Error('Browser fixture server did not start')); }, 10_000);
+        function cleanup() { clearTimeout(timer); current.off('message', ready); current.off('exit', failed); current.off('error', failed); }
+        current.on('message', ready); current.once('exit', failed); current.once('error', failed);
+      });
     }
     try {
       await sharp({ create: { width: 512, height: 512, channels: 3, background: '#d0b8ff' } }).png().toFile(image);

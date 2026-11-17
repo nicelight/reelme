@@ -1,0 +1,140 @@
+{
+  "id": "TASK-024-T2-FT-006-W21",
+  "title": "Полный проход с тестовым видео без fal в обычном приложении",
+  "status": "done",
+  "wave": "W21",
+  "feature": "FT-006",
+  "tier": "T2",
+  "reqs": [
+    "REQ-019",
+    "REQ-020",
+    "REQ-021"
+  ],
+  "depends_on": [
+    "TASK-013-T3-FT-006-W10",
+    "TASK-014-T2-FT-006-W11",
+    "TASK-015-T2-FT-006-W12"
+  ],
+  "purpose": "Проверять основной путь от съёмки до получения видео без платного инференса.",
+  "success_outcome": "Слот явно выбирает real, проверку входов или тестовое видео; полный тест использует обычные обработку и выдачу.",
+  "touched_files": [
+    "src/shared/scenarios.ts",
+    "src/shared/events.ts",
+    "src/server/app.ts",
+    "src/server/sessions/test-video.ts",
+    "src/server/sessions/generation.ts",
+    "src/server/sessions/cleanup.ts",
+    "src/server/sessions/display.ts",
+    "src/server/sessions/events.ts",
+    "src/client/cloud/SlotEditor.svelte",
+    "src/client/cloud/SlotTest.svelte",
+    "src/client/cloud/Archive.svelte",
+    "public/test-videos/",
+    ".dockerignore",
+    "tests/test-video.test.ts",
+    "tests/test-video.spec.ts",
+    "tests/browser-fixture.ts",
+    "tests/browser-server.ts",
+    "tests/editor.spec.ts",
+    "tests/display.spec.ts",
+    "tests/simulation.test.ts",
+    "src/client/cloud/Display.svelte",
+    ".impeccable/design.json"
+  ],
+  "gates": [
+    {
+      "name": "types",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "server",
+      "command": "npm test",
+      "required": true
+    },
+    {
+      "name": "browser",
+      "command": "npm run test:ui -- tests/test-video.spec.ts",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-17",
+      "stage": "server",
+      "result": "PASS",
+      "summary": "npm test: 115/115, без пропусков. Новый full-test проверяет обе ориентации, snapshot после правки слота, рестарты, zero fal calls, missing/corrupt MP4, no-key startup, последний real-ролик, архив и смешанную очистку.",
+      "evidence": [
+        ".tasks/TASK-024-T2-FT-006-W21/server-tests.log"
+      ]
+    },
+    {
+      "date": "2026-11-17",
+      "stage": "browser",
+      "result": "PASS",
+      "summary": "Chromium: test-video.spec.ts 1 PASS (23.5s), manual editor regression 1 PASS (19.1s). Путь через UI съёмки и production test-video worker до показанного QR, playable/download MP4 и Nodemailer→loopback SMTP; вложение побайтово совпадает, после рестарта повторного письма нет. Снимки просмотрены. Первый прогон остановился на устаревшем locator email; исправлено ожидание теста по текущему интерфейсу, повтор PASS. После браузерных проверок изменён только разделитель в диагностической подписи; финальные check/build PASS.",
+      "evidence": [
+        ".tasks/TASK-024-T2-FT-006-W21/browser-full-flow.log",
+        ".tasks/TASK-024-T2-FT-006-W21/browser-editor.log",
+        ".tasks/TASK-024-T2-FT-006-W21/test-video-results.png",
+        ".tasks/TASK-024-T2-FT-006-W21/test-video-received.png"
+      ],
+      "limitations": [
+        "Камера — HTTP fixture, почта — loopback SMTP. Реальные fal, внешняя почта и оборудование не проверялись.",
+        "Полный набор браузерных сценариев не запускался; выполнены новый сквозной путь и затронутый manual editor.",
+        "Изменения локальные; commit/deploy не выполнялись."
+      ]
+    },
+    {
+      "date": "2026-11-17",
+      "stage": "final",
+      "result": "PASS",
+      "summary": "npm run check: 0 ошибок/предупреждений; npm run build: PASS; git diff --check: PASS. Статические MP4 включены в Vite output и Docker allowlist. Общий browser fixture получает свободный порт и ждёт IPC своего процесса, исключая ранее выявленный захват чужого fixture. По запросу design hook обновлён sidecar из текущего DESIGN.md без изменения эталона.",
+      "evidence": [
+        ".tasks/TASK-024-T2-FT-006-W21/check.log",
+        ".tasks/TASK-024-T2-FT-006-W21/build.log"
+      ]
+    }
+  ],
+  "docs": [
+    ".memory-bank/prd.md",
+    ".memory-bank/features/FT-006-slot-testing.md",
+    ".memory-bank/contracts/integrations.md",
+    ".memory-bank/contracts/http-api.md",
+    ".memory-bank/domains/core-domain.md",
+    ".memory-bank/states/lifecycle-map.md",
+    "docs/MANUAL.md",
+    "docs/slot-setup/matrix.md"
+  ],
+  "evidence_required": [
+    "Фактический серверный прогон с запретом fal, рестартом и очисткой.",
+    "Браузер от съёмки до QR/MP4/локального SMTP, проверка идентичности вложения."
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-006-slot-testing.md#FT-006-AC-005"
+  ],
+  "normative_inputs": [
+    ".memory-bank/constitution.md",
+    ".memory-bank/prd.md",
+    "docs/slot-setup/matrix.md"
+  ],
+  "constraints": [
+    "Без реального fal/SMTP, commit или deploy. Не изменять чужие текущие изменения.",
+    "Сохранить значение старого simulateGeneration; новая настройка влияет только на новые сессии."
+  ],
+  "invariants": [
+    "Полный тест использует snapshot и общий worker; никакого fallback в fal.",
+    "Нет fal-удаления тестовых результатов; последнее реальное видео сохраняется.",
+    "Без проверенных MP4/кадра/фото/QR нет ready; SMTP ведёт себя как обычно."
+  ],
+  "verification_targets": [
+    "Две ориентации, входы, snapshot/перезапуск, missing/corrupt MP4, no-key application startup.",
+    "Экран/QR/download/email, архив/очистка и отсутствие fal-вызовов.",
+    "Редактор сохраняет три режима, существующий input-only тест не регрессирует."
+  ]
+}

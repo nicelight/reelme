@@ -142,7 +142,7 @@ test('one/four-photo simulations survive pending and terminal restart with zero 
   assert.equal(shown.length, 2);
   for (const row of shown) {
     assert.equal(row.card, null); assert.equal(row.stage, 0); assert.equal(row.hideAt, null);
-    assert.deepEqual(row.simulation, { status: 'passed', message: 'Эмуляция успешна, но fal не отвечает', detail: 'Тестовый режим: fal не вызывался' });
+    assert.deepEqual(row.simulation, { status: 'passed', message: 'Проверка входных данных пройдена', detail: 'Тестовый режим: fal не вызывался' });
   }
   f.advance(86400_000); assert.equal((await h.display()).sessions.length, 0);
   const archive = await f.app.inject({ url: '/api/events/2026-01-01', headers: h.admin });

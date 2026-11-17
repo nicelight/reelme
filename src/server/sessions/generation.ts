@@ -1,6 +1,7 @@
 /** Module contract: one in-process Sessions worker advances durable fal work.
  * Submit inputs use the saved snapshot/photos only. Simulation uses the same
- * preparation and ends before transport/issuance, including without fal configuration.
+ * preparation. Input-only simulation ends before transport/issuance; test-video
+ * uses a local transport chosen from the immutable snapshot, never the fal client.
  * Confirmed IDs are committed before observation and never resubmitted; network/files never run in SQL
  * transactions. A verified local result stays preparing until the issuance callback
  * owns ready; standalone generation has no authority to publish capabilities.
@@ -9,7 +10,7 @@
  * Source: docs/slot-setup/matrix.md. Completeness follows the saved capture plan. */
 import { snapshotPosePlan } from '../../shared/capture.js';
 import { open, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { sessionAvailable } from './availability.js';
 import { deleteKnownOutput, type CleanupOptions } from './cleanup.js';
 import type { FastifyBaseLogger } from 'fastify';
@@ -20,9 +21,11 @@ import { buildModelInput } from './model-input.js';
 import { photoProviderUrl, slotProviderUrl } from './provider-media.js';
 import type { FalTransport } from './fal.js';
 import { InvalidVideo, prepareVideo } from './video.js';
+import { isTestVideo } from '../../shared/scenarios.js';
+import { testVideoTransport } from './test-video.js';
 
-interface Job { request_id: string | null; result_url: string | null; video_path: string | null; frame_path: string | null }
-export interface GenerationOptions { deleteOutput?: CleanupOptions['deleteOutput']; client?: FalTransport; download?: typeof fetch; intervalMs?: number; now?: () => number; secret?: string; publishReady?: (id: string) => Promise<void> }
+interface Job { request_id: string | null; result_url: string | null; video_path: string | null; frame_path: string | null; submitted_at: number | null }
+export interface GenerationOptions { deleteOutput?: CleanupOptions['deleteOutput']; client?: FalTransport; download?: typeof fetch; testVideoDir?: string; intervalMs?: number; now?: () => number; secret?: string; publishReady?: (id: string) => Promise<void> }
 class GenerationFailure extends Error {
   constructor(readonly code: string, message: string, options?: ErrorOptions) { super(message, options); }
 }
@@ -69,11 +72,16 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
     const session = readSession(db, id);
     db.prepare('INSERT INTO generation_jobs(session_id) VALUES (?) ON CONFLICT DO NOTHING').run(id);
     const job = db.prepare('SELECT * FROM generation_jobs WHERE session_id=?').get(id) as Job;
+    const input = session.snapshot.generation;
+    const testVideo = isTestVideo(input);
+    const inputOnly = input.simulateGeneration && !testVideo;
+    const transport = testVideo
+      ? testVideoTransport(id, options.testVideoDir ?? resolve('dist/client/test-videos'), input.orientation === 'portrait', job.submitted_at, options.now ?? Date.now)
+      : options;
     try {
       if (session.state === 'submit_pending') {
         // Also recover an accepted ID if a prior record already contains it.
-        if (job.request_id && !session.snapshot.generation.simulateGeneration) { db.prepare("UPDATE capture_sessions SET state='observing' WHERE id=?").run(id); return; }
-        const input = session.snapshot.generation;
+        if (job.request_id && !inputOnly) { db.prepare("UPDATE capture_sessions SET state='observing' WHERE id=?").run(id); return; }
         const photos = db.prepare('SELECT pose_index,path FROM capture_photos WHERE session_id=? ORDER BY pose_index').all(id) as { pose_index: number; path: string }[];
         let payload: Record<string, unknown>;
         try {
@@ -93,18 +101,18 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
           });
         } catch (error) { throw new GenerationFailure('INPUT_PREPARATION_FAILED', 'Invalid generation snapshot/photos', { cause: error }); }
         if (!sessionAvailable(db, id)) return;
-        if (input.simulateGeneration) {
+        if (inputOnly) {
           db.transaction(() => {
             clearError(id);
             db.prepare("UPDATE capture_sessions SET state='simulated' WHERE id=?").run(id);
           })();
           return;
         }
-        if (!options.client) throw new GenerationFailure('FAL_NOT_CONFIGURED', 'Missing fal transport');
+        if (!transport.client) throw new GenerationFailure('FAL_NOT_CONFIGURED', 'Missing fal transport');
         let accepted;
         try {
           db.prepare('UPDATE generation_jobs SET submitted_at=? WHERE session_id=?').run((options.now ?? Date.now)(), id);
-          accepted = await options.client.submit(input.model, payload);
+          accepted = await transport.client.submit(input.model, payload);
         }
         catch (error) {
           // An HTTP refusal is known, unlike a missing acknowledgement. SDK retries
@@ -121,14 +129,14 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
         return;
       }
       if (session.state === 'observing') {
-        if (!options.client) throw new GenerationFailure('FAL_NOT_CONFIGURED', 'Missing fal transport');
+        if (!transport.client) throw new GenerationFailure('FAL_NOT_CONFIGURED', 'Missing fal transport');
         if (!job.request_id) throw new GenerationFailure('FAL_FAILED', 'Missing confirmed fal ID');
-        const status = await options.client.status(session.snapshot.generation.model, job.request_id);
+        const status = await transport.client.status(input.model, job.request_id);
         if (!sessionAvailable(db, id)) return;
         if (status.error || status.status === 'FAILED') throw new GenerationFailure('FAL_FAILED', 'fal terminal status', { cause: status });
         if (status.status !== 'COMPLETED') { clearError(id); return; }
         let result: unknown;
-        try { result = await options.client.result(session.snapshot.generation.model, job.request_id); }
+        try { result = await transport.client.result(input.model, job.request_id); }
         catch (error) {
           const code = httpStatus(error);
           if (code && ![408,429,502,503,504].includes(code)) throw new GenerationFailure('FAL_FAILED', 'fal result rejected', { cause: error });
@@ -139,7 +147,7 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
         let url: URL;
         try { url = new URL(data.video.url); } catch { throw new GenerationFailure('INVALID_RESULT', 'Invalid result URL'); }
         if (url.protocol !== 'https:' || url.username || url.password) throw new GenerationFailure('INVALID_RESULT', 'Invalid result URL');
-        if (!sessionAvailable(db, id)) { await deleteKnownOutput(url.href, log, options.deleteOutput); return; }
+        if (!sessionAvailable(db, id)) { if (!testVideo) await deleteKnownOutput(url.href, log, options.deleteOutput); return; }
         db.transaction(() => {
           db.prepare('UPDATE generation_jobs SET result_url=?,error_code=NULL,error_message=NULL WHERE session_id=?').run(url.href, id);
           db.prepare("UPDATE capture_sessions SET state='preparing' WHERE id=?").run(id);
@@ -148,7 +156,7 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
       }
       if (session.state === 'preparing' && !job.video_path) {
         if (!job.result_url) throw new GenerationFailure('INVALID_RESULT', 'Missing result URL');
-        const prepared = await prepareVideo(dataDir, id, job.result_url, options.download);
+        const prepared = await prepareVideo(dataDir, id, job.result_url, transport.download);
         if (!sessionAvailable(db, id)) {
           await rm(join(dataDir, 'media', 'sessions', id), { recursive: true, force: true });
           return;

@@ -24,7 +24,7 @@
   }
   const labels: Record<SessionState, string> = {
     capturing: 'Подготовка тестовых фотографий', submit_pending: 'Ожидает обработки', observing: 'Генерация видео',
-    preparing: 'Подготовка видео', ready: 'Видео готово', failed: 'Тест не завершён', simulated: 'Эмуляция успешна, но fal не отвечает',
+    preparing: 'Подготовка видео', ready: 'Видео готово', failed: 'Тест не завершён', simulated: 'Проверка входных данных пройдена',
   };
   function remember() {
     if (!slotId) return;
