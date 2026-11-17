@@ -2,22 +2,26 @@
  * Landscape source supports the two-orientation editor. Source: docs/slot-setup/matrix.md. */
 import { test as base, expect } from '@playwright/test';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, rm, copyFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, copyFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import sharp from 'sharp';
 import Database from 'better-sqlite3';
+import { eventDate } from '../src/server/sessions/index';
 
 type StoredPhoto = { session_id: string; pose_index: number; path: string; size: number; width: number; height: number; bytes: Buffer };
-type App = { photos: (sessionId: string) => Promise<StoredPhoto[]>; origin: string; dataDir: string; captureOrigin: string; password: string; image: string; jpeg: string; video: string; templateVideosDir: string; prepareTemplate: (slotId: string, orientation?: 'landscape' | 'portrait', file?: string) => Promise<void>; installationKey: string; sessionCount: () => number; restart: () => Promise<void> };
-export const test = base.extend<{ app: App; capturePort: number; runGeneration: boolean; testVideoOnly: boolean; smtpPort: number }>({
+type App = { photos: (sessionId: string) => Promise<StoredPhoto[]>; origin: string; dataDir: string; captureOrigin: string; password: string; image: string; jpeg: string; video: string; templateVideosDir: string; prepareTemplate: (slotId: string, orientation?: 'landscape' | 'portrait', file?: string) => Promise<void>; installationKey: string; sessionCount: () => number; restart: () => Promise<void>; advanceTime: (ms: number) => Promise<void> };
+export const test = base.extend<{ app: App; capturePort: number; runGeneration: boolean; testVideoOnly: boolean; smtpPort: number; preconfiguredEvent: boolean }>({
   capturePort: [5513, { option: true }],
   runGeneration: [false, { option: true }],
   testVideoOnly: [false, { option: true }],
   smtpPort: [0, { option: true }],
-  app: [async ({ capturePort, runGeneration, testVideoOnly, smtpPort }, use) => {
+  // Existing flows start at an already prepared event. The dedicated first-visitor
+  // suite disables this to exercise Save/Skip through the production capture UI.
+  preconfiguredEvent: [true, { option: true }],
+  app: [async ({ capturePort, runGeneration, testVideoOnly, smtpPort, preconfiguredEvent }, use) => {
     const dir = await mkdtemp(join(tmpdir(), 'reelme-browser-'));
     // Find a free port; IPC readiness below also detects any bind race instead
     // of accepting an HTTP response from another task's server.
@@ -28,7 +32,7 @@ export const test = base.extend<{ app: App; capturePort: number; runGeneration: 
     const origin = `http://localhost:${port}`;
     const password = randomUUID();
     const templateVideosDir = join(dir, 'templates');
-    const env = { ...process.env, TEMPLATE_VIDEOS_DIR: templateVideosDir, RUN_GENERATION: String(runGeneration), TEST_VIDEO_ONLY: String(testVideoOnly), EMAIL_TEST_SMTP_PORT: String(smtpPort), FIXTURE_VIDEO: join(dir, 'fixture.mp4'), CAPTURE_TEST_ORIGIN: '', FAL_KEY: '', SMTP_HOST: '', SMTP_PORT: '', SMTP_USER: '', SMTP_PASSWORD: '', SMTP_FROM: '', APP_ORIGIN: origin, HOST: '127.0.0.1', PORT: String(port), DATA_DIR: dir, ADMIN_PASSWORD: password, OPERATOR_PASSWORD: password };
+    const env = { ...process.env, FIXTURE_CLOCK: join(dir, 'clock'), TEMPLATE_VIDEOS_DIR: templateVideosDir, RUN_GENERATION: String(runGeneration), TEST_VIDEO_ONLY: String(testVideoOnly), EMAIL_TEST_SMTP_PORT: String(smtpPort), FIXTURE_VIDEO: join(dir, 'fixture.mp4'), CAPTURE_TEST_ORIGIN: '', FAL_KEY: '', SMTP_HOST: '', SMTP_PORT: '', SMTP_USER: '', SMTP_PASSWORD: '', SMTP_FROM: '', APP_ORIGIN: origin, HOST: '127.0.0.1', PORT: String(port), DATA_DIR: dir, ADMIN_PASSWORD: password, OPERATOR_PASSWORD: password };
     const image = join(dir, 'fixture.png');
     const jpeg = join(dir, 'fixture.jpg');
     const video = join(dir, 'fixture.mp4');
@@ -50,6 +54,11 @@ export const test = base.extend<{ app: App; capturePort: number; runGeneration: 
     }
     async function start() {
       execFileSync(process.execPath, ['--import', 'tsx', 'src/server/setup.ts'], { env, stdio: 'pipe' });
+      if (preconfiguredEvent) {
+        const db = new Database(join(dir, 'reelme.sqlite'));
+        try { db.prepare('INSERT OR IGNORE INTO events(date,next_number,name,setup_complete) VALUES (?,1,?,1)').run(eventDate(Date.now()), 'Тестовое мероприятие'); }
+        finally { db.close(); }
+      }
       child = spawn(process.execPath, ['--import', 'tsx', 'tests/browser-server.ts'], { env, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
       await new Promise<void>((resolve, reject) => {
         const current = child!;
@@ -77,7 +86,8 @@ export const test = base.extend<{ app: App; capturePort: number; runGeneration: 
       };
       const captureOrigin = `http://localhost:${(capture.address() as import('node:net').AddressInfo).port}`;
       const prepareTemplate = async (slotId: string, orientation: 'landscape' | 'portrait' = 'landscape', file = video) => { await mkdir(templateVideosDir, { recursive: true }); await copyFile(file, join(templateVideosDir, `${slotId}__${orientation}.mp4`)); };
-      await use({ templateVideosDir, prepareTemplate, origin, dataDir: dir, captureOrigin, password, image, jpeg, video, installationKey, sessionCount, photos, restart: async () => { await stop(); await start(); } });
+      let clock = Date.now();
+      await use({ templateVideosDir, prepareTemplate, origin, dataDir: dir, captureOrigin, password, image, jpeg, video, installationKey, sessionCount, photos, restart: async () => { await stop(); await start(); }, advanceTime: async ms => { clock += ms; await writeFile(env.FIXTURE_CLOCK, String(clock)); } });
     } finally {
       await stop();
       if (capture.listening) await new Promise<void>(resolve => { capture.close(() => resolve()); capture.closeAllConnections(); });

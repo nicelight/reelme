@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-17T08:40:22.134876+00:00",
+  "generatedAt": "2026-11-17T09:32:18.170013+00:00",
   "title": "ReelMe — принятый визуальный эталон",
   "extensions": {
     "shadows": [
@@ -120,6 +120,11 @@
         "name": "capture-review",
         "value": "1000ms",
         "purpose": "Полученный JPEG виден до возврата Live View и следующего автоматического отсчёта; DESIGN.md#фотосессия."
+      },
+      {
+        "name": "capture-guide-reveal",
+        "value": "1000ms; opacity",
+        "purpose": "После декодирования образец позы появляется без задержки и изменения размеров; до загрузки рамка прозрачная, reduced motion убирает анимацию. DESIGN.md#фотосессия."
       }
     ],
     "breakpoints": [

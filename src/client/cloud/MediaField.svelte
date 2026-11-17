@@ -1,7 +1,9 @@
 <script lang="ts">
   /** Module contract: uploads a new immutable material and previews protected
    * media. Replacing/removing a selection never deletes an existing file.
-   * Source: docs/slot-setup/matrix.md. Each test position uploads its own material. */
+   * Source: docs/slot-setup/matrix.md. Each test position uploads its own material.
+   * Static-image guidance includes the upload endpoint limits; test JPEGs keep
+   * their separate capture limits and caller-provided pose instructions. */
   import { api, mediaUrl } from './api';
   import { MAX_PHOTO_BYTES } from '../../shared/capture';
   import type { Media } from '../../shared/scenarios';
@@ -12,6 +14,9 @@
   } = $props();
   let uploading = $state(false);
   const inputId = $props.id();
+  const uploadHint = $derived(kind === 'image' && !jpegOnly
+    ? `${hint ? `${hint} ` : ''}JPEG, PNG или WebP. Не более 40 мегапикселей и 300 МБ на файл.`
+    : hint);
   async function upload(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
@@ -30,7 +35,7 @@
 
 <div class="media-field">
   <label for={inputId} class="field-label">{label}{#if optional}<span class="optional">необязательно</span>{/if}</label>
-  {#if hint}<p class="hint" id={`${inputId}-hint`}>{hint}</p>{/if}
+  {#if uploadHint}<p class="hint" id={`${inputId}-hint`}>{uploadHint}</p>{/if}
   {#if id}
     <div class:video-preview={kind === 'video'} class="media-preview">
       {#if kind === 'image'}
@@ -41,7 +46,7 @@
     </div>
   {/if}
   <div class="upload-row">
-    <input id={inputId} type="file" accept={jpegOnly ? 'image/jpeg,.jpg,.jpeg' : kind === 'image' ? 'image/jpeg,image/png,image/webp' : 'video/mp4,video/quicktime,.mov'} disabled={uploading} onchange={upload} aria-describedby={hint ? `${inputId}-hint` : undefined} aria-label={id ? `Заменить: ${label}` : label} />
+    <input id={inputId} type="file" accept={jpegOnly ? 'image/jpeg,.jpg,.jpeg' : kind === 'image' ? 'image/jpeg,image/png,image/webp' : 'video/mp4,video/quicktime,.mov'} disabled={uploading} onchange={upload} aria-describedby={uploadHint ? `${inputId}-hint` : undefined} aria-label={id ? `Заменить: ${label}` : label} />
     {#if id && onRemove}<button type="button" class="quiet small" onclick={onRemove} disabled={uploading}>Убрать</button>{/if}
   </div>
   {#if uploading}<p class="hint" role="status">Загружаем и проверяем файл…</p>{/if}

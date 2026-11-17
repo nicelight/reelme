@@ -1,0 +1,47 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/event-creation.spec.ts tests/capture.spec.ts tests/test-video.spec.ts
+
+
+Running 4 tests using 1 worker
+
+(node:586099) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/capture.spec.ts:9:1 › visitor catalog, protected media, durable start and lost acknowledgement recovery (9.1s)
+  ✘  2 tests/event-creation.spec.ts:13:3 › save: first event setup persists, capture continues and archive shows its name (19.1s)
+(node:586892) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  3 tests/event-creation.spec.ts:13:3 › skip: first event setup persists, capture continues and archive shows its name (14.1s)
+  ✓  4 tests/test-video.spec.ts:17:1 › saved test-video mode: camera → ordinary worker → visible QR → playable download → SMTP attachment (22.6s)
+
+
+  1) tests/event-creation.spec.ts:13:3 › save: first event setup persists, capture continues and archive shows its name 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: locator('.archive-heading')
+    Expected substring: "Томск · 100–300 участников"
+    Received string:    "REELME / МЕРОПРИЯТИЯДень команды17 ноября 2026 г. · Томск· 100–300 участников ← Все мероприятия"
+    Timeout: 5000ms
+
+    Call log:
+      - Expect "toContainText" locator('.archive-heading') with timeout 5000ms
+      - waiting for locator('.archive-heading')
+        14 × locator resolved to <div class="archive-heading svelte-cb8ma3">…</div>
+           - unexpected value "REELME / МЕРОПРИЯТИЯДень команды17 ноября 2026 г. · Томск· 100–300 участников ← Все мероприятия"
+
+
+      105 |       await archive.locator('.archive-day').click();
+      106 |       await expect(archive.getByRole('heading', { name, exact: true })).toBeVisible();
+    > 107 |       await expect(archive.locator('.archive-heading')).toContainText(action === 'save' ? 'Томск · 100–300 участников' : 'Новосибирск');
+          |                                                         ^
+      108 |       await archive.screenshot({ path: join(artifacts, `event-${action}-archive.png`), fullPage: true });
+      109 |       expect((await (await archive.request.get(app.origin + '/api/events')).json())[0]).toMatchObject({ name, participantRange: action === 'save' ? '100–300' : null, location: action === 'save' ? 'Томск' : 'Новосибирск' });
+      110 |     } finally { await account.close(); }
+        at /home/serg/Projects/reelme/tests/event-creation.spec.ts:107:57
+
+    Error Context: .tasks/TASK-025-T2-FT-005-W22/browser-results/event-creation-save-first--c416b--and-archive-shows-its-name/error-context.md
+
+  1 failed
+    tests/event-creation.spec.ts:13:3 › save: first event setup persists, capture continues and archive shows its name 
+  3 passed (1.2m)

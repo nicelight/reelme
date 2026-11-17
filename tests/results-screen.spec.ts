@@ -49,7 +49,7 @@ test('production results: admin timing, real preload/QR, first fill and stable p
     expect(await duration.locator('option').evaluateAll(nodes => nodes.map(node => (node as HTMLOptionElement).value))).toEqual(['10','20','30','40','50','60']);
     await duration.selectOption('20'); await settings.getByRole('button', { name: 'Сохранить настройку' }).click();
     await expect.poll(async () => (await (await settings.request.get(origin + '/api/admin/display-settings')).json()).pageDurationSeconds).toBe(20);
-    expect((await settings.request.get(origin + '/api/display/today')).status()).toBe(403);
+    expect((await settings.request.get(origin + '/api/display/today')).status()).toBe(200);
     await page.setViewportSize({ width: 1672, height: 941 });
     await page.goto(origin + '/?screen=results');
     await page.getByLabel('Логин').fill('operator'); await page.getByLabel('Пароль', { exact: true }).fill('test-password');

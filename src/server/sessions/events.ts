@@ -7,7 +7,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
 import type { SlotSnapshot } from '../../shared/capture.js';
-import type { ArchiveEvent, EventGallery } from '../../shared/events.js';
+import type { ArchiveEvent, EventDetails, EventGallery } from '../../shared/events.js';
 import { HttpError } from '../errors.js';
 import { readMedia, sendMedia } from '../scenarios/media.js';
 import { eventDate } from './index.js';
@@ -41,14 +41,15 @@ export function registerEvents(app: FastifyInstance, db: DB, dataDir: string, ac
       SELECT s.event_date,p.path,p.size,'image' AS kind FROM capture_sessions s JOIN capture_photos p ON p.session_id=s.id
       UNION SELECT s.event_date,g.frame_path,g.frame_size,'image' FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id WHERE g.frame_path IS NOT NULL AND g.frame_size IS NOT NULL
       UNION SELECT s.event_date,g.video_path,g.video_size,'video' FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id WHERE g.video_path IS NOT NULL AND g.video_size IS NOT NULL
-    ) SELECT e.date,COALESCE(SUM(CASE WHEN f.kind='image' THEN f.size ELSE 0 END),0) AS photoBytes,
+    ) SELECT e.date,e.name,e.participant_range AS participantRange,e.location,COALESCE(SUM(CASE WHEN f.kind='image' THEN f.size ELSE 0 END),0) AS photoBytes,
       COALESCE(SUM(CASE WHEN f.kind='video' THEN f.size ELSE 0 END),0) AS videoBytes
       FROM events e LEFT JOIN files f ON f.event_date=e.date WHERE e.date<? AND e.deleting=0 GROUP BY e.date ORDER BY e.date DESC`).all(eventDate(now())) as ArchiveEvent[];
   });
   app.get<{ Params: { date: string } }>('/api/events/:date', { preHandler: account }, (request): EventGallery => {
     const { date } = request.params; requirePast(date);
     const rows = db.prepare(`${selection} ORDER BY s.number,s.id`).all(date) as Row[];
-    return { date, sessions: rows.map(row => {
+    const event = db.prepare('SELECT date,name,participant_range AS participantRange,location FROM events WHERE date=?').get(date) as EventDetails;
+    return { ...event, sessions: rows.map(row => {
       const snapshot = JSON.parse(row.snapshot) as SlotSnapshot;
       const base = `/api/events/${date}/${row.id}`;
       return { id: row.id, number: row.number, description: snapshot.description,

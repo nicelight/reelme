@@ -248,7 +248,7 @@
         <div class="references-heading"><h4>Дополнительные фото</h4><p class="hint">До {variant.additionalReferenceLimit}. Фото камеры не нужно загружать сюда.</p></div>
         <div class="references">
           {#each Array.from({ length: Math.min(draft.referenceIds.length + 1, variant.additionalReferenceLimit) }, (_, index) => index) as index}
-            <MediaField label={`Референс ${index + 1}`} kind="image" id={draft.referenceIds[index]} optional onUploaded={media => { const refs = [...draft.referenceIds]; refs[index] = media.id; changeReferences(refs); }} onRemove={() => changeReferences(draft.referenceIds.filter((_, position) => position !== index))} {onError} {onBusy} />
+            <MediaField label={`Референс ${index + 1}`} kind="image" id={draft.referenceIds[index]} optional hint="Сохраняйте исходные пропорции; рекомендуем 1024–2048 px по длинной стороне. Не обрезайте лицо и важные детали." onUploaded={media => { const refs = [...draft.referenceIds]; refs[index] = media.id; changeReferences(refs); }} onRemove={() => changeReferences(draft.referenceIds.filter((_, position) => position !== index))} {onError} {onBusy} />
           {/each}
         </div>
       {:else}<p class="hint">Дополнительные фото для этого набора не передаются.</p>{/if}

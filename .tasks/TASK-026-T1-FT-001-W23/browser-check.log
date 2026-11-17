@@ -1,0 +1,13 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/admin-appearance.spec.ts tests/editor.spec.ts --grep admin workspace|sequential setup
+
+
+Running 2 tests using 1 worker
+
+(node:567688) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/admin-appearance.spec.ts:5:1 › admin workspace: responsive editor, themes and shared sections (4.9s)
+  ✓  2 tests/editor.spec.ts:50:1 › sequential setup exposes real capacities, locks fields, saves both modes and preserves the source on unlock (10.3s)
+
+  2 passed (16.8s)

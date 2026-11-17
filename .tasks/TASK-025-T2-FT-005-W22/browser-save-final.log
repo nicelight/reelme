@@ -1,0 +1,12 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/event-creation.spec.ts --grep save: first event
+
+
+Running 1 test using 1 worker
+
+(node:588846) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/event-creation.spec.ts:13:3 › save: first event setup persists, capture continues and archive shows its name (15.3s)
+
+  1 passed (17.6s)

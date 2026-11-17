@@ -1,0 +1,12 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/results-access.spec.ts
+
+
+Running 1 test using 1 worker
+
+(node:712464) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/results-access.spec.ts:16:1 › admin keeps editor access beside a reloadable results popup; operator sees results but cannot enter admin (6.3s)
+
+  1 passed (8.7s)

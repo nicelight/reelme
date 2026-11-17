@@ -1,0 +1,38 @@
+
+> reelme@0.1.0 build
+> npm run build:client && tsc -p tsconfig.server.json
+
+
+> reelme@0.1.0 build:client
+> vite build
+
+2:49:21 PM [vite-plugin-svelte] no Svelte config found at /home/serg/Projects/reelme - using default configuration.
+vite v8.3.8 building client environment for production...
+transforming...
+✓ 263 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/client/index.html                               0.37 kB │ gzip:  0.29 kB
+dist/client/.vite/manifest.json                      4.93 kB │ gzip:  0.76 kB
+dist/client/assets/manrope-3-D5vUuQK_.woff2         96.18 kB
+dist/client/assets/manrope-0-DAjpq4PJ.woff2         96.20 kB
+dist/client/assets/manrope-1-BTiNuwoH.woff2         96.30 kB
+dist/client/assets/manrope-2-BhnX4St1.woff2         96.34 kB
+dist/client/assets/manrope-4-CP-a3Kn4.woff2         96.81 kB
+dist/client/assets/reelme-mark-CckhOENq.png        999.85 kB
+dist/client/assets/egg-D65MMJnl.png              1,247.15 kB
+dist/client/assets/fonts-Cy6mxf1l.css                0.68 kB │ gzip:  0.20 kB
+dist/client/assets/Receive-BBGqTH3x.css              8.52 kB │ gzip:  2.36 kB
+dist/client/assets/style-DsT94yVD.css                9.30 kB │ gzip:  2.70 kB
+dist/client/assets/App-CRVnM61P.css                 26.39 kB │ gzip:  6.06 kB
+dist/client/assets/capture-CJGh54ZC.css             44.15 kB │ gzip:  9.42 kB
+dist/client/assets/disclose-version-xihTtKlq.js      0.06 kB │ gzip:  0.08 kB
+dist/client/assets/fonts-BdDRsMjP.js                 0.60 kB │ gzip:  0.46 kB
+dist/client/assets/cloud-C9rmDAE-.js                 2.45 kB │ gzip:  1.21 kB
+dist/client/assets/motion-BDS6Ime_.js                2.73 kB │ gzip:  1.20 kB
+dist/client/assets/Receive-wzf_1ZiD.js               9.72 kB │ gzip:  3.91 kB
+dist/client/assets/index-client-Cl0haRfG.js         46.64 kB │ gzip: 17.97 kB
+dist/client/assets/capture-HXgT5SXj.js              55.86 kB │ gzip: 18.80 kB
+dist/client/assets/App-89N5pmRg.js                 233.18 kB │ gzip: 57.61 kB
+
+✓ built in 5.47s

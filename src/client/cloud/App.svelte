@@ -1,5 +1,5 @@
 <script lang="ts">
-  /** Module contract: account entry, shared archive, operator display and admin-only scenario editor. Model
+  /** Module contract: account entry, shared archive/results for both accounts and admin-only scenario editor. Model
    * changes remove incompatible fields; API remains the authority for access,
    * validation and persistence. Manual tests call Sessions; camera and generation
    * processing remain outside this editor. Source: docs/slot-setup/matrix.md. */
@@ -23,7 +23,9 @@
   const dedicatedScreen = new URLSearchParams(location.search).get('screen') === 'results';
   let ready = $state(false);
   let role = $state<'admin' | 'operator' | null>(null);
-  const publicScreen = $derived(ready && role === 'operator' && dedicatedScreen);
+  const adminRoute = location.pathname === '/admin';
+  const publicScreen = $derived(ready && !!role && dedicatedScreen);
+  const adminDenied = $derived(ready && role === 'operator' && adminRoute && !dedicatedScreen);
   let username = $state('');
   let password = $state('');
   let busy = $state(false);
@@ -56,7 +58,7 @@
     try {
       role = (await api<{ role: 'admin' | 'operator' }>('/auth/session')).role;
       if (role === 'operator') theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      if (role === 'admin') await loadSlots();
+      if (role === 'admin' && !dedicatedScreen) await loadSlots();
     } catch (value) { if (!(value instanceof ApiError && value.status === 401)) fail(value); }
     finally { ready = true; }
   });
@@ -67,7 +69,7 @@
       role = (await api<{ role: 'admin' | 'operator' }>('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) })).role;
       theme = role === 'admin' || matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       password = '';
-      if (role === 'admin') await loadSlots();
+      if (role === 'admin' && !dedicatedScreen) await loadSlots();
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
@@ -124,13 +126,13 @@
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
-  function beforeUnload(event: BeforeUnloadEvent) { if (role === 'admin' && dirty) event.preventDefault(); }
+  function beforeUnload(event: BeforeUnloadEvent) { if (role === 'admin' && !dedicatedScreen && dirty) event.preventDefault(); }
 </script>
 
 <svelte:window onbeforeunload={beforeUnload} />
-<svelte:head><title>ReelMe — {displaySettings ? 'Экран результатов' : guides ? 'Образцы ракурсов' : archive ? 'Архив' : role === 'admin' ? 'Сюжеты' : role === 'operator' ? 'Ваши видео' : 'Вход'}</title></svelte:head>
+<svelte:head><title>ReelMe — {dedicatedScreen || displaySettings ? 'Экран результатов' : guides ? 'Образцы ракурсов' : archive ? 'Архив' : role === 'admin' ? 'Сюжеты' : role === 'operator' ? 'Ваши видео' : 'Вход'}</title></svelte:head>
 
-<div class:admin-shell={role === 'admin'} data-admin-theme={theme}>
+<div class:admin-shell={role === 'admin' && !publicScreen} data-admin-theme={theme}>
 {#if role && !publicScreen}
 <header class="app-header">
   <a class="brand" href="/" aria-label="ReelMe — главная">{#if role === 'admin'}<img src={brandMark} alt="" /><span class="admin-wordmark">REELME</span>{:else}Reel<span>Me</span><span class="brand-caption">STUDIO</span>{/if}</a>
@@ -140,13 +142,13 @@
   </div>
 </header>
 
-{#if ready && role}
+{#if ready && role && !adminDenied}
   <nav class="surface-nav" aria-label="Разделы">
     <button class="quiet" aria-current={!archive && !guides && !displaySettings ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = false; guides = false; displaySettings = false; }}>{role === 'admin' ? 'Сюжеты' : 'Сегодня'}</button>
     {#if role === 'admin'}<button class="quiet" aria-current={guides ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { guides = true; archive = false; displaySettings = false; } }}>Образцы ракурсов</button>{/if}
     {#if role === 'admin'}<button class="quiet" aria-current={displaySettings ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { displaySettings = true; archive = false; guides = false; } }}>Экран результатов</button>{/if}
     <button class="quiet" aria-current={archive ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (role !== 'admin' || canLeave()) { archive = true; guides = false; displaySettings = false; } }}>Архив</button>
-    {#if role === 'operator'}<a class="button" href="/?screen=results" target="_blank" rel="noopener">Открыть экран</a>{/if}
+    <a class="button" href="/?screen=results" target="_blank" rel="noopener">Открыть экран</a>
   </nav>
 {/if}
 {/if}
@@ -157,6 +159,8 @@
   <Login bind:username bind:password {busy} {error} onsubmit={login} />
 {:else if publicScreen}
   <Display onunauthorized={() => role = null} />
+{:else if adminDenied}
+  <main class="centered"><h1>Админка доступна администратору</h1><p>Вы вошли как оператор.</p><a class="button" href="/">Перейти к результатам</a></main>
 {:else if displaySettings && role === 'admin'}
   <DisplaySettings onunauthorized={() => role = null} />
 {:else if guides && role === 'admin'}
@@ -189,7 +193,7 @@
         <fieldset disabled={formDisabled}>
           <section class="form-section">
             <div class="section-heading"><span>01</span><h3>Карточка сюжета</h3></div>
-            <MediaField label="Изображение сюжета" kind="image" id={draft.thumbnailId} hint="JPEG, PNG или WebP. Это изображение гости увидят при выборе." onUploaded={media => draft.thumbnailId = media.id} onError={fail} onBusy={uploadBusy} />
+            <MediaField label="Изображение сюжета" kind="image" id={draft.thumbnailId} hint="Рекомендуем вертикальную обложку 2:3, 1200 × 1800 px (ширина × высота). Главный объект держите в центре: в карточках края изображения обрезаются." onUploaded={media => draft.thumbnailId = media.id} onError={fail} onBusy={uploadBusy} />
             <label for="description">Описание</label><textarea id="description" rows="3" maxlength="5000" bind:value={draft.description} placeholder="Например: Прогулка по ночному Токио" required></textarea>
             <p class="hint">Первые три слова станут названием карточки.{#if draft.description.trim()} <span class="title-preview">«{titleFrom(draft.description)}»</span>{/if}</p>
             <label class="checkbox-label"><input type="checkbox" bind:checked={draft.visible} />Отображать клиенту</label>

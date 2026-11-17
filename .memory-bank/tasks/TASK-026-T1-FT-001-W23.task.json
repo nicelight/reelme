@@ -1,0 +1,71 @@
+{
+  "id": "TASK-026-T1-FT-001-W23",
+  "title": "Показать рекомендации и лимиты загрузки статичных изображений в админке",
+  "status": "done",
+  "wave": "W23",
+  "feature": "FT-001",
+  "tier": "T1",
+  "reqs": [
+    "REQ-002"
+  ],
+  "depends_on": [],
+  "touched_files": [
+    "src/client/cloud/MediaField.svelte",
+    "src/client/cloud/App.svelte",
+    "src/client/cloud/SlotEditor.svelte",
+    "src/client/cloud/CaptureGuides.svelte",
+    "docs/MANUAL.md"
+  ],
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-17",
+      "result": "PASS",
+      "summary": "npm run check: 0 ошибок/предупреждений; npm run build: PASS. Два существующих Playwright-сценария admin workspace и sequential setup: 2/2 PASS. Визуально проверены обложка, референсы и образцы на desktop/mobile, без горизонтального переполнения. aria-describedby связывает каждый input с подсказкой.",
+      "evidence": [
+        ".tasks/TASK-026-T1-FT-001-W23/browser-check.log",
+        ".tasks/TASK-026-T1-FT-001-W23/editor-desktop.png",
+        ".tasks/TASK-026-T1-FT-001-W23/editor-mobile.png",
+        ".tasks/TASK-026-T1-FT-001-W23/guides-desktop.png",
+        ".tasks/TASK-026-T1-FT-001-W23/guides-mobile.png"
+      ],
+      "limitations": [
+        "Исключение jpegOnly из общей подсказки проверено по коду; панель тестовых JPEG в выбранных снимках закрыта. Серверные правила загрузки не менялись."
+      ]
+    }
+  ],
+  "docs": [
+    "docs/MANUAL.md"
+  ],
+  "evidence_required": [
+    "Рекомендации у всех трёх видов загрузок, доступная связь подсказки с полем, desktop/mobile без переполнения."
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-001-scenarios.md#FT-001-AC-001"
+  ],
+  "normative_inputs": [
+    "DESIGN.md",
+    "docs/slot-setup/matrix.md",
+    "src/server/scenarios/media.ts"
+  ],
+  "constraints": [
+    "По прямому заданию пользователя: все статичные изображения в админке, кроме тестовых фото."
+  ],
+  "invariants": [
+    "Рекомендации не становятся новыми ограничениями; правила приёма файлов и тестовых JPEG не меняются."
+  ],
+  "verification_targets": [
+    "Обложка, референсы и пять образцов показывают пропорции/размеры и существующие лимиты 40 Мп/300 MB; тестовые JPEG не получают эти подсказки."
+  ]
+}

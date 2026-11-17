@@ -1,6 +1,8 @@
 /** Module contract: Sessions owns session start, daily numbering and accepted JPEGs.
  * A single SQLite transaction fixes Novosibirsk date, unique number and a value
- * snapshot from Scenarios. Repeated startRequestId returns the saved receipt,
+ * snapshot from Scenarios. The first visitor setup and session start commit together;
+ * admin test sessions do not complete event setup. Legacy ordinary starts keep their
+ * implicit-event behavior. Repeated startRequestId returns the saved receipt,
  * including across edits, hidden slots and midnight. Manual admin tests alone use
  * saved test JPEGs, copied by position through the same intake/finalize. Legacy
  * tests retain their single-source retry; new plans never duplicate it.
@@ -23,12 +25,19 @@ import { snapshotSlot } from '../scenarios/store.js';
 import { readMedia, readTestPhoto, sendMedia } from '../scenarios/media.js';
 import { MAX_PHOTO_BYTES, snapshotPosePlan, type StartReceipt, type SlotSnapshot, type SessionState, type CaptureStatus } from '../../shared/capture.js';
 import { HttpError } from '../errors.js';
+import { participantRanges, type EventSetup } from '../../shared/events.js';
 
 interface SessionRow {
   id: string; start_request_id: string; event_date: string; number: number;
   slot_id: string; snapshot: string; state: SessionState; created_at: number;
 }
-const startSchema = z.object({ startRequestId: z.string().uuid(), slotId: z.string().uuid() }).strict();
+const eventSetupSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('check') }).strict(),
+  z.object({ action: z.literal('skip') }).strict(),
+  z.object({ action: z.literal('save'), name: z.string().trim().min(1).max(120),
+    participantRange: z.enum(participantRanges), location: z.string().trim().min(1).max(160) }).strict(),
+]);
+const startSchema = z.object({ startRequestId: z.string().uuid(), slotId: z.string().uuid(), eventSetup: eventSetupSchema.optional() }).strict();
 const sessionParams = z.object({ id: z.string().uuid() });
 const photoParams = sessionParams.extend({ poseIndex: z.string().regex(/^[0-7]$/).transform(Number) });
 const dateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Novosibirsk', year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -69,7 +78,7 @@ async function inspectPhoto(path: string) {
   } catch { throw new HttpError(400, 'INVALID_PHOTO', 'Нужен корректный JPEG до 40 мегапикселей'); }
 }
 export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, access: Access, now: () => number) {
-  const start = db.transaction((startRequestId: string, slotId: string, manualTest = false) => {
+  const start = db.transaction((startRequestId: string, slotId: string, manualTest = false, eventSetup?: EventSetup) => {
     const previous = db.prepare('SELECT * FROM capture_sessions WHERE start_request_id=?').get(startRequestId) as SessionRow | undefined;
     if (previous) {
       const saved = readSession(db, previous.id);
@@ -79,8 +88,22 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     // Read the current visibility/config under the same write transaction as numbering.
     const snapshot = snapshotSlot(db, slotId, manualTest);
     const createdAt = now(); const date = eventDate(createdAt);
-    db.prepare('INSERT INTO events(date,next_number) VALUES (?,1) ON CONFLICT(date) DO NOTHING').run(date);
+    let event = db.prepare('SELECT setup_complete FROM events WHERE date=?').get(date) as { setup_complete: number } | undefined;
+    if (!event?.setup_complete && eventSetup?.action === 'check') {
+      throw new HttpError(409, 'EVENT_SETUP_REQUIRED', 'Перед первой съёмкой создайте мероприятие или нажмите «Пропустить».');
+    }
+    if (!event) {
+      const { number } = db.prepare('UPDATE event_name_counter SET next_number=next_number+1 WHERE id=1 RETURNING next_number-1 AS number').get() as { number: number };
+      db.prepare('INSERT INTO events(date,next_number,name) VALUES (?,1,?)').run(date, `Session_${number}`);
+      event = { setup_complete: 0 };
+    }
     if (db.prepare('SELECT 1 FROM events WHERE date=? AND deleting=1').get(date)) throw new HttpError(409, 'EVENT_DELETING', 'Мероприятие удаляется');
+    if (!event.setup_complete && !manualTest) {
+      if (eventSetup?.action === 'save') {
+        db.prepare('UPDATE events SET name=?,participant_range=?,location=?,setup_complete=1 WHERE date=?')
+          .run(eventSetup.name, eventSetup.participantRange, eventSetup.location, date);
+      } else db.prepare('UPDATE events SET setup_complete=1 WHERE date=?').run(date);
+    }
     const { number } = db.prepare('UPDATE events SET next_number=next_number+1 WHERE date=? RETURNING next_number-1 AS number').get(date) as { number: number };
     const row: SessionRow = {
       id: randomUUID(), start_request_id: startRequestId, event_date: date, number,
@@ -90,8 +113,8 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     return { created: true, value: receipt(row) };
   });
   app.post('/api/capture/sessions', { preHandler: access.requireInstallation }, (request, reply) => {
-    const { startRequestId, slotId } = startSchema.parse(request.body);
-    const result = start.immediate(startRequestId, slotId);
+    const { startRequestId, slotId, eventSetup } = startSchema.parse(request.body);
+    const result = start.immediate(startRequestId, slotId, false, eventSetup);
     return reply.code(result.created ? 201 : 200).send(result.value);
   });
   app.get('/api/capture/sessions/:id/guides/:number', { preHandler: access.requireInstallation }, async (request, reply) => {

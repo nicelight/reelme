@@ -123,7 +123,7 @@ TEST_PHOTO_REQUIRED, неверный файл — INVALID_PHOTO, без зап�
 
 | Операция | Данные и результат |
 |---|---|
-| POST /capture/sessions | startRequestId, slotId → sessionId, дата, номер, план поз, story из snapshot |
+| POST /capture/sessions | startRequestId, slotId, eventSetup → sessionId, дата, номер, план поз, story из snapshot |
 | GET /capture/sessions/:id/thumbnail | Закреплённая картинка сюжета из snapshot, независимо от правок/видимости текущего слота; ключ установки обязателен |
 | GET /capture/sessions/:id/guides/:number | Закреплённый образец из snapshot; 404 при отсутствии, ключ установки обязателен |
 | GET /capture/sessions/:id | `CaptureStatus`: состояние, принятые позиции, полный набор и подтверждение finalize |
@@ -132,6 +132,15 @@ TEST_PHOTO_REQUIRED, неверный файл — INVALID_PHOTO, без зап�
 
 Первый старт возвращает 201, повтор — 200 с тем же `StartReceipt` из
 [capture.ts](../../src/shared/capture.ts). `startRequestId` и `slotId` — UUID.
+Текущий клиент передаёт `eventSetup: {action:'check'}`. Если настройка дня ещё не
+завершена, получает 409 `EVENT_SETUP_REQUIRED` без создания сессии и показывает форму.
+`{action:'save',name,participantRange,location}` сохраняет введённые данные;
+`{action:'skip'}` сохраняет автоматическое `Session_N`, NULL-диапазон и Новосибирск.
+Название после trim — 1–120 символов, локация — 1–160; диапазоны — точные значения
+из [events.ts](../../src/shared/events.ts). Настройка и старт атомарны, тот же
+`startRequestId` безопасен после потери ответа. Уже настроенный день не переименовывается
+следующими стартами. Отсутствие `eventSetup` сохраняет прежний протокол старых клиентов:
+обычный старт создаёт автоматическое мероприятие и считает настройку завершённой.
 Повтор одного ключа для другого слота даёт 409; для того же слота возвращается
 сохранённая сессия, даже после скрытия слота или смены суток. Проверка текущей
 видимости выполняется перед первым стартом. Номер в ответе API ещё не показывается
@@ -165,18 +174,19 @@ StartReceipt и CaptureStatus содержат `story: {description, thumbnailId
 
 | Операция | Доступ | Результат |
 |---|---|---|
-| GET /display/today | Оператор | Сегодняшние номера, этапы, ошибки и карточки |
-| POST /display/:id/load-failure | Оператор + разрешённый Origin | `{attempts: 4, reason: "timeout"\|"image"}` → 204; предупреждение `DISPLAY_CARD_DEPRECATED` для видимого ready-номера текущего дня, без изменения сессии |
+| GET /display/today | Оператор/администратор | Сегодняшние номера, этапы, ошибки и карточки |
+| POST /display/:id/load-failure | Оператор/администратор + разрешённый Origin | `{attempts: 4, reason: "timeout"\|"image"}` → 204; предупреждение `DISPLAY_CARD_DEPRECATED` для видимого ready-номера текущего дня, без изменения сессии |
+| GET /display/:id/{photo,frame,qr} | Оператор/администратор | Медиа видимой готовой карточки текущего дня |
 | GET /admin/display-settings | Администратор | `{pageDurationSeconds}` |
 | PUT /admin/display-settings | Администратор + разрешённый Origin | Строго `{pageDurationSeconds: 10\|20\|30\|40\|50\|60}` → сохранённое значение |
-| GET /events, /events/:date | Оператор/администратор | Прошедшие мероприятия, размеры и галерея |
+| GET /events, /events/:date | Оператор/администратор | Прошедшие мероприятия: date, name, participantRange (nullable), location; размеры списка и сессии галереи |
 | DELETE /events/:date | Администратор | Удаление прошедшего мероприятия после подтверждения в UI |
 
 `TodayDisplay` содержит `date`, `serverNow`, `pageDurationSeconds` и `sessions`.
 Длительность хранится в singleton SQLite `display_settings`; существующий интервал
 10 секунд используется до первого изменения администратором. Иные числа, строки,
 неизвестные поля и изменение без разрешённого Origin отклоняются. Значение сохраняется
-после перезапуска; оператор получает его только в своей проекции экрана.
+после перезапуска; оба аккаунта получают его в проекции экрана.
 
 `DisplaySession.readyAt` — существующее `generation_jobs.ready_at` в миллисекундах
 для готового видео, иначе null; отсутствующее историческое время не восстанавливается

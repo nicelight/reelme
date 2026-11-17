@@ -1,0 +1,76 @@
+{
+  "id": "TASK-027-T1-FT-004-W24",
+  "title": "Открывать результаты обоим аккаунтам, админку только администратору",
+  "status": "done",
+  "wave": "W24",
+  "feature": "FT-004",
+  "tier": "T1",
+  "reqs": [
+    "REQ-018"
+  ],
+  "depends_on": [],
+  "touched_files": [
+    "src/client/cloud/App.svelte",
+    "src/server/sessions/display.ts",
+    "tests/display.test.ts",
+    "tests/results-screen.spec.ts",
+    "tests/results-access.spec.ts"
+  ],
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-17",
+      "result": "PASS",
+      "summary": "npm run check: 0 ошибок/предупреждений; npm run build: PASS. display/display-settings/api tests: 19/19 PASS. Chromium results-access: 1/1 PASS (8.7s): admin editor плюс fullscreen popup/reload в одном контексте, draft сохранён, admin CSS и загрузки slots отсутствуют на fullscreen; operator видит результаты, /admin отказ; реальные ready card и защищённые медиа доступны обоим аккаунтам.",
+      "evidence": [
+        ".tasks/TASK-027-T1-FT-004-W24/reelme-access-tests.log",
+        ".tasks/TASK-027-T1-FT-004-W24/reelme-access-check.log",
+        ".tasks/TASK-027-T1-FT-004-W24/reelme-access-build.log",
+        ".tasks/TASK-027-T1-FT-004-W24/browser-check.log",
+        ".tasks/TASK-027-T1-FT-004-W24/results-access-observations.json",
+        ".tasks/TASK-027-T1-FT-004-W24/admin-results-desktop.png",
+        ".tasks/TASK-027-T1-FT-004-W24/operator-results-desktop.png",
+        ".tasks/TASK-027-T1-FT-004-W24/admin-editor-preserved.png",
+        ".tasks/TASK-027-T1-FT-004-W24/operator-admin-denied.png"
+      ],
+      "limitations": [
+        "Локальные временные БД/fixtures; полный UI suite не запускался, реальные fal/камера/SMTP не затрагивались."
+      ]
+    }
+  ],
+  "docs": [
+    ".memory-bank/contracts/access.md",
+    "docs/MANUAL.md"
+  ],
+  "evidence_required": [
+    "API role isolation и browser admin two tabs/operator refusal."
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-004-public-delivery.md"
+  ],
+  "normative_inputs": [
+    ".memory-bank/prd.md",
+    ".memory-bank/contracts/access.md",
+    "DESIGN.md"
+  ],
+  "constraints": [
+    "Прямое задание: оба аккаунта видят результаты, только admin видит админку."
+  ],
+  "invariants": [
+    "Авторизация и сроки cookie не меняются; display media закрыты от анонимного доступа и ключа установки."
+  ],
+  "verification_targets": [
+    "Admin editor плюс results в одной cookie-сессии; operator results и отказ /admin; отсутствие admin CSS на fullscreen."
+  ]
+}

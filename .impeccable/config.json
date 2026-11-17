@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/client/cloud/SlotEditor.svelte"
+        ],
+        "createdAt": "2026-11-17T09:32:17.990Z",
+        "reason": "Agent review: line 305 styles semantic Recast guidance and reference-change status paragraphs (role=status), not a decorative card accent; preserve the existing form notice affordance."
+      }
+    ]
+  }
+}

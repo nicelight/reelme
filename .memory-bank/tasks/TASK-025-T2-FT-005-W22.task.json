@@ -1,0 +1,129 @@
+{
+  "id": "TASK-025-T2-FT-005-W22",
+  "title": "Создание мероприятия перед первой съёмкой и название в архиве",
+  "status": "done",
+  "wave": "W22",
+  "feature": "FT-005",
+  "tier": "T2",
+  "reqs": [
+    "REQ-014"
+  ],
+  "depends_on": [
+    "TASK-011-T2-FT-005-W8"
+  ],
+  "purpose": "Один раз задать данные мероприятия и продолжить выбранную съёмку.",
+  "success_outcome": "Save/Skip сохраняет мероприятие в БД, продолжает съёмку и не повторяется для следующих посетителей; архив показывает название.",
+  "touched_files": [
+    "src/server/db.ts",
+    "src/server/sessions/index.ts",
+    "src/server/sessions/events.ts",
+    "src/shared/events.ts",
+    "src/client/capture/App.svelte",
+    "src/client/capture/EventSetup.svelte",
+    "src/client/capture/api.ts",
+    "src/client/cloud/Archive.svelte",
+    "tests/event-creation.test.ts",
+    "tests/event-creation.spec.ts",
+    "tests/browser-fixture.ts",
+    "tests/browser-server.ts",
+    "tests/archive.test.ts",
+    "tests/archive-fixture.ts"
+  ],
+  "gates": [
+    {
+      "name": "types",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "server",
+      "command": "npm test",
+      "required": true
+    },
+    {
+      "name": "browser",
+      "command": "npm run test:ui -- tests/event-creation.spec.ts tests/capture.spec.ts tests/test-video.spec.ts",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-17",
+      "stage": "server",
+      "result": "PASS_WITH_KNOWN_FLAKE",
+      "summary": "Общий npm test: 117/118 PASS, включая все 3 event-creation tests, capture и archive. Единственное падение — timing-sensitive tests/camera.test.ts:104 (abort polling: счётчик 12 вместо 11); повтор только camera.test.ts без правок кода: 4/4 PASS. Общий suite не заявлен полностью зелёным. Сохранение/Skip, restart, admin-only event gate, rollback, архив, миграция и неповторяемая нумерация после удаления подтверждены.",
+      "evidence": [
+        ".tasks/TASK-025-T2-FT-005-W22/server-tests.log"
+      ],
+      "limitations": [
+        "Физическая камера не проверялась; нестабильное ожидание счётчика камеры зафиксировано в PAPERCUTS."
+      ]
+    },
+    {
+      "date": "2026-11-17",
+      "stage": "browser",
+      "result": "PASS",
+      "summary": "Chromium: Skip, existing capture recovery и test-video full flow прошли в первом запуске. Save прошёл после исправления пробела-разделителя в метаданных архива; повторялся только Save. Оба пути доходят до реального JPEG intake; следующий посетитель/reload/restart обходят форму; имя и metadata видны в архиве. Потеря ответа Save и сохранённые поля после reload проверены. Desktop/mobile EventSetup и архив просмотрены, overflow нет.",
+      "evidence": [
+        ".tasks/TASK-025-T2-FT-005-W22/browser-initial.log",
+        ".tasks/TASK-025-T2-FT-005-W22/browser-save-final.log",
+        ".tasks/TASK-025-T2-FT-005-W22/event-save-desktop.png",
+        ".tasks/TASK-025-T2-FT-005-W22/event-skip-mobile.png",
+        ".tasks/TASK-025-T2-FT-005-W22/event-save-archive.png"
+      ],
+      "limitations": [
+        "Камера и SMTP — локальные fixtures, реальный fal не вызывается."
+      ]
+    },
+    {
+      "date": "2026-11-17",
+      "stage": "types-build",
+      "result": "PASS",
+      "summary": "npm run check: 0 ошибок/предупреждений; npm run build PASS. После локальной правки разделителя архива build:client и Save browser повторены успешно. git diff --check PASS.",
+      "evidence": [
+        ".tasks/TASK-025-T2-FT-005-W22/check.log",
+        ".tasks/TASK-025-T2-FT-005-W22/build.log",
+        ".tasks/TASK-025-T2-FT-005-W22/build-client-final.log"
+      ]
+    }
+  ],
+  "docs": [
+    ".memory-bank/prd.md",
+    ".memory-bank/requirements.md",
+    ".memory-bank/features/FT-005-event-archive.md",
+    ".memory-bank/domains/core-domain.md",
+    ".memory-bank/contracts/http-api.md",
+    ".memory-bank/glossary.md",
+    "docs/MANUAL.md"
+  ],
+  "evidence_required": [
+    "Save/Skip, повтор и новый посетитель в браузере; название в архиве.",
+    "API/SQLite: сохранение, idempotency, restart, сохранная миграция, нумерация после удаления."
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-005-event-archive.md#FT-005-AC-004"
+  ],
+  "normative_inputs": [
+    ".memory-bank/constitution.md",
+    ".memory-bank/prd.md",
+    "DESIGN.md"
+  ],
+  "constraints": [
+    "Один день Новосибирска остаётся одним мероприятием; без новой модели нескольких мероприятий в день.",
+    "Без реальных camera/fal/SMTP, commit/deploy; пользовательская var/ сохраняется."
+  ],
+  "invariants": [
+    "Настройка мероприятия и первая сессия фиксируются одной транзакцией; повтор startRequestId не меняет метаданные.",
+    "Админский тест не закрывает настройку за первого посетителя; legacy ordinary capture не требует заполнения задним числом.",
+    "Автоматический номер Session_N не повторяется после удаления."
+  ],
+  "verification_targets": [
+    "Два UI пути, reload после потери ответа, следующий посетитель/restart, архив.",
+    "Валидация, переход суток, миграция и сохраняемая последовательность имён."
+  ]
+}

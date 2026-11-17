@@ -27,7 +27,7 @@ test('operator display: six stages, explicit errors, stable order, private media
   const card = (await view()).sessions[0].card!;
   for (const url of ['/api/display/today', card.photoUrl, card.frameUrl, card.qrUrl]) {
     assert.equal((await f.app.inject(url)).statusCode, 401, url);
-    assert.equal((await f.app.inject({ url, headers: { cookie: admin } })).statusCode, 403, url);
+    assert.equal((await f.app.inject({ url, headers: { cookie: admin } })).statusCode, 200, url);
     assert.equal((await f.app.inject({ url, headers: { authorization: `Bearer ${'a'.repeat(43)}` } })).statusCode, 403, url);
     for (const token of [row().receive_token, row().download_token]) assert.equal((await f.app.inject({ url, headers: { authorization: `Bearer ${token}` } })).statusCode, 401, url);
     assert.equal((await get(url)).statusCode, 200, url);
@@ -46,7 +46,10 @@ test('operator display: six stages, explicit errors, stable order, private media
   t.mock.method(f.app.log, 'warn', (value: unknown) => { warnings.push(value); });
   const report = (headers: Record<string, string>, payload: unknown = { attempts: 4, reason: 'timeout' }) => f.app.inject({ method: 'POST', url: failureUrl, headers, payload: payload as object });
   assert.equal((await report({ origin: f.config.origin })).statusCode, 401);
-  assert.equal((await report({ cookie: admin, origin: f.config.origin })).statusCode, 403);
+  assert.equal((await report({ authorization: `Bearer ${'a'.repeat(43)}`, origin: f.config.origin })).statusCode, 403);
+  assert.equal((await report({ cookie: admin, origin: 'https://other.test' })).statusCode, 403);
+  assert.equal((await report({ cookie: admin, origin: f.config.origin })).statusCode, 204);
+  warnings.length = 0;
   assert.equal((await report({ cookie, origin: 'https://other.test' })).statusCode, 403);
   assert.equal((await report({ cookie, origin: f.config.origin }, { attempts: 4, reason: 'timeout', url: 'secret' })).statusCode, 400);
   assert.equal((await report({ cookie, origin: f.config.origin })).statusCode, 204);

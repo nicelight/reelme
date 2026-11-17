@@ -1,5 +1,6 @@
 <script lang="ts">
-  /** Account archive browsing; only admins see deletion, with explicit confirmation.
+  /** Account archive browsing displays saved event names alongside server dates;
+   * only admins see deletion, with explicit confirmation.
    * The server owns dates/authorization; viewing never opens visitor forms. */
   import { onMount } from 'svelte';
   import type { ArchiveEvent, ArchiveSession, EventGallery } from '../../shared/events';
@@ -38,7 +39,7 @@
 
 <main class="archive">
   <div class="archive-heading">
-    <div><p class="eyebrow">REELME / МЕРОПРИЯТИЯ</p><h1>{gallery ? dateLabel(gallery.date) : 'Архив мероприятий'}</h1></div>
+    <div><p class="eyebrow">REELME / МЕРОПРИЯТИЯ</p><h1>{gallery ? gallery.name : 'Архив мероприятий'}</h1>{#if gallery}<p class="hint">{[dateLabel(gallery.date), gallery.location, gallery.participantRange ? `${gallery.participantRange} участников` : null].filter(Boolean).join(' · ')}</p>{/if}</div>
     {#if gallery}<button class="quiet" onclick={load} disabled={busy}>← Все мероприятия</button>{/if}
   </div>
   <p class="hint">{gallery ? 'Выберите историю, чтобы посмотреть её видео.' : 'Прошедшие дни по Новосибирску. Сегодняшние истории появятся здесь после полуночи.'}</p>
@@ -68,7 +69,7 @@
       {#each events as event (event.date)}
         <article class="archive-event">
         <button class="archive-day" onclick={() => open(event.date)} data-date={event.date}>
-          <h2>{dateLabel(event.date)}</h2><span>Фотографии <strong>{bytesLabel(event.photoBytes)}</strong></span><span>Видео <strong>{bytesLabel(event.videoBytes)}</strong></span><span class="archive-link">Открыть мероприятие →</span>
+          <h2>{event.name}</h2><p class="hint">{dateLabel(event.date)} · {event.location}</p><span>Фотографии <strong>{bytesLabel(event.photoBytes)}</strong></span><span>Видео <strong>{bytesLabel(event.videoBytes)}</strong></span><span class="archive-link">Открыть мероприятие →</span>
         </button>
         {#if role === 'admin'}<button class="archive-delete" aria-label={`Удалить мероприятие ${dateLabel(event.date)}`} onclick={() => deleting = event.date}>Удалить мероприятие</button>{/if}
         </article>

@@ -41,6 +41,6 @@ export async function seedArchive(dataDir: string, firstVideo: Buffer, secondVid
     db.prepare("INSERT INTO capture_sessions(id,start_request_id,event_date,number,slot_id,snapshot,state,created_at) VALUES (?,?,'2026-11-13',1,?,?,'capturing',0)").run(randomUUID(), randomUUID(), firstRow.slot_id, JSON.stringify(snapshot));
     await publishReady(db, dataDir, first.id, origin); await publishReady(db, dataDir, second.id, origin);
     return { first, second, partialId, emptyId, thumbnailId, changedId, thumb, changed,
-      expected: { date: '2026-11-14', photoBytes: 2 * first.photo.length + 2 * second.photo.length + first.frame_size + second.frame_size, videoBytes: firstVideo.length + secondVideo.length } };
+      expected: { date: '2026-11-14', name: 'Session_1', participantRange: null, location: 'Новосибирск', photoBytes: 2 * first.photo.length + 2 * second.photo.length + first.frame_size + second.frame_size, videoBytes: firstVideo.length + secondVideo.length } };
   } finally { db.close(); }
 }

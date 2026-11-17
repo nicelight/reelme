@@ -22,7 +22,7 @@ test('archive: totals, snapshots, own media, permissions and read-only state aft
   const states = () => db.prepare('SELECT id,state FROM capture_sessions ORDER BY id').all();
   const firstDelivery = db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(seed.first.id) as { receive_token: string; download_token: string };
   const list = () => f.app.inject({ url: '/api/events', headers: { cookie: operator } });
-  assert.deepEqual((await list()).json(), [{ date: '2026-11-13', photoBytes: 0, videoBytes: 0 }]);
+  assert.deepEqual((await list()).json(), [{ date: '2026-11-13', name: 'Session_2', participantRange: null, location: 'Новосибирск', photoBytes: 0, videoBytes: 0 }]);
   for (const date of ['2026-11-14', '2026-11-15', '2026-11-99', 'invalid']) assert.equal((await f.app.inject({ url: `/api/events/${date}`, headers: { cookie: operator } })).statusCode, 404);
   // Use the existing confirmation and hide implementation; no SMTP worker required.
   assert.equal((await f.app.inject({ method: 'POST', url: `/api/receive/${firstDelivery.receive_token}/email`, payload: { email: 'visitor@example.test' } })).statusCode, 200);
@@ -30,7 +30,7 @@ test('archive: totals, snapshots, own media, permissions and read-only state aft
   assert.ok(!(await f.app.inject({ url: '/api/display/today', headers: { cookie: operator } })).json().sessions.some((s: { id: string }) => s.id === seed.first.id));
   f.advance(Date.parse('2026-11-14T17:00:00Z') - Date.parse('2026-11-14T10:03:00Z'));
   const beforeDelivery = delivery(); const beforeStates = states();
-  assert.deepEqual((await list()).json(), [seed.expected, { date: '2026-11-13', photoBytes: 0, videoBytes: 0 }]);
+  assert.deepEqual((await list()).json(), [seed.expected, { date: '2026-11-13', name: 'Session_2', participantRange: null, location: 'Новосибирск', photoBytes: 0, videoBytes: 0 }]);
   for (const cookie of [operator, admin]) {
     const detail = await f.app.inject({ url: '/api/events/2026-11-14', headers: { cookie } });
     assert.equal(detail.statusCode, 200); assert.doesNotMatch(detail.body, /fixture.test|receive_token|download_token|visitor@example|prompt|video_path/);
@@ -79,7 +79,7 @@ test('archive calendar uses saved start identity when photo arrives after Novosi
   assert.equal((await start()).sessionId,first.sessionId);
   const second = await start({...payload,startRequestId:randomUUID()}); assert.equal(second.date,'2026-01-02'); assert.equal(second.number,1);
   const list = await f.app.inject({url:'/api/events',headers:{cookie}});
-  assert.deepEqual(list.json(),[{date:'2026-01-01',photoBytes:photo.length,videoBytes:0}]);
+  assert.deepEqual(list.json(),[{date:'2026-01-01',name:'Session_1',participantRange:null,location:'Новосибирск',photoBytes:photo.length,videoBytes:0}]);
   const detail = await f.app.inject({url:'/api/events/2026-01-01',headers:{cookie}});
   assert.equal(detail.json().sessions[0].id,first.sessionId);
   assert.equal((await f.app.inject({url:'/api/events/2026-01-02',headers:{cookie}})).statusCode,404);

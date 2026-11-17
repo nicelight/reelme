@@ -1,4 +1,4 @@
-/** Operator projection of today's visible sessions and private media.
+/** Admin/operator projection of today's visible sessions and private media.
  * Serves the QR saved before ready; older results without a file render it on demand.
  * Polling/media reads never confirm email or open a receive form. Authenticated
  * card-load failures produce one warning per request, without changing session state. */
@@ -60,16 +60,17 @@ export function registerDisplay(app: FastifyInstance, db: DB, dataDir: string, o
     db.prepare('UPDATE display_settings SET page_duration_seconds=? WHERE id=1').run(value.pageDurationSeconds);
     return settings();
   });
-  async function operator(request: FastifyRequest, reply: FastifyReply) {
-    if (access.context(request, reply) !== 'operator') throw new HttpError(403, 'FORBIDDEN', 'Нужны права оператора');
+  async function account(request: FastifyRequest, reply: FastifyReply) {
+    const role = access.context(request, reply);
+    if (role !== 'operator' && role !== 'admin') throw new HttpError(403, 'FORBIDDEN', 'Нужен аккаунт оператора или администратора');
   }
-  app.get('/api/display/today', { preHandler: operator }, (): TodayDisplay => {
+  app.get('/api/display/today', { preHandler: account }, (): TodayDisplay => {
     const time = now(); const date = eventDate(time);
     const rows = db.prepare(`${selection} ORDER BY s.number,s.id`).all(date, time) as Row[];
     return { date, serverNow: time, ...settings(), sessions: rows.map(projection) };
   });
   const loadFailure = z.object({ attempts: z.literal(4), reason: z.enum(['timeout', 'image']) }).strict();
-  app.post<{ Params: { id: string } }>('/api/display/:id/load-failure', { preHandler: [access.requireOrigin, operator] }, (request, reply) => {
+  app.post<{ Params: { id: string } }>('/api/display/:id/load-failure', { preHandler: [access.requireOrigin, account] }, (request, reply) => {
     const failure = loadFailure.parse(request.body);
     const time = now();
     const row = db.prepare(`${selection} AND s.id=? AND s.state='ready'`).get(eventDate(time), time, request.params.id) as Row | undefined;
@@ -78,7 +79,7 @@ export function registerDisplay(app: FastifyInstance, db: DB, dataDir: string, o
     return reply.code(204).send();
   });
   for (const kind of ['photo', 'frame', 'qr'] as const) {
-    app.get<{ Params: { id: string } }>(`/api/display/:id/${kind}`, { preHandler: operator }, async (request, reply) => {
+    app.get<{ Params: { id: string } }>(`/api/display/:id/${kind}`, { preHandler: account }, async (request, reply) => {
       const time = now();
       const row = db.prepare(`${selection} AND s.id=? AND s.state='ready'`).get(eventDate(time), time, request.params.id) as Row | undefined;
       if (!row) throw new HttpError(404, 'NOT_FOUND', 'Результат недоступен на общем экране');

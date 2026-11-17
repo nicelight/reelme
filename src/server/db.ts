@@ -6,6 +6,8 @@
  * preserve unknown history; migrations never invent historical timestamps. Session issuance owns scoped
  * capabilities, first-open/confirmation times and the independent email state.
  * Events retain a deletion marker until restartable local cleanup finishes.
+ * Event names/metadata persist independently of browser state; a durable counter
+ * never reuses an automatic Session_N number after an event is deleted.
  * Capture positions follow docs/slot-setup/matrix.md; migrations retain provider capabilities. */
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
@@ -97,6 +99,26 @@ export function openDatabase(dataDir: string) {
   if (!(db.prepare('PRAGMA table_info(events)').all() as { name: string }[]).some(column => column.name === 'deleting')) {
     db.exec('ALTER TABLE events ADD COLUMN deleting INTEGER NOT NULL DEFAULT 0 CHECK(deleting IN (0,1))');
   }
+  const eventColumns = new Set((db.prepare('PRAGMA table_info(events)').all() as { name: string }[]).map(column => column.name));
+  db.transaction(() => {
+    if (!eventColumns.has('name')) db.exec('ALTER TABLE events ADD COLUMN name TEXT');
+    if (!eventColumns.has('participant_range')) db.exec('ALTER TABLE events ADD COLUMN participant_range TEXT');
+    if (!eventColumns.has('location')) db.exec("ALTER TABLE events ADD COLUMN location TEXT NOT NULL DEFAULT 'Новосибирск'");
+    if (!eventColumns.has('setup_complete')) db.exec('ALTER TABLE events ADD COLUMN setup_complete INTEGER NOT NULL DEFAULT 0 CHECK(setup_complete IN (0,1))');
+    db.exec(`CREATE TABLE IF NOT EXISTS event_name_counter (
+      id INTEGER PRIMARY KEY CHECK(id=1), next_number INTEGER NOT NULL CHECK(next_number>=1)
+    ); INSERT OR IGNORE INTO event_name_counter(id,next_number) VALUES(1,1);`);
+    // Existing ordinary capture has already begun: never ask for its event retroactively.
+    // Admin-only test days remain available for setup before the first visitor.
+    const unnamed = db.prepare('SELECT date FROM events WHERE name IS NULL ORDER BY date').all() as { date: string }[];
+    for (const { date } of unnamed) {
+      const { number } = db.prepare('UPDATE event_name_counter SET next_number=next_number+1 WHERE id=1 RETURNING next_number-1 AS number').get() as { number: number };
+      db.prepare(`UPDATE events SET name=?,setup_complete=EXISTS (
+        SELECT 1 FROM capture_sessions s WHERE s.event_date=events.date
+          AND json_type(s.snapshot,'$.testPhotoId') IS NULL AND json_type(s.snapshot,'$.testPhotoIds') IS NULL
+      ) WHERE date=?`).run(`Session_${number}`, date);
+    }
+  }).immediate();
   const jobColumns = new Set((db.prepare('PRAGMA table_info(generation_jobs)').all() as { name: string }[]).map(column => column.name));
   for (const column of ['submitted_at', 'ready_at']) {
     if (!jobColumns.has(column)) db.exec(`ALTER TABLE generation_jobs ADD COLUMN ${column} INTEGER`);
@@ -114,7 +136,7 @@ export function openDatabase(dataDir: string) {
     page_duration_seconds INTEGER NOT NULL CHECK(page_duration_seconds IN (10,20,30,40,50,60))
   );
   INSERT OR IGNORE INTO display_settings(id,page_duration_seconds) VALUES(1,10);`);
-  db.pragma('user_version = 10');
+  db.pragma('user_version = 11');
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

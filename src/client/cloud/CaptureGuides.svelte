@@ -31,12 +31,13 @@
 <main class="guides-page">
   <p class="eyebrow">ПОДГОТОВКА СЪЁМКИ</p><h1>Образцы ракурсов</h1>
   <p class="hint">Изображения помогают гостям повторить позу. Замены применяются к новым фотосессиям; начатые сохраняют свои образцы.</p>
+  <p class="hint">Во время съёмки образец показывается целиком, без обрезки; при других пропорциях останутся свободные поля.</p>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   <fieldset disabled={!ready || busy}>
     <div class="guides-grid">
       {#each guides as guide (guide.number)}
         <section class="guide-card" aria-label={`Ракурс ${guide.number}`}>
-          <MediaField label={`Образец ${guide.number}: ${guide.instruction}`} kind="image" id={guide.mediaId} optional onUploaded={media => { void assign(guide.number, media.id); }} onRemove={() => { void assign(guide.number, null); }} onError={fail} {onBusy} />
+          <MediaField label={`Образец ${guide.number}: ${guide.instruction}`} kind="image" id={guide.mediaId} optional hint="Рекомендуем вертикальное изображение 3:5, 600 × 1000 px (ширина × высота)." onUploaded={media => { void assign(guide.number, media.id); }} onRemove={() => { void assign(guide.number, null); }} onError={fail} {onBusy} />
           {#if !guide.mediaId}<p class="hint">Образец не загружен. Во время съёмки будет показана инструкция.</p>{/if}
         </section>
       {/each}

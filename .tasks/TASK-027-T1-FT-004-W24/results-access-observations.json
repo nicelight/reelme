@@ -1,0 +1,11 @@
+{
+  "adminPopupAndReload": true,
+  "adminEditorSessionPreserved": true,
+  "operatorAdminDenied": true,
+  "bothRolesRenderedReadyCard": true,
+  "privatePhotoFrameQrBytesMatch": true,
+  "fullscreenWithoutAdminChrome": true,
+  "horizontalOverflow": false,
+  "pageErrors": [],
+  "externalFalOrSmtp": false
+}

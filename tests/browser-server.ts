@@ -2,13 +2,16 @@
  * manual-test scenarios enable the ordinary worker with local video/transport. */
 import { createApp } from '../src/server/app.js';
 import { readFile } from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { readConfig } from '../src/server/config.js';
 import nodemailer from 'nodemailer';
 const config = readConfig();
 const smtpPort = Number(process.env.EMAIL_TEST_SMTP_PORT);
 const forbidden = () => { if (process.env.TEST_VIDEO_ONLY === 'true') throw new Error('Test-video scenario attempted a provider call'); };
-const app = await createApp(config, { generation: process.env.RUN_GENERATION === 'true' ? {
+const app = await createApp(config, {
+  now: () => process.env.FIXTURE_CLOCK && existsSync(process.env.FIXTURE_CLOCK) ? Number(readFileSync(process.env.FIXTURE_CLOCK, 'utf8')) : Date.now(),
+  generation: process.env.RUN_GENERATION === 'true' ? {
   intervalMs: 20,
   client: {
     async submit(_model, input) {
