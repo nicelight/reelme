@@ -1,9 +1,7 @@
 <script lang="ts">
   /** Module contract: uploads a new immutable material and previews protected
    * media. Replacing/removing a selection never deletes an existing file.
-   * Source: docs/slot-setup/matrix.md. Each test position uploads its own material.
-   * Static-image guidance includes the upload endpoint limits; test JPEGs keep
-   * their separate capture limits and caller-provided pose instructions. */
+   * Source: docs/slot-setup/matrix.md. Each test position uploads its own material. */
   import { api, mediaUrl } from './api';
   import { MAX_PHOTO_BYTES } from '../../shared/capture';
   import type { Media } from '../../shared/scenarios';
@@ -15,7 +13,7 @@
   let uploading = $state(false);
   const inputId = $props.id();
   const uploadHint = $derived(kind === 'image' && !jpegOnly
-    ? `${hint ? `${hint} ` : ''}JPEG, PNG или WebP. Не более 40 мегапикселей и 300 МБ на файл.`
+    ? `${hint ? `${hint} ` : ''}JPEG, PNG или WebP.`
     : hint);
   async function upload(event: Event) {
     const input = event.currentTarget as HTMLInputElement;

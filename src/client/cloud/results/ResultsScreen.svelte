@@ -113,10 +113,10 @@
   .result.concealed { opacity:0; }
   .card.center .result { transition:opacity 300ms ease-out; }
   .portrait { display:block; width:100%; min-height:0; object-fit:cover; border-radius:1.1cqw; min-width:0; height:100%; box-shadow:inset 0 0 0 1px #ffa8e026; }
-  .receive { display:flex; flex-direction:column; justify-content:center; align-items:center; min-width:0; gap:.55cqw; }
-  h2 { margin:0; font-size:1.95cqw; font-weight:800; line-height:1.15; letter-spacing:-.025em; font-variant-numeric:tabular-nums; white-space:nowrap; }
-  h2 span { font-size:1.5cqw; font-weight:600; }
-  .qr { display:block; width:7.2cqw; height:7.2cqw; padding:0; background:#fff; border-radius:.65cqw; box-shadow:0 0 .6cqw #ffd2f126; }
+  .receive { display:flex; flex-direction:column; justify-content:flex-end; align-items:flex-end; min-width:0; gap:.2cqw; }
+  h2 { margin:0; width:8.8cqw; text-align:center; font-size:1.6cqw; font-weight:800; line-height:1.15; letter-spacing:-.025em; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  h2 span { font-size:1.2cqw; font-weight:600; }
+  .qr { display:block; width:8.8cqw; height:8.8cqw; flex-shrink:0; padding:0; background:#fff; border-radius:.65cqw; box-shadow:0 0 .6cqw #ffd2f126; }
   .egg-scene { position:absolute; inset:0; opacity:1; transition:opacity 250ms ease; }
   .egg-art { position:absolute; top:50%; left:62%; height:116%; aspect-ratio:1; transform:translate(-49.8%,-51.4%); }
   .egg-art img { display:block; width:100%; height:100%; object-fit:contain; transform:rotate(0); }

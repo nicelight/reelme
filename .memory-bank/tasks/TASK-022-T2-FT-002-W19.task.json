@@ -75,6 +75,20 @@
         "Canon/Windows/физический звук и реальная digiCamControl Live View не проверены; аппаратура остаётся в TASK-005.",
         "Только локальная интеграция и сборка; deployment/commit/push не выполнялись."
       ]
+    },
+    {
+      "date": "2026-11-17",
+      "stage": "receipt-catalog-return-countdown",
+      "result": "PASS",
+      "summary": "По запросу оператора увеличены текст/номер финального экрана с адаптацией к невысоким экранам, возврат к каталогу — тапом в любом месте. Последний сюжет сохраняется в localStorage и восстанавливается по центру. Live View countdown расположен в точке 38,2% × 38,2%. npm run check: 0 ошибок/предупреждений; build PASS. Capture и transfer browser cases PASS; после адаптации высоты transfer повторён PASS, после смещения countdown controls case PASS. Просмотрены desktop/mobile receipt и desktop countdown скриншоты. Из-за занятого 5513 использованы удалённые после проверки временные копии тестов с другими портами.",
+      "evidence": [
+        ".tasks/capture-return-2026-11-17/transfer-number-001.png",
+        ".tasks/capture-return-2026-11-17/transfer-number-mobile.png",
+        ".tasks/capture-return-2026-11-17/countdown/controls-countdown-wide.png"
+      ],
+      "limitations": [
+        "Локальные браузерные fixtures; физическая камера не проверялась."
+      ]
     }
   ],
   "docs": [

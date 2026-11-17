@@ -63,7 +63,7 @@ test('installation catalog paginates 13 visible slots and protects current previ
     const result = response.json<CatalogPage>();
     assert.deepEqual({ page: result.page, pageSize: result.pageSize, total: result.total, totalPages: result.totalPages }, { page, pageSize: 12, total: 13, totalPages: 2 });
     assert.deepEqual(result.items.map(item => item.id), expected);
-    assert.deepEqual(result.items[0], { id: expected[0], description: `Сюжет номер ${page === 1 ? 0 : 12} полное описание`, thumbnailId: s.thumbnail.id, mode: 'V2V', previewId: s.clips.get(expected[0]) });
+    assert.deepEqual(result.items[0], { id: expected[0], description: `Сюжет номер ${page === 1 ? 0 : 12} полное описание`, thumbnailId: s.thumbnail.id, mode: 'V2V', previewId: s.clips.get(expected[0]), previewOrientation: 'landscape' });
   }
   const detail = await f.app.inject({ url: `/api/catalog/${ids[0]}`, headers: installation });
   assert.equal(detail.statusCode, 200);

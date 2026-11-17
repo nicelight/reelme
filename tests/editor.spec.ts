@@ -16,7 +16,7 @@ async function login(page: Page, origin: string, password: string, role = 'admin
   await page.getByLabel('Логин').fill(role); await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   if (role === 'admin') await expect(page.getByRole('heading', { name: 'Сюжеты', exact: false })).toBeVisible();
-  else await expect(page.getByRole('region', { name: 'Экран результатов ReelMe' })).toBeVisible();
+  else { await page.getByRole('link', { name: 'Перейти к результатам' }).click(); await expect(page.getByRole('region', { name: 'Экран результатов ReelMe' })).toBeVisible(); }
 }
 async function setup(page: Page, mode: 'P2V' | 'V2V', model: string, people: string, count: string) {
   await page.getByLabel('Режим', { exact: true }).selectOption(mode);
@@ -29,9 +29,10 @@ async function setup(page: Page, mode: 'P2V' | 'V2V', model: string, people: str
   if (await ratio.count() && !await ratio.inputValue()) await ratio.selectOption({ index: 1 });
 }
 async function lock(page: Page) {
-  await page.getByRole('button', { name: 'Зафиксировать выбор', exact: true }).click();
+  await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
   await expect(page.getByText('Загружаем готовый промпт…', { exact: true })).toBeHidden();
   await expect(page.locator('#prompt')).toBeVisible();
+  await expect(page.getByRole('switch', { name: 'Фиксация параметров генерации' })).toBeChecked();
 }
 async function openTests(page: Page) {
   const button = page.getByRole('button', { name: 'Открыть тесты', exact: true });
@@ -75,7 +76,7 @@ test('sequential setup exposes real capacities, locks fields, saves both modes a
   await save(page); await expect(page.locator('.slot-list strong')).toHaveText('Групповой портрет для');
   await app.restart(); await page.reload(); await page.getByRole('button', { name: /Групповой портрет для/ }).click();
   await expect(page.locator('#model')).toBeDisabled(); await expect(page.getByLabel('Заменить: Референс 1')).toBeVisible();
-  await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+  await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
   await expect(page.getByLabel('Описание', { exact: true })).toHaveValue('Групповой портрет для гостей');
   await expect(page.locator('#prompt')).toHaveCount(0);
   await page.getByLabel('Ориентация', { exact: true }).selectOption('portrait');
@@ -97,9 +98,9 @@ test('sequential setup exposes real capacities, locks fields, saves both modes a
   await page.getByRole('button', { name: 'Подключить исходник из файла', exact: true }).click();
   await expect(page.getByLabel('Исходный ролик сюжета', { exact: true })).toBeVisible(); await page.getByLabel('Подтверждаю:', { exact: false }).check(); await save(page);
   const source = await page.locator('.materials video').getAttribute('src');
-  await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click(); await lock(page);
+  await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click(); await lock(page);
   await expect(page.locator('.materials video')).toHaveAttribute('src', source!);
-  await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+  await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
   await page.getByLabel('Модель', { exact: true }).selectOption('fal-ai/kling-video/o1/video-to-video/edit');
   await page.getByLabel('Участники', { exact: true }).selectOption('2');
   await expect(page.locator('#photos-per-person option[value="1"]')).toBeDisabled();
@@ -108,25 +109,25 @@ test('sequential setup exposes real capacities, locks fields, saves both modes a
   await expect(page.locator('#resolution')).toHaveCount(0); await lock(page);
   await expect(page.locator('.materials video')).toHaveAttribute('src', source!); await upload(page, 'Референс 1', app.image); await save(page);
   await page.screenshot({ path: join(artifacts, 'editor-desktop.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+  await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
   await setup(page, 'P2V', 'kling/v4/flash/reference-to-video', '1', '2');
   await expect(page.getByLabel('Возможности модели')).toContainText('доступно 3 (max 7)');
   await expect(page.locator('#resolution option[value="1080p"]')).toBeDisabled();
   await lock(page); await page.setViewportSize({ width: 375, height: 812 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: join(artifacts, 'editor-mobile.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+  await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
   await setup(page, 'P2V', 'fal-ai/vidu/q4/reference-to-video', '2', '3');
   await page.getByLabel('Разрешение', { exact: true }).selectOption('1080p');
   await page.getByLabel('Длительность, с', { exact: true }).fill('6'); await page.getByLabel('Длительность, с', { exact: true }).blur();
   await page.getByLabel('Модель', { exact: true }).selectOption('google/gemini-omni-flash/v1.2/reference-to-video');
   await expect(page.locator('#participants')).toHaveValue('2'); await expect(page.locator('#photos-per-person')).toHaveValue('3');
   await expect(page.locator('#resolution')).toHaveValue('1080p'); await expect(page.locator('#duration')).toHaveValue('6');
-  await expect(page.getByRole('button', { name: 'Зафиксировать выбор', exact: true })).toBeEnabled();
+  await expect(page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true })).toBeEnabled();
   await page.getByLabel('Режим', { exact: true }).selectOption('V2V');
   await page.getByLabel('Модель', { exact: true }).selectOption('minimax/h3-max/recast');
   await expect(page.locator('#participants')).toHaveValue('2'); await expect(page.locator('#photos-per-person')).toHaveValue('');
-  await expect(page.getByRole('button', { name: 'Зафиксировать выбор', exact: true })).toBeDisabled();
+  await expect(page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Выйти', exact: true }).click(); await login(page, app.origin, app.password, 'operator');
   await expect(page.getByRole('region', { name: 'Редактор сюжета' })).toHaveCount(0);
   expect((await page.request.get(app.origin + '/api/admin/slots')).status()).toBe(403);
@@ -141,7 +142,7 @@ test('prompt text survives reference changes and stale fetches; real load failur
     if (!held) { held = true; await new Promise<void>(resolve => release = resolve); await route.fulfill({ status: 200, body: 'STALE PROMPT RESPONSE' }); }
     else await route.continue();
   });
-  await page.getByRole('button', { name: 'Зафиксировать выбор', exact: true }).click();
+  await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
   await expect(page.getByText('Загружаем готовый промпт…', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Сохранить сюжет', exact: true })).toBeDisabled();
   await page.locator('#prompt').fill('My authored text with Image 1'); release!();
@@ -155,7 +156,7 @@ test('prompt text survives reference changes and stale fetches; real load failur
   await page.locator('.references .media-field').first().getByRole('button', { name: 'Убрать', exact: true }).click();
   await expect(page.locator('#prompt')).toHaveValue('My authored text with Image 1');
   // Orientation is an upper setting even when the chosen prompt filename is unchanged.
-  await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+  await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
   await page.getByLabel('Ориентация', { exact: true }).selectOption('portrait'); await lock(page);
   const expected = await readFile('public/slot-prompts/h3-reference/people-1__photos-1__refs-0.md', 'utf8');
   await expect(page.locator('#prompt')).toHaveValue(expected);
@@ -167,7 +168,7 @@ test('prompt text survives reference changes and stale fetches; real load failur
   });
   await page.getByRole('button', { name: 'Восстановить готовый промпт', exact: true }).click();
   await expect(page.getByText('Загружаем готовый промпт…', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+  await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
   await page.getByLabel('Разрешение', { exact: true }).selectOption('1080P'); await lock(page); releaseOld!();
   await expect(page.locator('#prompt')).toHaveValue(expected);
   await page.unroute('**/slot-prompts/**');
@@ -193,11 +194,11 @@ test.describe('manual test flow', () => {
     const labels = ['Человек 1 — кадр 1 (JPEG)', 'Человек 1 — кадр 2 (JPEG)', 'Человек 2 — кадр 1 (JPEG)', 'Человек 2 — кадр 2 (JPEG)'];
     const send = page.getByRole('button', { name: 'Отправить тестовую генерацию', exact: true });
     for (let i = 0; i < 4; i++) { await upload(page, labels[i], files[i]); await expect(send).toBeDisabled(); }
-    await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+    await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
     await page.getByLabel('Участники', { exact: true }).selectOption('group'); await page.locator('#photos-per-person').selectOption('2'); await lock(page); await openTests(page);
     await expect(page.getByLabel('Группа — кадр 1 (JPEG)', { exact: true })).toBeVisible(); await expect(page.getByLabel('Группа — кадр 2 (JPEG)', { exact: true })).toBeVisible();
     await upload(page, 'Группа — кадр 1 (JPEG)', files[4]); await upload(page, 'Группа — кадр 2 (JPEG)', files[5]);
-    await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+    await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
     await page.getByLabel('Участники', { exact: true }).selectOption('2'); await page.locator('#photos-per-person').selectOption('2'); await lock(page); await openTests(page);
     for (const label of labels) await expect(page.getByLabel('Заменить: ' + label, { exact: true })).toBeVisible();
     await page.getByLabel('Режим генерации', { exact: true }).selectOption('inputs'); await save(page); await expect(send).toBeEnabled(); expect(app.sessionCount()).toBe(0);
@@ -217,7 +218,7 @@ test.describe('manual test flow', () => {
     await expect(page.locator('.test-result')).toContainText('Проверка входных данных пройдена'); expect(requestIds[1]).toBe(requestIds[0]); expect(app.sessionCount()).toBe(1);
     const photos = await app.photos(firstId); expect(photos.map(row => row.pose_index)).toEqual([0, 1, 2, 3]);
     for (const photo of photos) expect(photo.bytes).toEqual(bytes[photo.pose_index]);
-    await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+    await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
     await expect(page.locator('.test-result')).toContainText('Проверка входных данных пройдена'); await lock(page); await openTests(page);
     const simulation = page.getByLabel('Режим генерации', { exact: true }); await expect(simulation).toHaveValue('fal');
     await save(page); await send.click(); await expect(page.locator('.test-result')).toContainText('Видео готово');
@@ -226,7 +227,7 @@ test.describe('manual test flow', () => {
     await player.evaluate(node => (node as HTMLVideoElement).play()); await expect.poll(() => player.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(0.1); await player.evaluate(node => (node as HTMLVideoElement).pause());
     const stableUrl = await player.getAttribute('src'); await expect(page.locator('.last-video')).toContainText('Новосибирск'); await expect(page.locator('.last-video')).toContainText('До готового видео');
     await page.screenshot({ path: join(artifacts, 'slot-test-ready-desktop.png'), fullPage: true });
-    await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click(); await expect(player).toHaveAttribute('src', stableUrl!);
+    await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click(); await expect(player).toHaveAttribute('src', stableUrl!);
     await lock(page); await openTests(page); await page.locator('#prompt').fill('fail-test'); await save(page); await send.click();
     await expect(page.locator('.test-result')).toContainText('Тест не завершён'); await expect(player).toHaveAttribute('src', stableUrl!);
     await simulation.selectOption('inputs'); await save(page); await send.click(); await expect(page.locator('.test-result')).toContainText('Проверка входных данных пройдена'); await expect(player).toHaveAttribute('src', stableUrl!);
@@ -265,7 +266,7 @@ test('draft source binding and five-guide page show actual immutable media on de
   await page.getByRole('button', { name: 'Обновить исходник из файла', exact: true }).click();
   await expect(player).not.toHaveAttribute('src', `/api/admin/slot-media/${oldSource}`);
   await page.getByLabel('Подтверждаю:', { exact: false }).check(); await save(page);
-  await page.getByRole('button', { name: 'Изменить выбор', exact: true }).click();
+  await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
   await page.getByLabel('Ориентация', { exact: true }).selectOption('portrait'); await lock(page);
   await expect(player).toHaveCount(0); await expect(page.getByText(`${id}__portrait.mp4`, { exact: true })).toBeVisible();
   // Filename alone cannot disguise a landscape fixture as portrait.
@@ -298,4 +299,33 @@ test('draft source binding and five-guide page show actual immutable media on de
   await login(page, app.origin, app.password, 'operator');
   await expect(page.getByRole('button', { name: 'Образцы ракурсов', exact: true })).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+test('simulation warning persists on reopen and reload and keeps tests expanded', async ({ page, app }) => {
+  await mkdir(artifacts, { recursive: true });
+  await login(page, app.origin, app.password);
+  await upload(page, 'Изображение сюжета', app.image);
+  await page.getByLabel('Описание', { exact: true }).fill('Проверка режима тестирования');
+  await setup(page, 'P2V', h3, '1', '1'); await lock(page); await openTests(page);
+  const mode = page.getByLabel('Режим генерации', { exact: true });
+  await mode.selectOption('video'); await save(page);
+  const warning = page.locator('.testing-warning');
+  const collapse = page.getByRole('button', { name: 'Свернуть тесты', exact: true });
+  await expect(warning).toContainText('Тестирование!');
+  await expect(collapse).toBeDisabled();
+  await page.getByRole('button', { name: 'Новый сюжет', exact: true }).click();
+  await expect(warning).toHaveCount(0);
+  await page.getByRole('button', { name: /Проверка режима тестирования/ }).click();
+  await expect(warning).toBeVisible(); await expect(mode).toHaveValue('video');
+  await expect(collapse).toBeDisabled();
+  await page.reload();
+  await page.getByRole('button', { name: /Проверка режима тестирования/ }).click();
+  await expect(warning).toBeVisible(); await expect(mode).toBeVisible();
+  await expect(mode).toHaveValue('video'); await expect(collapse).toBeDisabled();
+  await page.screenshot({ path: join(artifacts, 'testing-warning.png'), fullPage: true });
+  await mode.selectOption('inputs'); await expect(warning).toBeVisible(); await expect(collapse).toBeDisabled();
+  await mode.selectOption('fal'); await save(page);
+  await expect(warning).toHaveCount(0);
+  // Normal generation may again hide its test tools.
+  await openTests(page); await collapse.click(); await expect(mode).toBeHidden();
 });

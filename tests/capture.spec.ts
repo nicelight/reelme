@@ -1,5 +1,7 @@
 /** Module contract: capture/browser evidence for docs/slot-setup/matrix.md; isolated local fixtures only. */
 import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import { test, expect } from './browser-fixture';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { request as apiRequest } from '@playwright/test';
@@ -16,10 +18,12 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
     expect(response.status()).toBe(201); return (await response.json()).id as string;
   };
   const thumbnailId = await upload(app.image, 'image/png');
-  const videoId = await upload(app.video, 'video/mp4');
+  const portraitVideo = join(app.dataDir, 'portrait-demo.mp4');
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=360x640:d=2:r=24', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', portraitVideo]);
+  const videoId = await upload(portraitVideo, 'video/mp4');
   const slots: { id: string; description: string }[] = [];
   for (let i = 0; i < 14; i++) {
-    const description = `История номер ${i + 1} — полное описание выбранного сюжета`;
+    const description = i === 1 ? 'История номер 2' : `История номер ${i + 1} — полное описание выбранного сюжета`;
     const id = randomUUID(); let sourceId: string | undefined;
     if (i === 0) { await app.prepareTemplate(id); const imported = await admin.post(`/api/admin/slots/${id}/template-video`, { data: { orientation: 'landscape', model: 'minimax/h3-max/recast' } }); expect(imported.status()).toBe(201); sourceId = (await imported.json()).id; }
     const data = { id, participants: 1, photosPerParticipant: i === 0 ? 1 : 4, orientation: 'landscape', ...(i === 0 ? {} : { aspectRatio: '16:9' }), description, visible: i < 13, thumbnailId, referenceIds: [], ...(i === 0
@@ -56,23 +60,33 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   // The transport still pages at 12; the visitor's sequence includes all 13.
   await expect(page.getByRole('navigation', { name: 'Выбор сюжета' }).getByRole('button')).toHaveCount(13);
   await page.getByRole('button', { name: 'Сюжет 13: История номер 13', exact: true }).click();
-  await expect(page.locator('.center .story-heading p')).toHaveText(slots[12].description);
+  await expect(page.locator('.center .story-heading h2')).toHaveText('История номер 13');
   await expect(page.locator('.center video')).toHaveCount(0);
-  await expect(page.locator('.center').getByText('У этого сюжета пока нет демовидео.', { exact: true })).toBeVisible();
+  await expect(page.locator('.center .qualities')).toHaveCount(0);
   await expect(page).toHaveURL(new RegExp('#slot=' + slots[12].id));
   await page.getByRole('button', { name: '← Назад в каталог' }).click();
   await expect(page.locator('.story')).toHaveCount(13);
   await expect(page.locator('.pagination')).toHaveCount(0);
+  await expect(page.locator('.center .story-heading h2')).toHaveText('История номер 13');
+  await page.reload();
+  await expect(page.locator('.center .story-heading h2')).toHaveText('История номер 13');
   await page.getByRole('button', { name: 'Сюжет 2: История номер 2', exact: true }).click();
   await expect(page.locator('.center video')).toHaveAttribute('src', /^blob:/);
   await expect.poll(() => page.locator('.center video').evaluate((video: HTMLVideoElement) => video.readyState)).toBeGreaterThanOrEqual(2);
   await page.locator('.center video').evaluate((video: HTMLVideoElement) => { video.muted = true; return video.play(); });
   await expect.poll(() => page.locator('.center video').evaluate((video: HTMLVideoElement) => video.currentTime)).toBeGreaterThan(0);
   await page.locator('.center video').evaluate((video: HTMLVideoElement) => video.pause());
-  await expect(page.getByText('Демонстрация сюжета', { exact: true })).toBeVisible();
+  await expect(page.getByText('Демонстрация сюжета', { exact: true })).toHaveCount(0);
+  await expect(page.locator('.center .story-heading p')).toHaveCount(0);
+  await expect(page.locator('.center .story-preview')).toHaveClass(/portrait/);
+  await expect(page.locator('.center video')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Выбрать этот сюжет' })).toBeEnabled();
+  const portraitCard = await page.locator('.story.center').boundingBox();
+  await page.screenshot({ path: `${artifacts}/browser-portrait.png`, fullPage: true });
   await page.getByRole('button', { name: '← Назад в каталог' }).click();
   await page.getByRole('button', { name: 'Сюжет 1: История номер 1', exact: true }).click();
-  await expect(page.locator('.center .story-heading p')).toHaveText(slots[0].description);
+  await expect(page.locator('.center .story-heading h2')).toHaveText('История номер 1');
+  await expect.poll(async () => Math.round((await page.locator('.story.center').boundingBox())!.height)).toBe(Math.round(portraitCard!.height));
   await expect(page.locator('.center video')).toHaveAttribute('src', /^blob:/);
   await expect.poll(() => page.locator('.center video').evaluate((video: HTMLVideoElement) => video.readyState)).toBeGreaterThanOrEqual(2);
   await page.locator('.center video').evaluate((video: HTMLVideoElement) => { video.muted = true; return video.play(); });
@@ -80,7 +94,7 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   await page.locator('.center video').evaluate((video: HTMLVideoElement) => video.pause());
   const videoBox = await page.locator('.center video').boundingBox();
   expect(videoBox!.height / page.viewportSize()!.height).toBeGreaterThan(0.2);
-  expect(videoBox!.height / page.viewportSize()!.height).toBeLessThan(0.5);
+  expect(videoBox!.height / page.viewportSize()!.height).toBeLessThan(0.65);
   await page.screenshot({ path: `${artifacts}/browser-detail.png`, fullPage: true });
   await page.setViewportSize({ width: 375, height: 812 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -128,7 +142,7 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   // A staff visibility change invalidates the selected route on focus refresh.
   await page.evaluate(() => sessionStorage.removeItem('reelme.captureStart'));
   await page.goto(local + '#slot=' + slots[12].id); await page.reload();
-  await expect(page.locator('.center .story-heading p')).toHaveText(slots[12].description);
+  await expect(page.locator('.center .story-heading h2')).toHaveText('История номер 13');
   const staff = await apiRequest.newContext({ baseURL: app.origin, extraHTTPHeaders: { Origin: app.origin } });
   await staff.post('/api/auth/login', { data: { username: 'admin', password: app.password } });
   const hide = async (index: number) => {
@@ -139,7 +153,7 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(page.locator('.story')).toHaveCount(12);
   await expect(page).toHaveURL(/#catalog$/);
-  await expect(page.locator('.center .story-heading p')).not.toHaveText(slots[12].description);
+  await expect(page.locator('.center .story-heading h2')).not.toHaveText('История номер 13');
   for (let index = 3; index < 12; index++) await hide(index);
   for (const count of [3, 2, 1, 0]) {
     await page.getByRole('button', { name: 'Обновить каталог', exact: true }).click();

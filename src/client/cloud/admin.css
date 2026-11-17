@@ -1,6 +1,6 @@
 /* ReelMe's established visual language, scoped to the administrator workspace. */
 .admin-shell {
-  --bg:#100c16; --surface:#211725; --text:#fff4fb; --muted:#c7b5c8;
+  --bg:#100c16; --surface:#211725; --editor-bg:#35283b; --text:#fff4fb; --muted:#c7b5c8;
   --line:#5d4059; --accent:#f5a4df; --accent-text:#291326;
   --soft:#38243a; --error:#ffb6ca; --input:#160f1d;
   color-scheme:dark; min-height:100svh; color:var(--text);
@@ -8,7 +8,7 @@
   background:radial-gradient(ellipse at 5% 0%,#42203e80,transparent 45%),radial-gradient(ellipse at 100% 90%,#3c1b4180,transparent 45%),var(--bg);
 }
 .admin-shell[data-admin-theme='light'] {
-  --bg:#faf4f8; --surface:#fffafd; --text:#2d1b2c; --muted:#70546c;
+  --bg:#faf4f8; --surface:#fffafd; --editor-bg:#ffffff; --text:#2d1b2c; --muted:#70546c;
   --line:#cbb6c6; --accent:#853b73; --accent-text:#fff8fd;
   --soft:#f0e0ed; --error:#a3264c; --input:#fffafd;
   color-scheme:light; background:radial-gradient(ellipse at 0% 0%,#f3dfed,transparent 50%),var(--bg);
@@ -41,7 +41,7 @@
 .admin-shell .slot-open img { width:76px; height:86px; border-radius:10px; }
 .admin-shell .slot-open small { font-size:12px; }
 .admin-shell .visibility-toggle { padding:0 14px 12px; }
-.admin-shell .editor { position:relative; padding:32px 40px 0; border:1px solid var(--line); border-radius:24px; background:linear-gradient(135deg,color-mix(in srgb,var(--soft) 65%,var(--surface)),var(--surface) 45%); }
+.admin-shell .editor { position:relative; padding:32px 40px 0; border:1px solid var(--line); border-radius:24px; background:var(--editor-bg); }
 .admin-shell .editor::before { content:''; position:absolute; height:1px; top:-1px; left:8%; width:25%; background:linear-gradient(90deg,transparent,#ffb0da,#fff4fb,#ffb0da,transparent); pointer-events:none; }
 .admin-shell .editor::after { content:''; position:absolute; inset:-1px; padding:1px; border-radius:inherit; background:radial-gradient(ellipse 50% 180px at 0% 0%,#f5a4df,transparent 90%),radial-gradient(ellipse 40% 180px at 100% 100%,#f5a4df99,transparent 90%); mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0); mask-composite:exclude; pointer-events:none; }
 .admin-shell .editor-heading { margin-bottom:8px; align-items:center; }
@@ -63,7 +63,7 @@
 .admin-shell .references .media-preview { width:100%; }
 .admin-shell .primary { background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:800; }
 .admin-shell .primary:hover:not(:disabled) { background:var(--accent); opacity:.9; }
-.admin-shell .editor-footer { position:sticky; bottom:0; z-index:2; padding:20px 0; background:var(--surface); border-top:1px solid var(--line); }
+.admin-shell .editor-footer { position:sticky; bottom:0; z-index:2; padding:20px 0; background:var(--editor-bg); border-top:1px solid var(--line); }
 .admin-shell .editor-footer .primary { min-height:48px; }
 .admin-shell .eyebrow { display:none; }
 .admin-shell :is(.guides-page,.archive,.display-settings) { max-width:1200px; padding:40px; margin:0 auto; }
@@ -102,3 +102,9 @@
   .admin-shell .editor-footer { position:static; gap:12px; padding:16px 0; }
   .admin-shell .editor-footer .primary { width:100%; }
 }
+
+.admin-shell .editor-title { display:flex; flex-wrap:wrap; align-items:baseline; gap:12px 24px; }
+.admin-shell .testing-warning { color:#ffc18a; }
+.admin-shell .testing-warning strong { font-size:clamp(28px,3vw,36px); font-weight:750; line-height:1.2; }
+.admin-shell .testing-warning p { margin:6px 0 0; font-size:14px; line-height:1.5; }
+.admin-shell[data-admin-theme='light'] .testing-warning { color:#974508; }

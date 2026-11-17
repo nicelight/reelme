@@ -1,0 +1,9 @@
+{
+  "firstFill": 9,
+  "pageDurationSeconds": 20,
+  "qrDecoded": true,
+  "stableMidpageArrivals": true,
+  "oneHatchPerPage": true,
+  "expiresAtBoundary": true,
+  "errors": []
+}

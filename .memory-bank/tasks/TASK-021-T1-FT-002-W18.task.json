@@ -40,6 +40,16 @@
         "Демонстрационный источник изображения и образцы, не настоящий поток камеры; локальная загрузка в памяти.",
         "Canon/Windows/digiCamControl не проверялись; production-перенос не выполнен; художественное принятие пользователем ещё не проводилось."
       ]
+    },
+    {
+      "date": "2026-11-17",
+      "stage": "portrait-preview",
+      "result": "PASS",
+      "summary": "Увеличена внутренняя область плеера без изменения внешних размеров карточек; убраны подписи и дублирующее название. CatalogItem получает previewOrientation из сохранённых размеров видео, fallback — настройка слота. Для portrait фон из размытой обложки, один видеоплеер. Build и API capture tests 3/3 PASS; browser capture PASS на альтернативном порту (основной 5513 оставлен камере). Реальный portrait upload при landscape настройке слота, отсутствие дублирующего описания, переключение форматов и сохранение высоты карточки проверены. Скриншоты desktop portrait и mobile просмотрены.",
+      "evidence": [
+        ".tasks/catalog-portrait-2026-11-17/catalog-regression/browser-portrait.png",
+        ".tasks/catalog-portrait-2026-11-17/catalog-regression/browser-mobile.png"
+      ]
     }
   ],
   "docs": [

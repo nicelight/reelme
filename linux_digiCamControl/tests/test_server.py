@@ -256,6 +256,18 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(self.request('/health',headers={'Origin':f'http://127.0.0.1:{self.port}'})[0],200)
         self.assertEqual(self.json('/filelist.json'),[])
 
+    def test_cross_site_entry_navigation_only(self):
+        headers = {'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate',
+                   'Sec-Fetch-Dest': 'document', 'Referer': 'https://example.com/'}
+        self.assertEqual(self.request('/reelme-test.html', headers=headers)[0], 200)
+        for path in ('/?CMD=Capture', '/liveview.html?CMD=LiveViewWnd_Show',
+                     '/filelist.json', '/liveview.jpg', '/image/photo.jpg'):
+            self.assertEqual(self.request(path, headers=headers)[0], 403, path)
+        self.assertEqual(self.request('/reelme-test.html', headers={
+            **headers, 'Sec-Fetch-Dest': 'iframe'})[0], 403)
+        self.assertEqual(self.request('/reelme-test.html', headers={
+            **headers, 'Host': 'evil.example'})[0], 403)
+
     def test_path_traversal_blocked(self):
         for path in ('/%2e%2e/linux_digicamcontrol.py','/image/%2e%2e%2fserver.log',
                      '/.work/secret.jpg','/image/%5c..%5cpasswd','/../cameras.py'):

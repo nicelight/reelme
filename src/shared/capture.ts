@@ -12,6 +12,7 @@ export interface CatalogItem {
   thumbnailId: string;
   mode: Mode;
   previewId?: string;
+  previewOrientation?: 'portrait' | 'landscape';
 }
 export interface CatalogPage {
   items: CatalogItem[];

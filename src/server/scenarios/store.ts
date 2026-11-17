@@ -28,9 +28,12 @@ export function editorSlot(db: DB, slot: Slot): Slot {
   const video = slot.videoId ? readMedia(db, slot.videoId) : undefined;
   return normalizeSlotForEditor(slot, video && video.height > video.width ? 'portrait' : 'landscape');
 }
-export function catalogItem(slot: Slot): CatalogItem {
+export function catalogItem(db: DB, slot: Slot): CatalogItem {
   const previewId = slot.mode === 'V2V' ? slot.videoId : slot.demoId;
-  return { id: slot.id, description: slot.description, thumbnailId: slot.thumbnailId, mode: slot.mode, ...(previewId ? { previewId } : {}) };
+  const preview = previewId ? readMedia(db, previewId) : undefined;
+  const previewOrientation = preview && preview.width > 0 && preview.height > 0
+    ? (preview.height > preview.width ? 'portrait' : 'landscape') : (slot.orientation ?? 'landscape');
+  return { id: slot.id, description: slot.description, thumbnailId: slot.thumbnailId, mode: slot.mode, ...(previewId ? { previewId, previewOrientation } : {}) };
 }
 export function snapshotSlot(db: DB, id: string, manualTest = false): SlotSnapshot {
   const slot = readSlot(db, id);

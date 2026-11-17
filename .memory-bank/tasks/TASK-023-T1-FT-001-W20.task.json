@@ -47,6 +47,33 @@
       "limitations": [
         "Локальный Chromium и изолированные тестовые данные. Художественная приёмка пользователем не выполнена; commit/deploy не выполнялись."
       ]
+    },
+    {
+      "date": "2026-11-17",
+      "stage": "simulation-warning",
+      "result": "PASS",
+      "summary": "Добавлено предупреждение о тестовом режиме у заголовка; симуляция принудительно раскрывает тесты и запрещает сворачивание. npm run check (0 ошибок/предупреждений), build и editor browser case simulation warning persists PASS: сохранение video, reopen/reload, inputs и возврат к fal. Скриншот просмотрен.",
+      "evidence": [
+        ".tasks/testing-warning-2026-11-17/testing-warning.png"
+      ]
+    },
+    {
+      "date": "2026-11-17",
+      "stage": "editor-surface",
+      "result": "PASS",
+      "summary": "Редактор и footer выделены более светлым фоном #35283b; светлая тема — #fff. Build и целевой editor browser case PASS, desktop screenshot просмотрен.",
+      "evidence": [
+        ".tasks/editor-surface-2026-11-17/testing-warning.png"
+      ]
+    },
+    {
+      "date": "2026-11-17",
+      "stage": "generation-lock-switch",
+      "result": "PASS",
+      "summary": "Кнопки фиксации/изменения заменены доступным switch с подписями «Изменить параметры генерации» / «Зафиксировать параметры генерации», яркость отражает состояние. Check/build PASS; sequential editor и simulation-warning browser cases PASS; mobile screenshot просмотрен. Обновлено устаревшее ожидание operator-route в helper теста.",
+      "evidence": [
+        ".tasks/generation-lock-2026-11-17/editor-mobile.png"
+      ]
     }
   ],
   "docs": [

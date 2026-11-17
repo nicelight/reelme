@@ -31,6 +31,7 @@
   let everChoseModel = !!slotId;
   let setupError = $state('');
   let testsOpen = $state(false);
+  const testsExpanded = $derived(testsOpen || !!draft.simulateGeneration);
   let promptLoading = $state(false);
   let promptError = $state('');
   // A saved prompt is protected until comparison with the matching file completes.
@@ -224,8 +225,14 @@
     {/if}
   </fieldset>
   <div class="setup-actions">
-    {#if locked}<p class="hint">Выбор зафиксирован. Материалы и промпт относятся к этому набору.</p><button type="button" class="quiet" onclick={unlock}>Изменить выбор</button>
-    {:else}<button type="button" class="primary" disabled={!modelChosen || !peopleChosen || !photosChosen} onclick={lock}>Зафиксировать выбор</button>{/if}
+    <div class="generation-lock" class:locked>
+      <span class="edit-label">Изменить параметры генерации</span>
+      <button type="button" class="lock-switch" role="switch" aria-label="Фиксация параметров генерации" aria-checked={locked}
+        disabled={disabled || (!locked && (!modelChosen || !peopleChosen || !photosChosen))}
+        onclick={() => locked ? unlock() : lock()}><span class="lock-thumb"></span></button>
+      <span class="fix-label">Зафиксировать параметры генерации</span>
+    </div>
+    {#if locked}<p class="hint">Параметры зафиксированы. Материалы и промпт относятся к этому набору.</p>{/if}
   </div>
   {#if setupError}<p class="error" role="alert">{setupError}</p>{/if}
   {#if locked}
@@ -248,7 +255,7 @@
         <div class="references-heading"><h4>Дополнительные фото</h4><p class="hint">До {variant.additionalReferenceLimit}. Фото камеры не нужно загружать сюда.</p></div>
         <div class="references">
           {#each Array.from({ length: Math.min(draft.referenceIds.length + 1, variant.additionalReferenceLimit) }, (_, index) => index) as index}
-            <MediaField label={`Референс ${index + 1}`} kind="image" id={draft.referenceIds[index]} optional hint="Сохраняйте исходные пропорции; рекомендуем 1024–2048 px по длинной стороне. Не обрезайте лицо и важные детали." onUploaded={media => { const refs = [...draft.referenceIds]; refs[index] = media.id; changeReferences(refs); }} onRemove={() => changeReferences(draft.referenceIds.filter((_, position) => position !== index))} {onError} {onBusy} />
+            <MediaField label={`Референс ${index + 1}`} kind="image" id={draft.referenceIds[index]} optional hint="Сохраняйте исходные пропорции; рекомендуем 1024 px по длинной стороне. Не обрезайте лицо и важные детали." onUploaded={media => { const refs = [...draft.referenceIds]; refs[index] = media.id; changeReferences(refs); }} onRemove={() => changeReferences(draft.referenceIds.filter((_, position) => position !== index))} {onError} {onBusy} />
           {/each}
         </div>
       {:else}<p class="hint">Дополнительные фото для этого набора не передаются.</p>{/if}
@@ -266,8 +273,8 @@
 </section>
 <section class="form-section" aria-label="Тестирование сюжета">
   {#if locked}
-    <div class="section-heading"><span>03</span><h3>Тесты</h3><button type="button" class="quiet small" aria-expanded={testsOpen} onclick={() => testsOpen = !testsOpen}>{testsOpen ? 'Свернуть тесты' : 'Открыть тесты'}</button></div>
-    <div hidden={!testsOpen}>
+    <div class="section-heading"><span>03</span><h3>Тесты</h3><button type="button" class="quiet small" aria-expanded={testsExpanded} disabled={draft.simulateGeneration} title={draft.simulateGeneration ? 'Выберите реальную генерацию, чтобы свернуть тесты' : undefined} onclick={() => testsOpen = !testsOpen}>{testsExpanded ? 'Свернуть тесты' : 'Открыть тесты'}</button></div>
+    <div hidden={!testsExpanded}>
       <label for="generation-mode">Режим генерации</label>
       <select id="generation-mode" value={!draft.simulateGeneration ? 'fal' : draft.simulationOutput === 'video' ? 'video' : 'inputs'} onchange={event => {
         draft.simulateGeneration = event.currentTarget.value !== 'fal';
@@ -290,7 +297,7 @@
       {#if !completeTestSet}<p class="hint">Неполный набор остаётся в редакторе; сохранённый сюжет пока нельзя тестировать.</p>{/if}
     </div>
   {/if}
-  {#key slotId}<SlotTest {slotId} hasPhotos={completeTestSet && !!draft.testPhotoIds?.length} dirty={dirty || !canSave} showControls={locked && testsOpen} {disabled} {onError} />{/key}
+  {#key slotId}<SlotTest {slotId} hasPhotos={completeTestSet && !!draft.testPhotoIds?.length} dirty={dirty || !canSave} showControls={locked && testsExpanded} {disabled} {onError} />{/key}
 </section>
 
 <style>
@@ -298,8 +305,18 @@
   .template-video video { display:block; width:100%; max-height:360px; margin:16px 0; background:#17251c; }
   .capacity-note { margin-top:20px; padding:16px; border:1px solid var(--line); border-radius:6px; background:var(--bg); font-size:14px; overflow-wrap:anywhere; }
   .capacity-note p { margin-top:6px; }
-  .setup-actions { display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-top:22px; }
-  .setup-actions .hint { flex:1; min-width:180px; }
+  .setup-actions { margin-top:24px; }
+  .generation-lock { display:grid; grid-template-columns:minmax(0,1fr) 64px minmax(0,1fr); align-items:center; gap:16px; }
+  .generation-lock>span { font-size:15px; line-height:1.4; font-weight:600; color:var(--muted); opacity:.65; transition:color 160ms ease,opacity 160ms ease; }
+  .edit-label { text-align:right; }
+  .generation-lock:not(.locked) .edit-label,.generation-lock.locked .fix-label { color:var(--text); opacity:1; }
+  .generation-lock .lock-switch { position:relative; width:64px; height:44px; min-height:44px; padding:0; border:1px solid var(--line); border-radius:24px; background:var(--input); }
+  .generation-lock.locked .lock-switch { background:var(--accent); border-color:var(--accent); }
+  .lock-thumb { position:absolute; top:7px; left:7px; width:28px; height:28px; border-radius:50%; background:var(--text); transition:transform 180ms ease,background 180ms ease; }
+  .locked .lock-thumb { transform:translateX(20px); background:var(--accent-text); }
+  .setup-actions .hint { margin-top:12px; text-align:center; }
+  @media(max-width:600px) { .generation-lock { gap:10px; } .generation-lock>span { font-size:13px; } }
+  @media(prefers-reduced-motion:reduce) { .generation-lock>span,.lock-thumb { transition:none; } }
   .references-heading { margin-top:22px; }
   .test-photos { display:grid; gap:24px; margin-top:24px; }
   .reference-notice,.recast-warning { padding:12px; border-left:3px solid var(--accent); background:var(--soft); }

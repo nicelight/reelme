@@ -54,7 +54,9 @@ export async function inspectMedia(path: string, mime: string, rejectRotation = 
       const duration = Number(probe.format.duration);
       if (rejectRotation && (Number(stream?.tags?.rotate ?? 0) % 360 || stream?.side_data_list?.some((item: { rotation?: number }) => Number(item.rotation ?? 0) % 360))) throw new Error();
       if (!stream?.width || !stream.height || !Number.isFinite(duration) || duration <= 0) throw new Error();
-      return { kind: 'video', mime, duration, width: stream.width, height: stream.height };
+      const rotation = Number(stream.side_data_list?.find((item: { rotation?: number }) => item.rotation != null)?.rotation ?? stream.tags?.rotate ?? 0);
+      const swapAxes = Math.abs(rotation % 180) === 90;
+      return { kind: 'video', mime, duration, width: swapAxes ? stream.height : stream.width, height: swapAxes ? stream.width : stream.height };
     } catch { throw new HttpError(400, 'INVALID_MEDIA', 'Нужен корректный MP4 или MOV с видеодорожкой'); }
   }
   throw new HttpError(400, 'INVALID_MEDIA', 'Поддерживаются JPEG, PNG, WebP, MP4 и MOV');

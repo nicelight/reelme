@@ -188,12 +188,12 @@
     </aside>
 
     <section class="editor" aria-label="Редактор сюжета">
-      <div class="editor-heading"><div><h2>{selectedId ? 'Настройка сюжета' : 'Новый сюжет'}</h2></div><span class="save-status">{dirty ? 'Есть изменения' : selectedId ? 'Сохранено' : 'Черновик'}</span></div>
+      <div class="editor-heading"><div class="editor-title"><h2>{selectedId ? 'Настройка сюжета' : 'Новый сюжет'}</h2>{#if draft.simulateGeneration}<div class="testing-warning" role="status"><strong>Тестирование!</strong><p>отключите тесты чтобы слот заработал</p></div>{/if}</div><span class="save-status">{dirty ? 'Есть изменения' : selectedId ? 'Сохранено' : 'Черновик'}</span></div>
       <form onsubmit={save} novalidate>
         <fieldset disabled={formDisabled}>
           <section class="form-section">
             <div class="section-heading"><span>01</span><h3>Карточка сюжета</h3></div>
-            <MediaField label="Изображение сюжета" kind="image" id={draft.thumbnailId} hint="Рекомендуем вертикальную обложку 2:3, 1200 × 1800 px (ширина × высота). Главный объект держите в центре: в карточках края изображения обрезаются." onUploaded={media => draft.thumbnailId = media.id} onError={fail} onBusy={uploadBusy} />
+            <MediaField label="Изображение сюжета" kind="image" id={draft.thumbnailId} hint="Рекомендуем вертикальную обложку 2:3, 600 × 900 px (ширина × высота). Главный объект держите в центре: в карточках края изображения обрезаются." onUploaded={media => draft.thumbnailId = media.id} onError={fail} onBusy={uploadBusy} />
             <label for="description">Описание</label><textarea id="description" rows="3" maxlength="5000" bind:value={draft.description} placeholder="Например: Прогулка по ночному Токио" required></textarea>
             <p class="hint">Первые три слова станут названием карточки.{#if draft.description.trim()} <span class="title-preview">«{titleFrom(draft.description)}»</span>{/if}</p>
             <label class="checkbox-label"><input type="checkbox" bind:checked={draft.visible} />Отображать клиенту</label>

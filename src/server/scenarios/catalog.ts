@@ -20,14 +20,14 @@ export function registerCatalog(app: FastifyInstance, db: DB, dataDir: string, a
     const { total } = db.prepare(`SELECT COUNT(*) AS total FROM slots WHERE ${available}`).get() as { total: number };
     const rows = db.prepare(`SELECT id,config FROM slots WHERE ${available} ORDER BY rowid LIMIT ? OFFSET ?`).all(pageSize, (page - 1) * pageSize) as { id: string; config: string }[];
     const result: CatalogPage = {
-      items: rows.map(row => catalogItem({ ...JSON.parse(row.config), id: row.id } as Slot)),
+      items: rows.map(row => catalogItem(db, { ...JSON.parse(row.config), id: row.id } as Slot)),
       page, pageSize, total, totalPages: Math.ceil(total / pageSize),
     };
     return result;
   });
-  app.get<{ Params: { id: string } }>('/api/catalog/:id', { preHandler: access.requireInstallation }, request => catalogItem(visibleSlot(db, request.params.id)));
+  app.get<{ Params: { id: string } }>('/api/catalog/:id', { preHandler: access.requireInstallation }, request => catalogItem(db, visibleSlot(db, request.params.id)));
   app.get<{ Params: { id: string; mediaId: string } }>('/api/catalog/:id/media/:mediaId', { preHandler: access.requireInstallation }, async (request, reply) => {
-    const item = catalogItem(visibleSlot(db, request.params.id));
+    const item = catalogItem(db, visibleSlot(db, request.params.id));
     if (request.params.mediaId !== item.thumbnailId && request.params.mediaId !== item.previewId) throw new HttpError(404, 'NOT_FOUND', 'Материал не найден');
     return sendMedia(dataDir, readMedia(db, request.params.mediaId), request, reply);
   });

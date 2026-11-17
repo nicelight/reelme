@@ -15,6 +15,7 @@
    * the catalog. Start timeout retains the same request ID for manual recovery.
    * The server requests event setup before the first visitor; setup action and
    * receipt share the durable start key. Source: docs/slot-setup/matrix.md.
+   * Last browsed/chosen story persists in localStorage for catalog return/reload.
    * Server photos are never erased here. */
   type StartState = { startRequestId: string; slotId: string; receipt?: StartReceipt; eventSetupRequired?: boolean; eventSetup?: EventSetupAction };
   let key = $state('');
@@ -31,6 +32,14 @@
   let catalogAbort: AbortController | undefined;
   let loadVersion = 0;
   const lifecycle = new AbortController();
+  const lastStoryStorage = 'reelme.lastStory';
+  function lastStory() {
+    try { return localStorage.getItem(lastStoryStorage) ?? undefined; } catch { return undefined; }
+  }
+  function rememberStory(item: CatalogItem) {
+    selected = item;
+    try { localStorage.setItem(lastStoryStorage, item.id); } catch { /* Catalog stays usable without preference storage. */ }
+  }
 
   function message(cause: unknown) {
     if (cause instanceof ApiError && [401, 403].includes(cause.status)) return 'Нужна помощь сотрудника: проверьте настройку установки.';
@@ -50,7 +59,7 @@
       // API pages are transport only: the visitor browses every currently eligible slot.
       const items = Array.from(new Map([first, ...rest].flatMap(result => result.items).map(item => [item.id, item])).values());
       catalog = { ...first, items };
-      selected = preferredId ? items.find(item => item.id === preferredId) : undefined;
+      selected = items.find(item => item.id === (preferredId ?? lastStory()));
       if (preferredId && !selected) {
         history.replaceState(null, '', '#catalog');
         if (items.length) error = 'Этот сюжет больше недоступен. Выберите другой в каталоге.';
@@ -62,7 +71,7 @@
     } finally { if (version === loadVersion) loading = false; }
   }
   function browse(item: CatalogItem) {
-    selected = item;
+    rememberStory(item);
     const hash = `#slot=${encodeURIComponent(item.id)}`;
     if (location.hash.startsWith('#slot=')) history.replaceState(null, '', hash);
     else history.pushState(null, '', hash);
@@ -157,7 +166,7 @@
 {#if !setup && storageReady && key && start?.eventSetupRequired && !start.receipt}
   <EventSetup {busy} {error} initial={start.eventSetup?.action === 'save' ? start.eventSetup : undefined} onsave={setUpEvent} onskip={() => setUpEvent({ action: 'skip' })} />
 {:else if !setup && storageReady && key && !start}
-  <StoryCatalog items={catalog?.items ?? []} activeId={selected?.id} installationKey={key} {loading} {error} {busy} onbrowse={browse} onbegin={(item) => { selected = item; void begin(); }} onback={back} onrefresh={() => loadCatalog()}/>
+  <StoryCatalog items={catalog?.items ?? []} activeId={selected?.id} installationKey={key} {loading} {error} {busy} onbrowse={browse} onbegin={(item) => { rememberStory(item); void begin(); }} onback={back} onrefresh={() => loadCatalog()}/>
 {:else if !setup && storageReady && key && start?.receipt}
   {#key start.receipt.sessionId}<PhotoSession receipt={start.receipt} installationKey={key} onnext={nextVisitor} />{/key}
   {#if error}<div class="session-storage-error error" role="alert"><p>{error}</p></div>{/if}

@@ -265,6 +265,15 @@ class Handler(BaseHTTPRequestHandler):
         host = self.headers.get("Host", "").lower()
         if host not in allowed_hosts:
             raise ApiError(403, "Недопустимый Host. Используйте localhost или 127.0.0.1.")
+        # Entry-page navigation is safe across sites; camera commands and media
+        # still require same-origin requests. No query can bypass the guard.
+        target = urlsplit(self.path)
+        if (self.command in {"GET", "HEAD"}
+                and target.path in {"/", "/reelme.html", "/reelme-test.html", "/liveview.html"}
+                and not target.query
+                and self.headers.get("Sec-Fetch-Mode") == "navigate"
+                and self.headers.get("Sec-Fetch-Dest") == "document"):
+            return
         expected = "http://" + host
         origin = self.headers.get("Origin")
         if origin is not None and origin.lower() != expected:

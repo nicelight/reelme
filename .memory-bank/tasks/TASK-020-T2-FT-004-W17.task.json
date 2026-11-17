@@ -84,6 +84,15 @@
         "Только локальные изолированные данные/Chromium; реальные fal/SMTP, целевое оборудование фотобудки и performance не проверялись.",
         "Deployment и commit/push не выполнялись; локальный preview не является развёртыванием."
       ]
+    },
+    {
+      "date": "2026-11-17",
+      "stage": "larger-qr",
+      "result": "PASS",
+      "summary": "QR увеличен с 7.2 до 8.8cqw, прижат вправо-вниз; номер уменьшен до 1.6cqw. Check/build PASS; results-screen browser PASS, QR декодирован со скриншота в ожидаемый receive URL; общий кадр просмотрен.",
+      "evidence": [
+        ".tasks/results-qr-2026-11-17/production-results-A.png"
+      ]
     }
   ],
   "docs": [

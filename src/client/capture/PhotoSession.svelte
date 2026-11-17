@@ -70,7 +70,7 @@
   <section class="narrow receipt" aria-live="polite">
     <p class="eyebrow">ФОТОГРАФИИ ПРИНЯТЫ</p>
     <h1>Ищи свое видео под номером <span class="visitor-number">{String(status.number).padStart(3, '0')}</span> на промо экране</h1>
-    <button class="primary" onclick={next}>Следующий посетитель</button>
+    <button class="receipt-next" onclick={next} aria-label="Следующий посетитель"></button>
   </section>
 {:else if phase === 'capture' && status}
   <Capture receipt={status} {installationKey} oncomplete={captured} onscenario={() => { if (phase === 'capture') next(); }} />
@@ -93,5 +93,19 @@
 <style>
   .session-state { max-width:none; width:100%; margin:0; min-height:100svh; padding:6vh 24px; display:grid; place-items:center; background:radial-gradient(ellipse at 50% 10%,#402139,#0d0a13 65%); color:#fff4fb; font-family:Manrope,sans-serif; --paper:#241827; --ink:#fff4fb; --surface:#2f2133; --muted:#e1c9d9; --accent:#f5b0d8; --accent-ink:#281324; --line:#a57594; --error:#ffd0df; }
   .session-state :global(.narrow) { width:100%; margin:0 auto; }
-  .session-state :global(.visitor-number) { color:#f5b0d8; }
+  .session-state .receipt { max-width:1360px; }
+  .receipt .eyebrow { font-size:22px; margin-bottom:32px; }
+  .receipt h1 { font-size:clamp(40px,6vw,80px); }
+  .receipt .visitor-number { color:#f5b0d8; font-size:clamp(160px,32vw,360px); margin:40px 0; }
+  .receipt-next { position:fixed; inset:0; z-index:1; width:100%; height:100%; padding:0; border:0; border-radius:0; background:transparent; }
+  .receipt-next:focus-visible { outline:3px solid #f5b0d8; outline-offset:-8px; }
+  @media(max-height:800px) and (min-width:601px) {
+    .receipt h1 { font-size:min(6vw,8svh); }
+    .receipt .visitor-number { font-size:min(32vw,40svh); margin:24px 0; }
+    .receipt .eyebrow { margin-bottom:24px; }
+  }
+  @media(max-width:600px) {
+    .receipt .eyebrow { font-size:18px; }
+    .receipt .visitor-number { margin:24px 0; }
+  }
 </style>

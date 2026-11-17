@@ -158,7 +158,8 @@ test('accepted JPEGs, same-Blob upload retry, lost finalize acknowledgement and 
   expect(repeat.status()).toBe(200); expect(await repeat.json()).toEqual(await status(firstId));
 
   // No fixture reset/reload: release and start the next visitor using the UI.
-  await page.getByRole('button', { name: 'Следующий посетитель' }).click();
+  await expect(page.getByRole('button', { name: 'Следующий посетитель' })).toHaveText('');
+  await page.mouse.click(5, 5);
   await expect(page.getByRole('heading', { name: 'Выберите историю' })).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem('reelme.captureStart'))).toBeNull();
   await expect(page.locator('.captured-frame, .visitor-number')).toHaveCount(0);
@@ -221,6 +222,6 @@ test('accepted JPEGs, same-Blob upload retry, lost finalize acknowledgement and 
   expect(transport.every(row => !row.cookie && row.authorization)).toBe(true);
   expect(pageErrors).toEqual([]); expect(unauthorizedOrigins).toEqual([]);
   const summarize = (photos: typeof firstPhotos) => photos.map(({ bytes, ...photo }) => ({ ...photo, sha256: createHash('sha256').update(bytes).digest('hex') }));
-  await writeFile(`${artifacts}/transfer-observations.json`, JSON.stringify({ first: statusesBeforeRestart[0], second: statusesBeforeRestart[1], firstPhotos: summarize(firstPhotos), secondPhotos: summarize(secondPhotos), commands, downloads, retrySameBlob: true, retrySameBytes: true, earlierPositionUnchanged: true, noNumberBeforeFinalizeAcknowledgement: true, lostFinalizeRecovery: 'GET status, no second browser POST or shutter', repeatFinalize: 200, nextVisitor: 'real button, no fixture reset or page reload', generation: 'no consumer; both sessions remain submit_pending', persistedAfterRestart: true, localOriginCORS: localOrigin, visitorCookies: 0, credentials: 'omit', transport, pageErrors, externalOrigins: unauthorizedOrigins, hardware: 'synthetic JPEG and controlled DCC HTTP only' }, null, 2));
+  await writeFile(`${artifacts}/transfer-observations.json`, JSON.stringify({ first: statusesBeforeRestart[0], second: statusesBeforeRestart[1], firstPhotos: summarize(firstPhotos), secondPhotos: summarize(secondPhotos), commands, downloads, retrySameBlob: true, retrySameBytes: true, earlierPositionUnchanged: true, noNumberBeforeFinalizeAcknowledgement: true, lostFinalizeRecovery: 'GET status, no second browser POST or shutter', repeatFinalize: 200, nextVisitor: 'tap at viewport edge, no fixture reset or page reload', generation: 'no consumer; both sessions remain submit_pending', persistedAfterRestart: true, localOriginCORS: localOrigin, visitorCookies: 0, credentials: 'omit', transport, pageErrors, externalOrigins: unauthorizedOrigins, hardware: 'synthetic JPEG and controlled DCC HTTP only' }, null, 2));
   await installation.dispose();
 });
