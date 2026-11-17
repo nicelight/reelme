@@ -82,10 +82,10 @@ export function registerMedia(app: FastifyInstance, db: DB, dataDir: string, acc
 }
 
 /** Authorization belongs to the route: admin editor or visible catalog material. */
-export async function sendMedia(dataDir: string, media: StoredMedia, request: FastifyRequest, reply: FastifyReply) {
+export async function sendMedia(dataDir: string, media: StoredMedia, request: FastifyRequest, reply: FastifyReply, disposition = 'inline') {
   const path = join(dataDir, 'media', media.path);
   const size = (await stat(path)).size;
-  reply.header('Content-Type', media.mime).header('Accept-Ranges', 'bytes').header('Content-Disposition', 'inline');
+  reply.header('Content-Type', media.mime).header('Accept-Ranges', 'bytes').header('Content-Disposition', disposition);
   const range = request.headers.range;
   if (range) {
     const match = /^bytes=(\d*)-(\d*)$/.exec(range);

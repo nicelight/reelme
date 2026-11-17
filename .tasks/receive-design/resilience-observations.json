@@ -1,0 +1,17 @@
+{
+  "initialTimeoutRetry": true,
+  "shareTimeoutRetry": true,
+  "nativeCancelSilent": true,
+  "actualMP4File": true,
+  "playerRetryCallsLoad": true,
+  "emailTimeoutPreservesAddress": true,
+  "emailPostCount": 1,
+  "singleFlightMax": 1,
+  "pollStopsAtSent": true,
+  "abortedDeadlines": 5,
+  "reducedMotion": true,
+  "pageErrors": [],
+  "nativeShareMocked": true,
+  "deadlineTimersAccelerated": true,
+  "unmountCleanup": "source-inspected"
+}

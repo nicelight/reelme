@@ -1,0 +1,22 @@
+{
+  "measures": [
+    {
+      "width": 320,
+      "overflow": false,
+      "inputFont": "16px",
+      "buttonHeight": 52
+    },
+    {
+      "width": 430,
+      "overflow": false,
+      "inputFont": "16px",
+      "buttonHeight": 52
+    }
+  ],
+  "shortViewportScroll": true,
+  "actualVideoPlayback": true,
+  "downloadMatchesMP4": true,
+  "emailSubmit": true,
+  "pageErrors": [],
+  "realKeyboard": false
+}

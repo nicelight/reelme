@@ -14,6 +14,8 @@
   import CaptureGuides from './CaptureGuides.svelte';
   import DisplaySettings from './DisplaySettings.svelte';
   import Login from './Login.svelte';
+  import brandMark from '../capture/story-prototype/assets/reelme-mark.png';
+  import './admin.css';
 
   let archive = $state(false);
   let guides = $state(false);
@@ -37,7 +39,7 @@
   let videoMedia = $state<Media | undefined>();
   let editorCanSave = $state(false);
   const photoCaches = new Map<string, Record<string, string>>();
-  let theme = $state<'light' | 'dark'>('light');
+  let theme = $state<'light' | 'dark'>('dark');
   const currentModel = $derived(models.find(model => model.id === draft.model)!);
   const dirty = $derived(JSON.stringify(draft) !== baseline);
   const sourceProblem = $derived(videoMedia && draft.mode === 'V2V' ? videoProblem(currentModel, videoMedia) : undefined);
@@ -51,9 +53,9 @@
   function uploadBusy(value: boolean) { uploads += value ? 1 : -1; }
   async function loadSlots() { slots = await api<Slot[]>('/admin/slots'); }
   onMount(async () => {
-    theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     try {
       role = (await api<{ role: 'admin' | 'operator' }>('/auth/session')).role;
+      if (role === 'operator') theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       if (role === 'admin') await loadSlots();
     } catch (value) { if (!(value instanceof ApiError && value.status === 401)) fail(value); }
     finally { ready = true; }
@@ -63,6 +65,7 @@
     event.preventDefault(); busy = true; error = '';
     try {
       role = (await api<{ role: 'admin' | 'operator' }>('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) })).role;
+      theme = role === 'admin' || matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       password = '';
       if (role === 'admin') await loadSlots();
     } catch (value) { fail(value); }
@@ -127,11 +130,12 @@
 <svelte:window onbeforeunload={beforeUnload} />
 <svelte:head><title>ReelMe — {displaySettings ? 'Экран результатов' : guides ? 'Образцы ракурсов' : archive ? 'Архив' : role === 'admin' ? 'Сюжеты' : role === 'operator' ? 'Ваши видео' : 'Вход'}</title></svelte:head>
 
+<div class:admin-shell={role === 'admin'} data-admin-theme={theme}>
 {#if role && !publicScreen}
 <header class="app-header">
-  <a class="brand" href="/" aria-label="ReelMe — главная">Reel<span>Me</span><span class="brand-caption">STUDIO</span></a>
+  <a class="brand" href="/" aria-label="ReelMe — главная">{#if role === 'admin'}<img src={brandMark} alt="" /><span class="admin-wordmark">REELME</span>{:else}Reel<span>Me</span><span class="brand-caption">STUDIO</span>{/if}</a>
   <div class="header-actions">
-    <button class="quiet theme-toggle" onclick={() => theme = theme === 'light' ? 'dark' : 'light'} aria-label={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}>{theme === 'light' ? '◐' : '◑'}</button>
+    <button class="quiet theme-toggle" onclick={() => theme = theme === 'light' ? 'dark' : 'light'} aria-label={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></button>
     {#if role}<span class="role-label">{role === 'admin' ? 'Администратор' : 'Оператор'}</span><button class="quiet" onclick={logout} disabled={formDisabled}>Выйти</button>{/if}
   </div>
 </header>
@@ -164,9 +168,9 @@
 {:else}
   <main class="workspace">
     <aside class="library" aria-label="Список сюжетов">
-      <div class="library-heading"><div><p class="eyebrow">ВАША КОЛЛЕКЦИЯ</p><h1>Сюжеты <span class="count">{slots.length}</span></h1></div><button class="add-button" onclick={fresh} disabled={formDisabled} aria-label="Новый сюжет">+</button></div>
+      <div class="library-heading"><div><h1>Сюжеты <span class="count">{slots.length}</span></h1></div><button class="add-button" onclick={fresh} disabled={formDisabled} aria-label="Новый сюжет"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>
       <p class="library-description">Образы, которые смогут выбрать ваши гости.</p>
-      {#if slots.length === 0}<div class="empty-library"><span class="empty-mark">01</span><h2>Первый сюжет</h2><p>Начните с изображения и описания. Затем добавьте материалы для генерации.</p></div>{/if}
+      {#if slots.length === 0}<div class="empty-library"><h2>Первый сюжет</h2><p>Начните с изображения и описания. Затем добавьте материалы для генерации.</p></div>{/if}
       <ul class="slot-list">
         {#each slots as slot (slot.id)}
           <li class:selected={selectedId === slot.id}>
@@ -180,7 +184,7 @@
     </aside>
 
     <section class="editor" aria-label="Редактор сюжета">
-      <div class="editor-heading"><div><p class="eyebrow">РЕДАКТОР СЮЖЕТА</p><h2>{selectedId ? 'Настройка сюжета' : 'Новый сюжет'}</h2></div><span class="save-status">{dirty ? 'Есть изменения' : selectedId ? 'Сохранено' : 'Черновик'}</span></div>
+      <div class="editor-heading"><div><h2>{selectedId ? 'Настройка сюжета' : 'Новый сюжет'}</h2></div><span class="save-status">{dirty ? 'Есть изменения' : selectedId ? 'Сохранено' : 'Черновик'}</span></div>
       <form onsubmit={save} novalidate>
         <fieldset disabled={formDisabled}>
           <section class="form-section">
@@ -203,3 +207,5 @@
     </section>
   </main>
 {/if}
+
+</div>

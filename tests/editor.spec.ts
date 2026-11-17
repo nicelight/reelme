@@ -15,7 +15,8 @@ async function login(page: Page, origin: string, password: string, role = 'admin
   await page.goto(origin + '/admin');
   await page.getByLabel('Логин').fill(role); await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(page.getByRole('heading', { name: role === 'admin' ? 'Сюжеты' : 'Ваша история — здесь.', exact: false })).toBeVisible();
+  if (role === 'admin') await expect(page.getByRole('heading', { name: 'Сюжеты', exact: false })).toBeVisible();
+  else await expect(page.getByRole('region', { name: 'Экран результатов ReelMe' })).toBeVisible();
 }
 async function setup(page: Page, mode: 'P2V' | 'V2V', model: string, people: string, count: string) {
   await page.getByLabel('Режим', { exact: true }).selectOption(mode);

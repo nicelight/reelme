@@ -38,19 +38,41 @@ test('ready capabilities survive restart, isolate two sessions and serve the ori
   assert.equal(card.number, 1); assert.equal(card.receiveUrl, `${f.config.origin}${page}`);
   assert.equal((await f.app.inject(new URL(card.frameUrl).pathname)).statusCode, 200);
   const download = `/download/${a.download_token}`;
+  assert.equal(view.downloadUrl, download);
+  assert.equal(view.videoUrl, `${download}?inline=1`);
+  assert.notEqual(view.videoUrl, other.videoUrl);
+  const playback = await f.app.inject({ url: view.videoUrl, headers: { range: 'bytes=0-63' } });
+  assert.equal(playback.statusCode, 206);
+  assert.equal(playback.headers['content-type'], 'video/mp4');
+  assert.equal(playback.headers['content-disposition'], 'inline');
+  assert.equal(playback.headers['accept-ranges'], 'bytes');
+  assert.equal(playback.headers['content-range'], `bytes 0-63/${bytes.length}`);
+  assert.equal(playback.headers['cache-control'], 'private, no-store');
+  assert.deepEqual(playback.rawPayload, bytes.subarray(0, 64));
+  const tail = await f.app.inject({ url: view.downloadUrl, headers: { range: 'bytes=-32' } });
+  assert.equal(tail.statusCode, 206); assert.match(String(tail.headers['content-disposition']), /attachment/);
+  assert.deepEqual(tail.rawPayload, bytes.subarray(-32));
+  const outOfRange = await f.app.inject({ url: view.videoUrl, headers: { range: `bytes=${bytes.length}-` } });
+  assert.equal(outOfRange.statusCode, 416);
+  assert.equal(outOfRange.headers['content-range'], `bytes */${bytes.length}`);
+  assert.deepEqual(db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(first.id), a);
   const file = await f.app.inject(download);
   assert.equal(file.statusCode, 200); assert.match(String(file.headers['content-disposition']), /attachment.*reelme-1.mp4/);
   assert.deepEqual(file.rawPayload, bytes); assert.equal(file.headers['referrer-policy'], 'no-referrer');
-  for (const url of [`/download/${a.receive_token}`, `/api/receive/${a.download_token}`, '/receive/1', '/api/receive/' + 'x'.repeat(43), '/download/1', '/media/', `/api/receive/${a.receive_token}/../../media/`, `/api/receive/${a.receive_token}/photo/1`]) assert.equal((await f.app.inject(url)).statusCode, 404, url);
+  for (const url of [`/download/${a.receive_token}`, `/download/${a.receive_token}?inline=1`, `/api/receive/${a.download_token}`, '/receive/1', '/api/receive/' + 'x'.repeat(43), '/download/1', '/media/', `/api/receive/${a.receive_token}/../../media/`, `/api/receive/${a.receive_token}/photo/1`]) assert.equal((await f.app.inject(url)).statusCode, 404, url);
   for (const url of ['/api/admin/slots', '/api/auth/session', `/api/capture/sessions/${first.id}`]) assert.equal((await f.app.inject({ url, headers: { authorization: `Bearer ${a.receive_token}` } })).statusCode, 401, url);
   assert.equal((await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: { authorization: `Bearer ${a.receive_token}`, origin: f.config.origin }, payload: {} })).statusCode, 401);
   await f.restart(); await f.app.ready();
   assert.deepEqual((await f.app.inject(download)).rawPayload, bytes);
   assert.deepEqual(db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(first.id), a);
+  db.prepare('UPDATE events SET deleting=1').run();
+  for (const url of [api, view.videoUrl, view.downloadUrl]) assert.equal((await f.app.inject(url)).statusCode, 404);
+  db.prepare('UPDATE events SET deleting=0').run();
   const artifact = process.env.REELME_RECEIVE_ARTIFACTS;
   if (artifact) { await mkdir(artifact, { recursive: true }); await writeFile(join(artifact, 'api-observations.json'), JSON.stringify({ localOnly: true, ready: true, sessions: 2, videoSha256: createHash('sha256').update(bytes).digest('hex'), restartPreservesTokensAndBytes: true, originalPhotoMatches: true, wrongScopeRejected: true, noAccountPrivileges: true }, null, 2) + '\n'); }
   db.prepare('DELETE FROM capture_sessions WHERE id=?').run(first.id);
   assert.equal((await f.app.inject(download)).statusCode, 404); assert.equal((await f.app.inject(api)).statusCode, 404);
+  assert.equal((await f.app.inject(view.videoUrl)).statusCode, 404);
 });
 
 test('email acceptance is atomic, first confirmation is fixed and only failed permits manual retry', async t => {

@@ -56,8 +56,8 @@ needed for the requested outcome.
   `src/shared/`: shared contracts and slot setup rules.
 - [Slot setup matrix](docs/slot-setup/matrix.md): accepted model capabilities,
   capture plans and prompt rules; consult before changing the slot editor.
-- [DESIGN.md](DESIGN.md): approved results-screen design, not a universal admin
-  theme. Prototype directories retain references; production entry points are
+- [DESIGN.md](DESIGN.md): visual decisions for results, capture, login and admin;
+  use the section for the target surface. Prototype directories retain references; production entry points are
   defined in `vite.config.ts` and client `main.ts` files.
 - [README.md](README.md): launch instructions and project documentation.
 

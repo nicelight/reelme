@@ -3,6 +3,8 @@ export type EmailState = 'not_requested' | 'pending' | 'sending' | 'sent' | 'fai
 export interface ReceiveStatus {
   number: number;
   photoUrl: string;
+  videoUrl: string;
+  downloadUrl: string;
   emailState: EmailState;
   canSubmit: boolean;
   openedAt: number | null;

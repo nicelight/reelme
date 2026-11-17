@@ -1,0 +1,104 @@
+/* ReelMe's established visual language, scoped to the administrator workspace. */
+.admin-shell {
+  --bg:#100c16; --surface:#211725; --text:#fff4fb; --muted:#c7b5c8;
+  --line:#5d4059; --accent:#f5a4df; --accent-text:#291326;
+  --soft:#38243a; --error:#ffb6ca; --input:#160f1d;
+  color-scheme:dark; min-height:100svh; color:var(--text);
+  font-family:Manrope,sans-serif;
+  background:radial-gradient(ellipse at 5% 0%,#42203e80,transparent 45%),radial-gradient(ellipse at 100% 90%,#3c1b4180,transparent 45%),var(--bg);
+}
+.admin-shell[data-admin-theme='light'] {
+  --bg:#faf4f8; --surface:#fffafd; --text:#2d1b2c; --muted:#70546c;
+  --line:#cbb6c6; --accent:#853b73; --accent-text:#fff8fd;
+  --soft:#f0e0ed; --error:#a3264c; --input:#fffafd;
+  color-scheme:light; background:radial-gradient(ellipse at 0% 0%,#f3dfed,transparent 50%),var(--bg);
+}
+.admin-shell ::selection { background:var(--accent); color:var(--accent-text); }
+.admin-shell :is(input,textarea) { caret-color:var(--accent); }
+.admin-shell :is(input,textarea)::placeholder { color:var(--muted); opacity:1; }
+.admin-shell :focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
+.admin-shell button { border-radius:12px; }
+.admin-shell button:disabled { cursor:not-allowed; }
+.admin-shell .app-header { max-width:1600px; margin:auto; background:transparent; border:0; padding:28px 40px 20px; }
+.admin-shell .brand { align-items:center; gap:14px; }
+.admin-shell .brand img { width:38px; height:44px; object-fit:contain; }
+.admin-shell .brand .admin-wordmark { color:var(--text); font-size:25px; font-weight:800; letter-spacing:.16em; }
+.admin-shell .header-actions { gap:12px; }
+.admin-shell .theme-toggle { display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; }
+.admin-shell .surface-nav { max-width:1520px; margin:0 auto; padding:0 0 18px; background:transparent; gap:8px; overflow-x:auto; }
+.admin-shell .surface-nav button { white-space:nowrap; font-size:14px; padding:10px 18px; }
+.admin-shell .surface-nav [aria-current='page'] { border-color:var(--line); }
+.admin-shell .workspace { max-width:1520px; margin:28px auto 0; padding-bottom:40px; gap:28px; align-items:start; min-height:0; }
+.admin-shell .library { border:0; padding:24px 0; min-width:0; }
+.admin-shell .library-heading h1 { font-size:26px; }
+.admin-shell .add-button { display:grid; place-items:center; background:var(--soft); color:var(--accent); }
+.admin-shell .library-description { line-height:1.6; margin:12px 0 24px; }
+.admin-shell .empty-library { border-radius:16px; padding:24px; }
+.admin-shell .slot-list { gap:14px; }
+.admin-shell .slot-list li { border-radius:16px; background:var(--surface); }
+.admin-shell .slot-list li.selected { border-color:var(--accent); box-shadow:none; background:var(--soft); }
+.admin-shell .slot-open { border-radius:0; background:transparent; padding:14px; }
+.admin-shell .slot-open img { width:76px; height:86px; border-radius:10px; }
+.admin-shell .slot-open small { font-size:12px; }
+.admin-shell .visibility-toggle { padding:0 14px 12px; }
+.admin-shell .editor { position:relative; padding:32px 40px 0; border:1px solid var(--line); border-radius:24px; background:linear-gradient(135deg,color-mix(in srgb,var(--soft) 65%,var(--surface)),var(--surface) 45%); }
+.admin-shell .editor::before { content:''; position:absolute; height:1px; top:-1px; left:8%; width:25%; background:linear-gradient(90deg,transparent,#ffb0da,#fff4fb,#ffb0da,transparent); pointer-events:none; }
+.admin-shell .editor::after { content:''; position:absolute; inset:-1px; padding:1px; border-radius:inherit; background:radial-gradient(ellipse 50% 180px at 0% 0%,#f5a4df,transparent 90%),radial-gradient(ellipse 40% 180px at 100% 100%,#f5a4df99,transparent 90%); mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0); mask-composite:exclude; pointer-events:none; }
+.admin-shell .editor-heading { margin-bottom:8px; align-items:center; }
+.admin-shell .editor-heading h2 { font-size:28px; }
+.admin-shell .save-status { font-size:12px; padding:6px 10px; border:1px solid var(--line); border-radius:8px; }
+.admin-shell .editor form { max-width:none; }
+.admin-shell .form-section { padding:28px 0 32px; }
+.admin-shell .section-heading { margin-bottom:24px; flex-wrap:wrap; }
+.admin-shell .section-heading h3 { font-size:20px; }
+.admin-shell .section-heading>span { border-radius:7px; color:var(--accent); }
+.admin-shell label,.admin-shell .field-label { font-size:14px; }
+.admin-shell :is(input:not([type='checkbox']):not([type='file']),select,textarea) { border-radius:10px; border-color:var(--line); font-size:15px; }
+.admin-shell select { text-overflow:ellipsis; }
+.admin-shell .media-preview { border-radius:12px; width:180px; height:150px; }
+.admin-shell .video-preview { width:100%; height:auto; }
+.admin-shell input[type='file']::file-selector-button { border-radius:10px; }
+.admin-shell .materials { border:0; border-radius:12px; padding:24px; }
+.admin-shell .capacity-note { border-radius:12px; }
+.admin-shell .references .media-preview { width:100%; }
+.admin-shell .primary { background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:800; }
+.admin-shell .primary:hover:not(:disabled) { background:var(--accent); opacity:.9; }
+.admin-shell .editor-footer { position:sticky; bottom:0; z-index:2; padding:20px 0; background:var(--surface); border-top:1px solid var(--line); }
+.admin-shell .editor-footer .primary { min-height:48px; }
+.admin-shell .eyebrow { display:none; }
+.admin-shell :is(.guides-page,.archive,.display-settings) { max-width:1200px; padding:40px; margin:0 auto; }
+.admin-shell :is(.guide-card,.archive-session,.archive-player,.confirmation) { background:var(--surface); border-radius:16px; }
+.admin-shell .guide-card { padding:24px; }
+.admin-shell .display-settings form { max-width:720px; padding:28px; background:var(--surface); border:1px solid var(--line); border-radius:16px; }
+.admin-shell .display-settings form>label:first-child { margin-top:0; }
+.admin-shell .archive-day { background:var(--surface); border-radius:16px; }
+.admin-shell .danger { color:var(--error); }
+@media(min-width:960px) { .admin-shell .workspace { grid-template-columns:300px minmax(0,1fr); } }
+@media(max-width:1599px) { .admin-shell :is(.workspace,.surface-nav) { margin-left:40px; margin-right:40px; } }
+@media(max-width:959px) {
+  .admin-shell .workspace { gap:20px; }
+  .admin-shell .library { padding:0; }
+  .admin-shell .slot-list { display:flex; overflow-x:auto; padding-bottom:8px; }
+  .admin-shell .slot-list li { flex:0 0 280px; }
+  .admin-shell .empty-library { padding:18px; }
+  .admin-shell .library-description { margin-bottom:16px; }
+}
+@media(max-width:639px) {
+  .admin-shell .app-header { padding:20px 16px; gap:8px; }
+  .admin-shell .brand { gap:8px; }
+  .admin-shell .brand img { width:28px; height:34px; }
+  .admin-shell .brand .admin-wordmark { font-size:18px; letter-spacing:.12em; }
+  .admin-shell .header-actions { gap:4px; }
+  .admin-shell .header-actions .quiet { padding:8px; font-size:13px; }
+  .admin-shell :is(.workspace,.surface-nav) { margin-left:16px; margin-right:16px; }
+  .admin-shell .surface-nav { padding-bottom:14px; gap:4px; }
+  .admin-shell .surface-nav button { padding:8px 12px; font-size:13px; }
+  .admin-shell .editor { padding:24px 20px 0; border-radius:18px; }
+  .admin-shell .editor-heading { align-items:flex-start; flex-direction:column; gap:12px; }
+  .admin-shell .editor-heading h2 { font-size:25px; }
+  .admin-shell .materials { padding:16px; }
+  .admin-shell :is(.guides-page,.archive,.display-settings) { padding:28px 16px; }
+  .admin-shell .display-settings form { padding:20px; }
+  .admin-shell .editor-footer { position:static; gap:12px; padding:16px 0; }
+  .admin-shell .editor-footer .primary { width:100%; }
+}

@@ -10,6 +10,7 @@
   let { onunauthorized }: { onunauthorized: () => void } = $props();
   let sessions = $state<Record<string, DisplaySession>>({});
   let error = $state('');
+  let stageError = $state('');
   let progress = $state<(DisplaySession | null)[]>([]);
   let issues = $state<DisplaySession[]>([]);
   const publicScreen = new URLSearchParams(location.search).get('screen') === 'results';
@@ -34,6 +35,8 @@
     let anchorClock = 0;
     let generation = 0;
     let stageImage: HTMLImageElement | undefined;
+    let stageLoading = false;
+    let stageRetryAt = 0;
     let poll: ReturnType<typeof setTimeout>;
     let expiry: ReturnType<typeof setTimeout>;
     let wake: ReturnType<typeof setTimeout>;
@@ -87,6 +90,20 @@
       const deadline = projection.sessions.map(item => item.hideAt).filter((value): value is number => value !== null && value > serverNow()).sort((a, b) => a - b)[0];
       if (deadline !== undefined) expiry = setTimeout(() => { reconcile(); updateExpiry(); }, Math.max(1, deadline - serverNow()));
     }
+    async function prepareStage() {
+      if (stopped || resourcesReady || stageLoading || performance.now() < stageRetryAt) return;
+      stageLoading = true;
+      try {
+        const image = await preloadStage();
+        if (stopped) return;
+        stageImage = image; resourcesReady = true; stageError = ''; reconcile();
+      } catch {
+        if (!stopped) {
+          stageError = 'Не удалось подготовить экран. Повторяем загрузку…';
+          stageRetryAt = performance.now() + 5000;
+        }
+      } finally { stageLoading = false; }
+    }
     async function prepare(item: DisplaySession) {
       if (!item.card || loading.has(item.id)) return;
       const urls = `${item.card.frameUrl}\n${item.card.qrUrl}`;
@@ -126,7 +143,13 @@
           stopped = true; clearTimeout(wake); clearTimeout(expiry); sessions = {}; onunauthorized(); return;
         }
         error = 'Нет связи с сервером. Повторяем подключение…';
-      } finally { if (!stopped) poll = setTimeout(refresh, 2000); }
+      } finally {
+        if (!stopped) {
+          // Reuse the API polling loop for recovery; never run parallel stage loads.
+          void prepareStage();
+          poll = setTimeout(refresh, 2000);
+        }
+      }
     }
     function visibility() {
       const now = performance.now();
@@ -139,10 +162,7 @@
     }
     function preference() { reduced = media.matches; queue.reduced = reduced; queue.advance(performance.now()); publish(); }
     media.addEventListener('change', preference); document.addEventListener('visibilitychange', visibility);
-    void preloadStage().then(image => {
-      if (stopped) return;
-      stageImage = image; resourcesReady = true; reconcile();
-    }).catch(() => { if (!stopped) error = 'Не удалось подготовить экран. Обновите страницу.'; });
+    void prepareStage();
     void refresh();
     return () => {
       stopped = true; generation++; clearTimeout(poll); clearTimeout(expiry); clearTimeout(wake); decoded.clear(); stageImage = undefined;
@@ -150,7 +170,7 @@
     };
   });
 </script>
-<ResultsScreen {...scene} {sessions} {reduced} {resourcesReady} {error} {progress} />
+<ResultsScreen {...scene} {sessions} {reduced} {resourcesReady} error={stageError || error} {progress} />
 
 {#if !publicScreen && issues.length}
   <section class="operator-issues" aria-label="Сообщения обработки">

@@ -1,0 +1,12 @@
+{
+  "actualMP4FileMatches": true,
+  "gestureActive": true,
+  "onePreparationFetch": true,
+  "cancelSilent": true,
+  "failureRecoverable": true,
+  "unsupportedDownloadFallback": true,
+  "emailFormPreserved": true,
+  "mobileOverflow": false,
+  "pageErrors": [],
+  "nativeShareMocked": true
+}

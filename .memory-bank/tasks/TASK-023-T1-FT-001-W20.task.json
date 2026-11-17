@@ -1,0 +1,74 @@
+{
+  "id": "TASK-023-T1-FT-001-W20",
+  "title": "Привести админ-панель к дизайну остальных страниц ReelMe",
+  "status": "done",
+  "wave": "W20",
+  "feature": "FT-001",
+  "tier": "T1",
+  "reqs": [
+    "REQ-018"
+  ],
+  "depends_on": [
+    "TASK-017-T2-FT-001-W14",
+    "TASK-018-T2-FT-001-W15"
+  ],
+  "touched_files": [
+    "src/client/cloud/App.svelte",
+    "src/client/cloud/admin.css",
+    "tests/admin-appearance.spec.ts",
+    "DESIGN.md"
+  ],
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-17",
+      "result": "PASS",
+      "summary": "npm run check: 0 ошибок/предупреждений; npm run build: PASS. Chromium: admin appearance и sequential editor 2/2 PASS. Проверены сохранение P2V/V2V, повторное открытие, переходы разделов, темы, desktop/mobile без горизонтального переполнения. Первый редакторский прогон остановился на устаревшем ожидании заголовка оператора; тест обновлён на реальную region экрана результатов.",
+      "evidence": [
+        ".tasks/admin-design/empty-editor-desktop.png",
+        ".tasks/admin-design/empty-editor-mobile.png",
+        ".tasks/admin-design/editor-desktop.png",
+        ".tasks/admin-design/guides-desktop.png",
+        ".tasks/admin-design/settings-desktop.png",
+        ".tasks/admin-design/archive-desktop.png",
+        ".tasks/admin-design/editor-light.png"
+      ],
+      "limitations": [
+        "Локальный Chromium и изолированные тестовые данные. Художественная приёмка пользователем не выполнена; commit/deploy не выполнялись."
+      ]
+    }
+  ],
+  "docs": [
+    "DESIGN.md"
+  ],
+  "evidence_required": [
+    "Снимки desktop/mobile, проверка редактора и переходов между разделами."
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-001-scenarios.md"
+  ],
+  "normative_inputs": [
+    "DESIGN.md",
+    "docs/slot-setup/matrix.md"
+  ],
+  "constraints": [
+    "Прямое поручение оператора: дизайн админки по образу остальных страниц."
+  ],
+  "invariants": [
+    "Сохранить API, настройки сюжетов, права и действия администратора."
+  ],
+  "verification_targets": [
+    "Редактор, образцы ракурсов, настройки экрана, архив, светлая тема и узкий экран."
+  ]
+}

@@ -41,8 +41,9 @@ test('visitor form at mobile/desktop: validation, pending, retry, sent, restart 
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto(route);
     await expect(page.getByRole('heading', { name: 'История № 1' })).toBeVisible();
-    await expect(page.getByAltText('Ваш исходный снимок, сессия № 1')).toBeVisible();
-    await expect.poll(() => page.getByRole('img').evaluate((el: HTMLImageElement) => el.naturalWidth)).toBe(400);
+    await expect(page.getByLabel('Видео истории № 1')).toBeVisible();
+    await expect(page.locator('video')).toHaveAttribute('poster', /\/photo$/);
+    await expect.poll(() => page.locator('video').evaluate((el: HTMLVideoElement) => el.readyState)).toBeGreaterThanOrEqual(1);
     expect(row().opened_at).toBeTruthy(); expect(row().email_confirmed_at).toBeNull();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: join(artifacts, 'receive-mobile.png'), fullPage: true });

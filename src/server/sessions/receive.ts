@@ -1,12 +1,12 @@
 /** Module contract: Sessions publishes a verified local result and its two distinct
- * capabilities and its first ready timestamp atomically. Receive grants only its own form/photo/frame; download
- * grants only its video. Email acceptance owns first confirmation and pending,
+ * capabilities and its first ready timestamp atomically. Receive grants its own
+ * form/photo/frame and scoped playback/download URLs; download grants only its video.
+ * Watching/downloading does not submit email or alter delivery state. Email acceptance owns first confirmation and pending,
  * never SMTP or sent. Neither opening nor retry changes the first confirmation.
  * Deleting events issue no capabilities or ready publication. Ready cards are internal projections for the authenticated display/archive. */
 import { sessionAvailable } from './availability.js';
 import { randomBytes } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
-import { createReadStream } from 'node:fs';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -34,6 +34,7 @@ function delivery(db: DB, token: string, kind: 'receive' | 'download'): Delivery
 }
 function status(row: Delivery): ReceiveStatus {
   return { number: row.number, photoUrl: `/api/receive/${row.receive_token}/photo`, emailState: row.email_state,
+    videoUrl: `/download/${row.download_token}?inline=1`, downloadUrl: `/download/${row.download_token}`,
     canSubmit: row.email_state === 'not_requested' || row.email_state === 'failed', openedAt: row.opened_at, emailConfirmedAt: row.email_confirmed_at };
 }
 export function readyCard(db: DB, origin: string, sessionId: string): ReadyCard | undefined {
@@ -108,13 +109,12 @@ export function registerReceive(app: FastifyInstance, db: DB, dataDir: string, c
       return sendMedia(dataDir, { ...file, id: row.session_id, kind: 'image', mime: 'image/jpeg' }, request, reply);
     });
   }
-  app.get<{ Params: { token: string } }>('/download/:token', async (request, reply) => {
+  app.get<{ Params: { token: string }; Querystring: { inline?: string } }>('/download/:token', async (request, reply) => {
     const row = delivery(db, request.params.token, 'download');
-    const file = db.prepare('SELECT video_path AS path FROM generation_jobs WHERE session_id=?').get(row.session_id) as { path: string };
-    const path = join(dataDir, 'media', file.path);
-    let size: number;
-    try { size = (await stat(path)).size; } catch { throw missing(); }
-    return reply.type('video/mp4').header('Cache-Control', 'private, no-store').header('Content-Length', size)
-      .header('Content-Disposition', `attachment; filename="reelme-${row.number}.mp4"`).send(createReadStream(path));
+    const file = db.prepare('SELECT video_path AS path,video_size AS size,width,height FROM generation_jobs WHERE session_id=?').get(row.session_id) as FileRow;
+    try { await stat(join(dataDir, 'media', file.path)); } catch { throw missing(); }
+    reply.header('Cache-Control', 'private, no-store');
+    const disposition = request.query.inline === '1' ? 'inline' : `attachment; filename="reelme-${row.number}.mp4"`;
+    return sendMedia(dataDir, { ...file, id: row.session_id, kind: 'video', mime: 'video/mp4' }, request, reply, disposition);
   });
 }
