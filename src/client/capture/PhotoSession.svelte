@@ -3,6 +3,7 @@
    * JPEG upload and finalize. Retries retain original Blobs/positions and never
    * call the camera again. Server status is authoritative, including after reload
    * or a lost acknowledgement. Only finalized=true permits the number and release.
+   * Request deadlines include response bodies; timeout preserves manual recovery.
    * Finish records only a session marker, never JPEG bytes. Reload with missing
    * local Blobs stops explicitly; accepted server positions are never recaptured.
    * Source: docs/slot-setup/matrix.md. SQLite/files remain owned by the server. */
@@ -32,7 +33,7 @@
     busy = true; error = ''; phase = 'loading';
     try {
       if (photos.length) sessionStorage.setItem(transferStorage, receipt.sessionId);
-      status = await readResponse(await request(path(), installationKey, { signal: lifecycle.signal }));
+      status = await readResponse(await request(path(), installationKey, { signal: AbortSignal.any([lifecycle.signal, AbortSignal.timeout(15_000)]) }));
       if (status.finalized) { clearTransferMarker(); photos = []; phase = 'done'; return; }
       if (!status.complete && photos.length === 0 && status.acceptedPoseIndices.length === 0 && sessionStorage.getItem(transferStorage) !== receipt.sessionId) { phase = 'capture'; return; }
       const missing = status.posePlan.filter(pose => !status!.acceptedPoseIndices.includes(pose.index));
@@ -45,9 +46,10 @@
         const photo = photos.find(photo => photo.sessionId === receipt.sessionId && photo.poseIndex === pose.index);
         if (!photo) throw new Error('Не найден снятый кадр');
         const body = new FormData(); body.set('file', photo.blob, `pose-${pose.index}.jpg`);
-        status = await readResponse(await request(`${path()}/photos/${pose.index}`, installationKey, { method: 'PUT', body, signal: lifecycle.signal }));
+        // A JPEG can be up to 20 MiB; allow a slower uplink than for status JSON.
+        status = await readResponse(await request(`${path()}/photos/${pose.index}`, installationKey, { method: 'PUT', body, signal: AbortSignal.any([lifecycle.signal, AbortSignal.timeout(120_000)]) }));
       }
-      status = await readResponse(await request(`${path()}/finalize`, installationKey, { method: 'POST', signal: lifecycle.signal }));
+      status = await readResponse(await request(`${path()}/finalize`, installationKey, { method: 'POST', signal: AbortSignal.any([lifecycle.signal, AbortSignal.timeout(15_000)]) }));
       if (!status.complete || !status.finalized) throw new Error('Приём фотографий не подтверждён');
       clearTransferMarker(); photos = []; phase = 'done';
     } catch (cause) {

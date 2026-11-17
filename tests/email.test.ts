@@ -17,7 +17,7 @@ async function fixture(t: test.TestContext) {
   const config = { dataDir: join(root, 'data'), clientDir: join(root, 'client'), origin: 'https://reelme.test', host: '127.0.0.1', port: 3000 };
   await mkdir(config.clientDir); await writeFile(join(config.clientDir, 'index.html'), '<html>Test</html>');
   const bytes = await videoBytes(root, 1); const session = await preparedSession(config.dataDir, bytes);
-  const db = openDatabase(config.dataDir); await publishReady(db, config.dataDir, session.id);
+  const db = openDatabase(config.dataDir); await publishReady(db, config.dataDir, session.id, config.origin);
   const smtp = await smtpFixture(); const app = await createApp(config); await app.ready();
   let now = 100; let attempts = 0;
   const worker = createEmailWorker(db, config.dataDir, config.origin, app.log, { from: 'sender@example.test', transport: {
@@ -87,7 +87,7 @@ test('file stream failure falls back; failure of both variants allows corrected 
   await f.post('corrected@example.test'); await f.worker.runOnce();
   assert.equal(f.row().email_state, 'sent'); assert.equal(f.smtp.messages.at(-1)!.recipient, 'corrected@example.test');
   assert.equal(f.row().email_confirmed_at, confirmed);
-  const second = await preparedSession(f.config.dataDir, f.bytes, 2); await publishReady(f.db, f.config.dataDir, second.id);
+  const second = await preparedSession(f.config.dataDir, f.bytes, 2); await publishReady(f.db, f.config.dataDir, second.id, f.config.origin);
   const delivery = f.db.prepare('SELECT receive_token,download_token FROM session_delivery WHERE session_id=?').get(second.id) as { receive_token: string; download_token: string };
   // The local stream fails before SMTP can accept DATA. No complete first message.
   await rm(join(f.config.dataDir, 'media', second.video_path));

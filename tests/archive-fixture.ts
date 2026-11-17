@@ -7,7 +7,7 @@ import { openDatabase } from '../src/server/db.js';
 import { publishReady } from '../src/server/sessions/receive.js';
 import { preparedSession } from './receive-fixture.js';
 
-export async function seedArchive(dataDir: string, firstVideo: Buffer, secondVideo: Buffer) {
+export async function seedArchive(dataDir: string, firstVideo: Buffer, secondVideo: Buffer, origin = 'https://reelme.test') {
   const first = await preparedSession(dataDir, firstVideo, 1);
   const second = await preparedSession(dataDir, secondVideo, 2);
   const db = openDatabase(dataDir);
@@ -39,7 +39,7 @@ export async function seedArchive(dataDir: string, firstVideo: Buffer, secondVid
     db.prepare('INSERT INTO capture_photos(session_id,pose_index,path,size,width,height) VALUES (?,1,?,?,400,500)').run(first.id, extraPath, second.photo.length);
     db.prepare("INSERT INTO events(date,next_number) VALUES ('2026-11-13',2),('2026-11-15',1)").run();
     db.prepare("INSERT INTO capture_sessions(id,start_request_id,event_date,number,slot_id,snapshot,state,created_at) VALUES (?,?,'2026-11-13',1,?,?,'capturing',0)").run(randomUUID(), randomUUID(), firstRow.slot_id, JSON.stringify(snapshot));
-    await publishReady(db, dataDir, first.id); await publishReady(db, dataDir, second.id);
+    await publishReady(db, dataDir, first.id, origin); await publishReady(db, dataDir, second.id, origin);
     return { first, second, partialId, emptyId, thumbnailId, changedId, thumb, changed,
       expected: { date: '2026-11-14', photoBytes: 2 * first.photo.length + 2 * second.photo.length + first.frame_size + second.frame_size, videoBytes: firstVideo.length + secondVideo.length } };
   } finally { db.close(); }

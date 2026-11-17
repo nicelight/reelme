@@ -9,6 +9,7 @@ import { openDatabase } from '../src/server/db.js';
 import { publishReady, readyCard } from '../src/server/sessions/receive.js';
 import { createApp } from '../src/server/app.js';
 import type { ReceiveStatus } from '../src/shared/receive.js';
+import QRCode from 'qrcode';
 
 type Row = { receive_token: string; download_token: string; opened_at: number | null; email_confirmed_at: number | null; email: string | null; email_state: string };
 test('ready capabilities survive restart, isolate two sessions and serve the original photo/verified video', async t => {
@@ -108,7 +109,7 @@ test('email acceptance is atomic, first confirmation is fixed and only failed pe
   f.advance(60_000); assert.equal((await post('email', { email: 'corrected@example.test' })).statusCode, 200);
   assert.equal(row().email, 'corrected@example.test'); assert.equal(row().email_state, 'pending'); assert.equal(row().email_confirmed_at, confirmedAt);
   await f.restart(); assert.equal((await f.app.inject(api)).json().emailState, 'pending'); assert.equal(row().email_confirmed_at, confirmedAt);
-  const second = await preparedSession(f.config.dataDir, bytes, 2); await publishReady(db, f.config.dataDir, second.id);
+  const second = await preparedSession(f.config.dataDir, bytes, 2); await publishReady(db, f.config.dataDir, second.id, f.config.origin);
   const secondRow = db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(second.id) as Row;
   await f.app.inject({ method: 'POST', url: `/api/receive/${secondRow.receive_token}/email`, payload: { email: 'without-opened@example.test' } });
   const inferred = db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(second.id) as Row;
@@ -127,17 +128,43 @@ test('missing or corrupt persisted video/frame cannot publish ready', async t =>
   const f = await fixture(); t.after(() => f.close());
   const bytes = await videoBytes(f.root, 1);
   const db = openDatabase(f.config.dataDir); t.after(() => db.close());
-  for (const [index, kind] of ['missing', 'corrupt', 'frame'].entries()) {
+  for (const [index, kind] of ['missing', 'corrupt', 'frame', 'qr-write'].entries()) {
     const session = await preparedSession(f.config.dataDir, bytes, index + 1);
     const path = join(f.config.dataDir, 'media', kind === 'frame' ? session.frame_path : session.video_path);
-    if (kind === 'missing') await rm(path); else await writeFile(path, Buffer.alloc((await readFile(path)).length, 0));
-    await publishReady(db, f.config.dataDir, session.id);
+    if (kind === 'qr-write') await mkdir(join(f.config.dataDir, 'media', 'sessions', session.id, 'qr.png'));
+    else if (kind === 'missing') await rm(path); else await writeFile(path, Buffer.alloc((await readFile(path)).length, 0));
+    await publishReady(db, f.config.dataDir, session.id, f.config.origin);
     assert.equal((db.prepare('SELECT state FROM capture_sessions WHERE id=?').get(session.id) as { state: string }).state, 'failed');
     assert.equal(db.prepare('SELECT session_id FROM session_delivery WHERE session_id=?').get(session.id), undefined);
     assert.equal(readyCard(db, f.config.origin, session.id), undefined);
     const state = await f.app.inject({ url: `/api/capture/sessions/${session.id}`, headers: { authorization: 'Bearer ' + 'a'.repeat(43) } });
     assert.equal(state.json().error.code, 'INVALID_RESULT'); assert.doesNotMatch(state.body, /fixture.test|video_path/);
   }
+});
+
+test('QR preparation precedes ready publication and repeated publication preserves tokens and QR', async t => {
+  const f = await fixture(); t.after(() => f.close());
+  const session = await preparedSession(f.config.dataDir, await videoBytes(f.root, 1));
+  const db = openDatabase(f.config.dataDir); t.after(() => db.close());
+  const entered = Promise.withResolvers<void>(); const release = Promise.withResolvers<void>();
+  const generate = QRCode.toBuffer.bind(QRCode);
+  t.mock.method(QRCode, 'toBuffer', async (text: string, options: QRCode.QRCodeToBufferOptions) => {
+    entered.resolve(); await release.promise; return generate(text, options);
+  });
+  const publication = publishReady(db, f.config.dataDir, session.id, f.config.origin, () => 123);
+  await entered.promise;
+  assert.equal((db.prepare('SELECT state FROM capture_sessions WHERE id=?').get(session.id) as { state: string }).state, 'preparing');
+  assert.equal(readyCard(db, f.config.origin, session.id), undefined);
+  assert.equal(db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(session.id), undefined);
+  release.resolve(); await publication;
+  const row = db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(session.id);
+  const qrPath = join(f.config.dataDir, 'media', 'sessions', session.id, 'qr.png');
+  const qr = await readFile(qrPath);
+  assert.ok(qr.length > 0);
+  await publishReady(db, f.config.dataDir, session.id, f.config.origin, () => 456);
+  assert.deepEqual(db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(session.id), row);
+  assert.deepEqual(await readFile(qrPath), qr);
+  assert.equal((db.prepare('SELECT ready_at FROM generation_jobs WHERE session_id=?').get(session.id) as { ready_at: number }).ready_at, 123);
 });
 
 test('application generation callback publishes newly prepared results without email or another submit', async t => {

@@ -1,16 +1,15 @@
-/** Module contract: Sessions publishes a verified local result and its two distinct
- * capabilities and its first ready timestamp atomically. Receive grants its own
- * form/photo/frame and scoped playback/download URLs; download grants only its video.
- * Watching/downloading does not submit email or alter delivery state. Email acceptance owns first confirmation and pending,
- * never SMTP or sent. Neither opening nor retry changes the first confirmation.
- * Deleting events issue no capabilities or ready publication. Ready cards are internal projections for the authenticated display/archive. */
+/** Publishes ready and its tokens only after video, frame, photo and saved QR exist.
+ * Receive/download tokens grant access only to their session and intended media.
+ * Opening and email confirmation are separate events; retries preserve their first times.
+ * Deleting events cannot publish or issue capabilities. */
 import { sessionAvailable } from './availability.js';
 import { randomBytes } from 'node:crypto';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
+import QRCode from 'qrcode';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { DB } from '../db.js';
@@ -47,7 +46,7 @@ export function readyCard(db: DB, origin: string, sessionId: string): ReadyCard 
 /** Rechecks persisted files before publication, including recovery after restart.
  * Ordinary generation already decoded them; the recheck closes the saved-file
  * boundary before issuing permanent capabilities. No remote access or SQL awaits. */
-export async function publishReady(db: DB, dataDir: string, sessionId: string, now: () => number = Date.now) {
+export async function publishReady(db: DB, dataDir: string, sessionId: string, origin: string, now: () => number = Date.now) {
   const row = db.prepare(`SELECT g.* FROM generation_jobs g JOIN capture_sessions s ON s.id=g.session_id WHERE s.id=? AND s.state='preparing' AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.deleting=0) AND g.video_path IS NOT NULL`).get(sessionId) as { video_path: string; frame_path: string; video_size: number; frame_size: number } | undefined;
   if (!row) return;
   try {
@@ -58,10 +57,16 @@ export async function publishReady(db: DB, dataDir: string, sessionId: string, n
     await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-xerror', '-protocol_whitelist', 'file,pipe', '-format_whitelist', 'mov', '-i', video, '-map', '0:v:0', '-f', 'null', '-'], { timeout: 120_000, maxBuffer: 2 * 1024 * 1024 });
     await sharp(frame, { failOn: 'warning' }).stats();
     await sharp(join(dataDir, 'media', photo.path), { failOn: 'warning' }).stats();
+    const tokens = db.prepare('SELECT receive_token,download_token FROM session_delivery WHERE session_id=?').get(sessionId) as Pick<Delivery, 'receive_token' | 'download_token'> | undefined;
+    const receiveToken = tokens?.receive_token ?? randomBytes(32).toString('base64url');
+    const downloadToken = tokens?.download_token ?? randomBytes(32).toString('base64url');
+    const qr = await QRCode.toBuffer(`${origin}/receive/${receiveToken}`, { errorCorrectionLevel: 'M', margin: 4, scale: 6 });
+    // The prepared directory already exists. Never recreate one removed by cleanup.
+    await writeFile(join(dataDir, 'media', 'sessions', sessionId, 'qr.png'), qr, { mode: 0o600 });
     db.transaction(() => {
       if (!sessionAvailable(db, sessionId)) return;
       if (!db.prepare("UPDATE capture_sessions SET state='ready' WHERE id=? AND state='preparing'").run(sessionId).changes) return;
-      db.prepare('INSERT INTO session_delivery(session_id,receive_token,download_token) VALUES (?,?,?) ON CONFLICT(session_id) DO NOTHING').run(sessionId, randomBytes(32).toString('base64url'), randomBytes(32).toString('base64url'));
+      db.prepare('INSERT INTO session_delivery(session_id,receive_token,download_token) VALUES (?,?,?) ON CONFLICT(session_id) DO NOTHING').run(sessionId, receiveToken, downloadToken);
       db.prepare('UPDATE generation_jobs SET ready_at=COALESCE(ready_at,?),error_code=NULL,error_message=NULL WHERE session_id=?').run(now(), sessionId);
     }).immediate();
   } catch {

@@ -30,7 +30,7 @@ async function setup(t: TestContext) {
   const send = (slotId: string, startRequestId = randomUUID()) => f.app.inject({ method: 'POST', url: `/api/admin/slots/${slotId}/test-generations`, headers: admin, payload: { startRequestId } });
   const get = async (slotId: string, id: string) => (await f.app.inject({ url: `/api/admin/slots/${slotId}/sessions/${id}`, headers: admin })).json<CaptureStatus>();
   const photos = (id: string) => db.prepare('SELECT pose_index,path FROM capture_photos WHERE session_id=? ORDER BY pose_index').all(id) as { pose_index: number; path: string }[];
-  function worker(options: GenerationOptions = {}) { return createGenerationWorker(db, f.config.dataDir, f.config.origin, f.app.log, { ...options, publishReady: id => publishReady(db, f.config.dataDir, id) }); }
+  function worker(options: GenerationOptions = {}) { return createGenerationWorker(db, f.config.dataDir, f.config.origin, f.app.log, { ...options, publishReady: id => publishReady(db, f.config.dataDir, id, f.config.origin) }); }
   return { f, db, admin, operator, jpeg, photo, thumb, input, save, send, get, photos, worker };
 }
 

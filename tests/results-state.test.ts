@@ -66,3 +66,31 @@ test('snapshot bootstrap avoids replay; hidden updates preserve deadlines and re
   queue.advance(1780); assert.equal(queue.phase, 'reveal'); queue.advance(2230); assert.equal(queue.phase, 'result');
   const due = queue.pageDue!; queue.shiftTime(1000); assert.equal(queue.pageDue, due + 1000);
 });
+
+test('a delayed opening-snapshot card joins ordinary results without hatching or disturbing a full page', () => {
+  const initial = new Set(['old', 'late']);
+  const sparse = new ResultsQueue(); sparse.bootstrap(['old'], 0);
+  sparse.sync(['old', 'late', 'new'], 10, true, initial);
+  assert.equal(sparse.hatched.has('late'), true);
+  assert.deepEqual(sparse.pending, ['new']);
+  assert.equal(sparse.cells.includes('late'), true);
+  const full = new ResultsQueue(); full.bootstrap(ids(9), 0);
+  const before = [...full.cells]; full.sync([...ids(9), 'late'], 10, true, new Set(['late']));
+  assert.deepEqual(full.cells, before); assert.equal(full.hatch, null);
+  assert.equal(full.circular.includes('late'), true); assert.deepEqual(full.pending, []);
+});
+
+test('a late ordinary card cannot occupy the destination of an active centre move', () => {
+  for (const count of [7, 8]) {
+    const queue = new ResultsQueue(); queue.bootstrap(ids(count), 0);
+    queue.sync([...ids(count), 'new'], 100);
+    assert.equal(queue.movingUntil, 380);
+    queue.sync([...ids(count), 'new', 'late'], 200, true, new Set(['late']));
+    assert.equal(queue.paged, false); assert.equal(queue.cells.includes('late'), false);
+    queue.advance(380); assert.equal(queue.movingUntil, null); assert.equal(queue.hatch?.id, 'new');
+    finish(queue);
+    assert.equal(queue.paged, true); assert.equal(queue.movingUntil, null);
+    assert.equal(queue.cells.includes('late'), count === 7);
+    assert.equal(queue.circular.includes('late'), true);
+  }
+});

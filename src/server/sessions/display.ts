@@ -1,10 +1,10 @@
-/** Module contract: read-only, operator-only projection of today's sessions and
- * their private media. First email confirmation owns the persisted hide deadline;
- * neither polling, QR rendering nor media requests mark a form opened or delete
- * records. Receive capability is encoded only into the QR; full email and provider
- * data never leave this module. Simulation is a separate safe projection with no
- * ready card or completed real stages. See contracts/access.md and states/lifecycle-map.md. */
+/** Operator projection of today's visible sessions and private media.
+ * Serves the QR saved before ready; older results without a file render it on demand.
+ * Polling/media reads never confirm email or open a receive form. Authenticated
+ * card-load failures produce one warning per request, without changing session state. */
 import QRCode from 'qrcode';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { z } from 'zod';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
@@ -63,12 +63,24 @@ export function registerDisplay(app: FastifyInstance, db: DB, dataDir: string, o
     const rows = db.prepare(`${selection} ORDER BY s.number,s.id`).all(date, time) as Row[];
     return { date, serverNow: time, ...settings(), sessions: rows.map(projection) };
   });
+  const loadFailure = z.object({ attempts: z.literal(4), reason: z.enum(['timeout', 'image']) }).strict();
+  app.post<{ Params: { id: string } }>('/api/display/:id/load-failure', { preHandler: [access.requireOrigin, operator] }, (request, reply) => {
+    const failure = loadFailure.parse(request.body);
+    const time = now();
+    const row = db.prepare(`${selection} AND s.id=? AND s.state='ready'`).get(eventDate(time), time, request.params.id) as Row | undefined;
+    if (!row) throw new HttpError(404, 'NOT_FOUND', 'Результат недоступен на общем экране');
+    app.log.warn({ code: 'DISPLAY_CARD_DEPRECATED', sessionId: row.id, number: row.number, ...failure }, 'Карточка не загрузилась на экране результатов');
+    return reply.code(204).send();
+  });
   for (const kind of ['photo', 'frame', 'qr'] as const) {
     app.get<{ Params: { id: string } }>(`/api/display/:id/${kind}`, { preHandler: operator }, async (request, reply) => {
       const time = now();
       const row = db.prepare(`${selection} AND s.id=? AND s.state='ready'`).get(eventDate(time), time, request.params.id) as Row | undefined;
       if (!row) throw new HttpError(404, 'NOT_FOUND', 'Результат недоступен на общем экране');
       if (kind === 'qr') {
+        try { return reply.type('image/png').send(await readFile(join(dataDir, 'media', 'sessions', row.id, 'qr.png'))); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+        // Legacy ready sessions predate saved QR files; their capabilities stay valid.
         const card = readyCard(db, origin, row.id);
         if (!card) throw new HttpError(404, 'NOT_FOUND', 'Результат недоступен');
         return reply.type('image/png').send(await QRCode.toBuffer(card.receiveUrl, { errorCorrectionLevel: 'M', margin: 4, scale: 6 }));

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import jsQR from 'jsqr';
@@ -36,6 +36,22 @@ test('operator display: six stages, explicit errors, stable order, private media
   assert.deepEqual((await get(card.frameUrl)).rawPayload, await readFile(join(f.config.dataDir, 'media', first.frame_path)));
   const png = await sharp((await get(card.qrUrl)).rawPayload).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   assert.equal(jsQR(new Uint8ClampedArray(png.data), png.info.width, png.info.height)?.data, `${f.config.origin}/receive/${row().receive_token}`);
+  const savedQr = join(f.config.dataDir, 'media', 'sessions', first.id, 'qr.png');
+  assert.deepEqual((await get(card.qrUrl)).rawPayload, await readFile(savedQr));
+  await rm(savedQr); // Ready results from before saved QR files remain readable.
+  const legacyQr = await sharp((await get(card.qrUrl)).rawPayload).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  assert.equal(jsQR(new Uint8ClampedArray(legacyQr.data), legacyQr.info.width, legacyQr.info.height)?.data, `${f.config.origin}/receive/${row().receive_token}`);
+  const failureUrl = `/api/display/${first.id}/load-failure`;
+  const warnings: unknown[] = [];
+  t.mock.method(f.app.log, 'warn', (value: unknown) => { warnings.push(value); });
+  const report = (headers: Record<string, string>, payload: unknown = { attempts: 4, reason: 'timeout' }) => f.app.inject({ method: 'POST', url: failureUrl, headers, payload: payload as object });
+  assert.equal((await report({ origin: f.config.origin })).statusCode, 401);
+  assert.equal((await report({ cookie: admin, origin: f.config.origin })).statusCode, 403);
+  assert.equal((await report({ cookie, origin: 'https://other.test' })).statusCode, 403);
+  assert.equal((await report({ cookie, origin: f.config.origin }, { attempts: 4, reason: 'timeout', url: 'secret' })).statusCode, 400);
+  assert.equal((await report({ cookie, origin: f.config.origin })).statusCode, 204);
+  assert.deepEqual(warnings, [{ code: 'DISPLAY_CARD_DEPRECATED', sessionId: first.id, number: 1, attempts: 4, reason: 'timeout' }]);
+  assert.equal((await view()).sessions[0].card !== null, true); // Logging never invalidates the server result.
   assert.equal(row().opened_at, null); assert.equal(row().email_confirmed_at, null);
   assert.equal((await get()).headers['cache-control'], 'no-store');
   for (const [state, stage, label] of [

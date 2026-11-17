@@ -23,7 +23,7 @@ test('results recover a failed stage preload without hiding its error on success
           card: { photoUrl: '/fixture.png', frameUrl: '/fixture.png', qrUrl: '/fixture.png' } }],
       } });
     });
-    await page.route('**/fixture.png', route => route.fulfill({ contentType: 'image/png', body: pixel }));
+    await page.route('**/fixture.png*', route => route.fulfill({ contentType: 'image/png', body: pixel }));
     await page.route(/\/egg\.png(?:\?.*)?$/, route => {
       if (route.request().resourceType() !== 'image') return route.continue();
       eggAttempts++;

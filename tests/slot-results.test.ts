@@ -30,7 +30,7 @@ async function setup(t: TestContext) {
   }
   const latest = async (id: string) => (await f.app.inject({ url: `/api/admin/slots/${id}/latest-video`, headers: admin })).json<{ video: LastSlotVideo | null }>().video;
   const times = (id: string) => db.prepare('SELECT submitted_at,ready_at FROM generation_jobs WHERE session_id=?').get(id) as { submitted_at: number | null; ready_at: number | null };
-  const worker = (options: GenerationOptions) => createGenerationWorker(db, f.config.dataDir, f.config.origin, f.app.log, { download: async () => new Response(bytes), ...options, now: () => now, publishReady: id => publishReady(db, f.config.dataDir, id, () => now) });
+  const worker = (options: GenerationOptions) => createGenerationWorker(db, f.config.dataDir, f.config.origin, f.app.log, { download: async () => new Response(bytes), ...options, now: () => now, publishReady: id => publishReady(db, f.config.dataDir, id, f.config.origin, () => now) });
   return { f, db, admin, operator, bytes, input, slot, start, latest, times, worker, setTime(value: number) { now = value; }, get now() { return now; } };
 }
 
@@ -49,7 +49,7 @@ test('submitted/ready times follow actual retry, confirmed-ID restart, queue/dow
   completed = true; h.setTime(base + 20_000); await w.runOnce(); await w.runOnce(); await w.stop();
   assert.deepEqual(h.times(id), { submitted_at: base + 5_000, ready_at: base + 30_000 }); assert.equal(attempts, 2);
   const result = await h.latest(slot); assert.equal(result?.elapsedMs, 25_000); assert.equal(result?.submittedAt, base + 5_000); assert.equal(result?.readyAt, base + 30_000);
-  h.setTime(base + 90_000); await publishReady(h.db, h.f.config.dataDir, id, () => h.now);
+  h.setTime(base + 90_000); await publishReady(h.db, h.f.config.dataDir, id, h.f.config.origin, () => h.now);
   assert.equal(h.times(id).ready_at, base + 30_000);
   // Same slot, new simulated snapshot: neither success nor its timestamps may overwrite the real result.
   seedLegacySlot(h.db, { ...h.input, simulateGeneration: true }, slot);

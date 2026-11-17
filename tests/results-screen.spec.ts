@@ -24,7 +24,7 @@ test('production results: admin timing, real preload/QR, first fill and stable p
   const bytes = await readFile(video); const seeds = [];
   for (let n = 1; n <= 11; n++) seeds.push(await preparedSession(dataDir, bytes, n));
   const db = openDatabase(dataDir);
-  for (const seed of seeds) await publishReady(db, dataDir, seed.id, () => now);
+  for (const seed of seeds) await publishReady(db, dataDir, seed.id, origin, () => now);
   db.prepare("UPDATE capture_sessions SET state='capturing'").run();
   const ready = (n: number) => {
     db.prepare("UPDATE capture_sessions SET state='ready' WHERE id=?").run(seeds[n - 1].id);

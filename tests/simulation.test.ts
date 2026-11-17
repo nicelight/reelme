@@ -52,7 +52,7 @@ async function setup(t: TestContext) {
   const status = async (id: string) => (await f.app.inject({ url: `/api/capture/sessions/${id}`, headers: installation })).json<CaptureStatus>();
   const display = async () => (await f.app.inject({ url: '/api/display/today', headers: { cookie: operator } })).json<TodayDisplay>();
   function worker(options: GenerationOptions = {}) {
-    return createGenerationWorker(db, f.config.dataDir, f.config.origin, f.app.log, { ...options, publishReady: id => publishReady(db, f.config.dataDir, id) });
+    return createGenerationWorker(db, f.config.dataDir, f.config.origin, f.app.log, { ...options, publishReady: id => publishReady(db, f.config.dataDir, id, f.config.origin) });
   }
   return { f, db, admin, operator, input, jpeg, save, start, photos, finalize, status, display, worker };
 }

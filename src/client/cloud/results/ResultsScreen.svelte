@@ -1,13 +1,16 @@
 <script lang="ts">
+  /** Renders fixed page snapshots and eight status slots. Local load failures
+   * replace the ready label without changing server-owned session data. */
   import egg from '../results-prototype/assets/egg.png';
   import '../results-prototype/assets/fonts.css';
   import { ribbonLight, rimWave, revealSize } from './motion';
   import type { DisplaySession } from '../../../shared/display';
   import type { ResultPhase } from './state';
-  let { cells, phase, page, pageCount, pageVersion, moving, leaving, entering, reduced, resourcesReady, error, sessions, progress, completedIds } : {
+  let { cells, phase, page, pageCount, pageVersion, moving, leaving, entering, reduced, resourcesReady, error, sessions, progress, completedIds, loadStates = {} } : {
     cells: (string | null)[]; phase: ResultPhase; page: number; pageCount: number; pageVersion: number;
     moving: boolean; leaving: boolean; entering: boolean; reduced: boolean; resourcesReady: boolean;
     error: string; sessions: Record<string, DisplaySession>; progress: (DisplaySession | null)[]; completedIds: string[];
+    loadStates?: Record<string, 'delayed' | 'deprecated'>;
   } = $props();
   let showProgress = $state(true);
   const completed = $derived(new Set(completedIds));
@@ -54,7 +57,7 @@
             {@const item = progress[index]}
             {#if item}
               <button class="progress-slot" data-progress-session={item.number} data-progress-position={index} data-stage={item.stage} onclick={() => showProgress = false} title="Скрыть статусы">
-                <span class="progress-number">№ {number(item.number)}</span><span class="progress-label">{item.card ? completed.has(item.id) ? 'готово' : 'вот вот вылупится :)' : item.simulation?.message ?? item.label}</span>
+                <span class="progress-number">№ {number(item.number)}</span><span class="progress-label">{loadStates[item.id] === 'deprecated' ? 'пройдите фотосессию снова' : loadStates[item.id] === 'delayed' ? 'загрузка задерживается' : item.card ? completed.has(item.id) ? 'готово' : 'вот вот вылупится :)' : item.simulation?.message ?? item.label}</span>
                 <span class="progress-track" aria-hidden="true"><span style:width={`${Math.max(1, Math.min(3, item.stage)) / 3 * 100}%`}></span></span>
               </button>
             {:else}<div class="progress-placeholder" aria-hidden="true"></div>{/if}

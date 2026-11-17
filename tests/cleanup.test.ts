@@ -96,7 +96,7 @@ test('deleting marker immediately closes every new operation, late generation pu
   const entered = deferred(); const release = deferred(); let downloadCalls=0;
   db.prepare("UPDATE capture_sessions SET state='preparing' WHERE id=?").run(seed.first.id);
   db.prepare('UPDATE generation_jobs SET video_path=NULL,frame_path=NULL WHERE session_id=?').run(seed.first.id);
-  const generation = createGenerationWorker(db,f.config.dataDir,f.config.origin,quiet,{client:{submit:async()=>{throw Error('unexpected');},status:async()=>{throw Error('unexpected');},result:async()=>{throw Error('unexpected');}},download:async()=>{downloadCalls++;entered.resolve();await release.promise;return new Response(bytes);},publishReady:id=>publishReady(db,f.config.dataDir,id)});
+  const generation = createGenerationWorker(db,f.config.dataDir,f.config.origin,quiet,{client:{submit:async()=>{throw Error('unexpected');},status:async()=>{throw Error('unexpected');},result:async()=>{throw Error('unexpected');}},download:async()=>{downloadCalls++;entered.resolve();await release.promise;return new Response(bytes);},publishReady:id=>publishReady(db,f.config.dataDir,id,f.config.origin)});
   const generating=generation.runOnce(); await entered.promise;
   const mailEntered=deferred(); const mailRelease=deferred(); let mailCalls=0;
   db.prepare("UPDATE session_delivery SET email_state='pending',email='visitor@example.test' WHERE session_id=?").run(seed.second.id);

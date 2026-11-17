@@ -1,5 +1,8 @@
-/** Display-only queue: session visibility/media remain owned by the server. Times
- * supplied by the caller are monotonic; no timers or browser state live here. */
+/** Owns page order and hatch timing, not media or server visibility. Late resources
+ * from the opening snapshot join as ordinary cards, never replayed hatches.
+ * A late ordinary card waits for the active centre move/hatch: it cannot occupy
+ * the move's destination or enable paging before that move finishes.
+ * Supplied times are monotonic; this class starts no timers. */
 export const perimeter = [0, 1, 2, 3, 5, 6, 7, 8] as const;
 export type ResultPhase = 'egg' | 'shake' | 'bloom' | 'reveal' | 'result';
 export const hatchTiming = { shake: 1400, bloom: 2450, reveal: 2850, done: 4850 } as const;
@@ -35,13 +38,27 @@ export class ResultsQueue {
       this.completedAt = now - 2000;
     }
   }
-  sync(ids: string[], now: number, animate = true) {
+  sync(ids: string[], now: number, animate = true, initialIds: ReadonlySet<string> = new Set()) {
     const valid = new Set(ids); this.valid = valid;
     this.pending = this.pending.filter(id => valid.has(id));
     this.circular = this.circular.filter(id => valid.has(id));
     // Current page is a snapshot: expiry changes future eligibility only.
-    for (const id of ids) if (!this.seen.has(id)) { this.seen.add(id); this.pending.push(id); }
+    for (const id of ids) if (!this.seen.has(id)) {
+      this.seen.add(id);
+      if (!initialIds.has(id)) { this.pending.push(id); continue; }
+      this.hatched.add(id); this.circular.push(id);
+    }
     if (animate) this.advance(now);
+  }
+  private placeOrdinary(now: number) {
+    // A moving centre owns the next free position until its hatch completes.
+    if (this.paged || this.movingUntil !== null || this.hatch) return;
+    for (const id of this.circular) if (!this.cells.includes(id)) {
+      const position = this.cells[4] === null ? 4 : perimeter.find(index => this.cells[index] === null);
+      if (position === undefined) break;
+      this.cells[position] = id; this.completedAt ??= now - 2000;
+    }
+    if (this.cells.every(Boolean)) { this.paged = true; this.pageDue = now + this.duration; }
   }
   private rotate(id: string) { if (this.valid.has(id)) this.circular = [...this.circular.filter(value => value !== id), id]; }
   private beginHatch(now: number) {
@@ -78,6 +95,7 @@ export class ResultsQueue {
           : elapsed >= hatchTiming.reveal ? 'reveal' : elapsed >= hatchTiming.bloom ? 'bloom' : elapsed >= hatchTiming.shake ? 'shake' : 'egg';
       }
     }
+    this.placeOrdinary(now);
     if (this.paged) {
       if (this.pageDue !== null && now >= this.pageDue && !this.hatch) {
         this.pageDue = null; this.leavingUntil = now + (this.reduced ? 160 : 280);

@@ -8,7 +8,8 @@
   /** Module contract: visitor catalog → durable start → PhotoSession owns capture
    * and transfer. sessionStorage recovers the server receipt; only confirmed
    * completion or confirmed abandonment (including lost local JPEGs) permits returning to
-   * the catalog. Source: docs/slot-setup/matrix.md. Server photos are never erased here. */
+   * the catalog. Start timeout retains the same request ID for manual recovery.
+   * Source: docs/slot-setup/matrix.md. Server photos are never erased here. */
   type StartState = { startRequestId: string; slotId: string; receipt?: StartReceipt };
   let key = $state('');
   let setup = $state(false);
@@ -23,6 +24,7 @@
   let error = $state('');
   let catalogAbort: AbortController | undefined;
   let loadVersion = 0;
+  const lifecycle = new AbortController();
 
   function message(cause: unknown) {
     if (cause instanceof ApiError && [401, 403].includes(cause.status)) return 'Нужна помощь сотрудника: проверьте настройку установки.';
@@ -81,7 +83,7 @@
     if (storageReady) route();
     window.addEventListener('hashchange', route);
     window.addEventListener('focus', refresh);
-    return () => { catalogAbort?.abort(); loadVersion++; window.removeEventListener('hashchange', route); window.removeEventListener('focus', refresh); };
+    return () => { lifecycle.abort(); catalogAbort?.abort(); loadVersion++; window.removeEventListener('hashchange', route); window.removeEventListener('focus', refresh); };
   });
   async function saveKey(event: SubmitEvent) {
     event.preventDefault(); busy = true; error = ''; setupMessage = '';
@@ -105,12 +107,14 @@
       }
       const receipt: StartReceipt = await (await request('/api/capture/sessions', key, {
         method:'POST', headers:{ 'Content-Type':'application/json' },
+        signal: AbortSignal.any([lifecycle.signal, AbortSignal.timeout(15_000)]),
         body:JSON.stringify({ startRequestId:start.startRequestId, slotId:start.slotId }),
       })).json();
       start = { ...start, receipt };
       // If this write fails, the persisted pending key still recovers the same receipt.
       sessionStorage.setItem(startStorage, JSON.stringify(start));
     } catch (cause) {
+      if (lifecycle.signal.aborted) return;
       if (cause instanceof ApiError && [400, 404, 422].includes(cause.status)) {
         try { sessionStorage.removeItem(startStorage); start = undefined; error = message(cause); }
         catch { error = 'Не удалось обновить данные сессии. Обратитесь к сотруднику.'; }

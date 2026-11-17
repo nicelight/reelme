@@ -1,11 +1,17 @@
 <script lang="ts">
+  /** Admits decoded cards in readiness order. A failed six-second window moves
+   * the card behind current waiters; its last window starts when they are admitted,
+   * not when their animations finish. Deprecated cards stay local until reload.
+   * Polling cannot start another load for an active or deprecated id. Date/unmount
+   * cancellation and generation checks reject completions from the previous screen.
+   * Server ready state is never changed. */
   import { onMount } from 'svelte';
   import { api, ApiError } from './api';
   import type { DisplaySession, TodayDisplay } from '../../shared/display';
   import ResultsScreen from './results/ResultsScreen.svelte';
   import { ResultsQueue } from './results/state';
   import { ProgressSlots } from './results/progress';
-  import { decodeImage, preloadStage } from './results/preload';
+  import { CardLoadError, loadCardImages, preloadStage } from './results/preload';
   import './results-prototype/assets/fonts.css';
   let { onunauthorized }: { onunauthorized: () => void } = $props();
   let sessions = $state<Record<string, DisplaySession>>({});
@@ -13,6 +19,7 @@
   let stageError = $state('');
   let progress = $state<(DisplaySession | null)[]>([]);
   let issues = $state<DisplaySession[]>([]);
+  let loadStates = $state<Record<string, 'delayed' | 'deprecated'>>({});
   const publicScreen = new URLSearchParams(location.search).get('screen') === 'results';
   let resourcesReady = $state(false);
   let reduced = $state(false);
@@ -27,6 +34,7 @@
   });
   onMount(() => {
     let stopped = false;
+    const lifecycle = new AbortController();
     let initialized = false;
     let firstIds: Set<string> | undefined;
     let currentDate: string | undefined;
@@ -34,6 +42,8 @@
     let anchor = 0;
     let anchorClock = 0;
     let generation = 0;
+    let resourceLifetime = new AbortController();
+    let order = 0;
     let stageImage: HTMLImageElement | undefined;
     let stageLoading = false;
     let stageRetryAt = 0;
@@ -41,13 +51,29 @@
     let expiry: ReturnType<typeof setTimeout>;
     let wake: ReturnType<typeof setTimeout>;
     let hiddenAt: number | null = document.hidden ? performance.now() : null;
-    const decoded = new Map<string, { frame: HTMLImageElement; qr: HTMLImageElement; urls: string }>();
-    const loading = new Set<string>();
+    const decoded = new Map<string, Awaited<ReturnType<typeof loadCardImages>>>();
+    const loads = new Map<string, { state: 'loading' | 'delayed' | 'retry' | 'ready' | 'deprecated'; order: number }>();
     const media = matchMedia('(prefers-reduced-motion: reduce)');
     reduced = media.matches; queue.reduced = reduced;
     const serverNow = () => anchor + performance.now() - anchorClock;
-    const readySessions = () => (projection?.sessions ?? []).filter(item => item.card && (item.hideAt === null || item.hideAt > serverNow()))
+    const serverReadySessions = () => (projection?.sessions ?? []).filter(item => item.card && (item.hideAt === null || item.hideAt > serverNow()))
       .sort((a, b) => (a.readyAt ?? 0) - (b.readyAt ?? 0) || a.number - b.number || a.id.localeCompare(b.id));
+    const readySessions = () => serverReadySessions().filter(item => loads.get(item.id)?.state !== 'deprecated')
+      .sort((a, b) => (loads.get(a.id)?.order ?? 0) - (loads.get(b.id)?.order ?? 0));
+    function withImages(item: DisplaySession): DisplaySession {
+      const images = decoded.get(item.id);
+      return images && item.card ? { ...item, card: { ...item.card, frameUrl: images.frameUrl, qrUrl: images.qrUrl } } : item;
+    }
+    function updateProgress() {
+      const states: typeof loadStates = {};
+      for (const [id, entry] of loads) {
+        if (entry.state === 'deprecated') states[id] = 'deprecated';
+        else if (entry.state === 'delayed' || entry.state === 'retry') states[id] = 'delayed';
+      }
+      loadStates = states;
+      const failed = new Set([...loads].filter(([, entry]) => entry.state === 'deprecated').map(([id]) => id));
+      progress = headerSlots.sync([...(projection?.sessions ?? [])].sort((a, b) => a.number - b.number || a.id.localeCompare(b.id)), failed);
+    }
     function publish() {
       revision++;
       // Keep current page metadata/decoded resources even after API expiry.
@@ -65,11 +91,15 @@
     function reconcile() {
       if (stopped || !resourcesReady || !projection) return;
       const live = readySessions();
-      // A slower first result must not be overtaken by a later decoded result.
+      // Readiness order changes only when a failed window moves its card to the tail.
       let blocked = false;
+      let retry: DisplaySession | undefined;
       const available = live.filter(item => {
         if (queue.seen.has(item.id)) return decoded.has(item.id);
-        if (!decoded.has(item.id)) { blocked = true; return false; }
+        if (!decoded.has(item.id)) {
+          if (!blocked && loads.get(item.id)?.state === 'delayed') retry = item;
+          blocked = true; return false;
+        }
         return !blocked;
       });
       const now = performance.now();
@@ -77,12 +107,13 @@
         if (document.hidden) return;
         // First response is one bootstrap snapshot; do not hatch old results simply
         // because one image was slower to decode than another.
-        if (live.some(item => firstIds?.has(item.id) && !decoded.has(item.id))) return;
+        if (live.some(item => firstIds?.has(item.id) && loads.get(item.id)?.state === 'loading')) return;
         queue.bootstrap(available.filter(item => firstIds?.has(item.id)).map(item => item.id), now);
         initialized = true;
       }
-      queue.sync(available.map(item => item.id), now, !document.hidden);
+      queue.sync(available.map(item => item.id), now, !document.hidden, firstIds);
       publish();
+      if (retry) void prepare(retry, true);
     }
     function updateExpiry() {
       clearTimeout(expiry);
@@ -104,43 +135,60 @@
         }
       } finally { stageLoading = false; }
     }
-    async function prepare(item: DisplaySession) {
-      if (!item.card || loading.has(item.id)) return;
-      const urls = `${item.card.frameUrl}\n${item.card.qrUrl}`;
-      if (decoded.get(item.id)?.urls === urls) return;
-      const epoch = generation; loading.add(item.id);
+    async function prepare(item: DisplaySession, retry = false) {
+      if (!item.card) return;
+      const existing = loads.get(item.id);
+      if (retry ? existing?.state !== 'delayed' : existing !== undefined) return;
+      const entry = existing ?? { state: 'loading' as const, order: ++order };
+      if (retry) entry.state = 'retry';
+      loads.set(item.id, entry);
+      const epoch = generation;
+      const signal = AbortSignal.any([lifecycle.signal, resourceLifetime.signal]);
       try {
-        const [frame, qr] = await Promise.all([decodeImage(item.card.frameUrl), decodeImage(item.card.qrUrl)]);
-        if (stopped || epoch !== generation) return;
-        decoded.set(item.id, { frame, qr, urls });
-        sessions = { ...sessions, [item.id]: item };
+        const images = await loadCardImages(item.card, signal);
+        if (stopped || epoch !== generation || signal.aborted || loads.get(item.id) !== entry) return;
+        entry.state = 'ready'; decoded.set(item.id, images);
+        const current = projection?.sessions.find(value => value.id === item.id) ?? item;
+        sessions = { ...sessions, [item.id]: withImages(current) };
+        updateProgress();
         reconcile();
-      } catch {
-        if (!stopped && epoch === generation) error = 'Подготавливаем изображения. Повторяем загрузку…';
-      } finally { if (epoch === generation) loading.delete(item.id); }
+      } catch (cause) {
+        if (stopped || epoch !== generation || signal.aborted || loads.get(item.id) !== entry) return;
+        if (!serverReadySessions().some(value => value.id === item.id)) return;
+        if (!retry) { entry.state = 'delayed'; entry.order = ++order; }
+        else {
+          entry.state = 'deprecated';
+          void api(`/display/${encodeURIComponent(item.id)}/load-failure`, {
+            method: 'POST', signal: AbortSignal.any([lifecycle.signal, AbortSignal.timeout(15_000)]),
+            body: JSON.stringify({ attempts: 4, reason: cause instanceof CardLoadError ? cause.reason : 'image' }),
+          }).catch(() => {});
+        }
+        updateProgress(); reconcile();
+      }
     }
     async function refresh() {
       const started = performance.now();
       try {
-        const next = await api<TodayDisplay>('/display/today');
+        const next = await api<TodayDisplay>('/display/today', { signal: AbortSignal.any([lifecycle.signal, AbortSignal.timeout(15_000)]) });
         if (stopped) return;
         if (currentDate !== undefined && currentDate !== next.date) {
-          generation++; headerSlots = new ProgressSlots(); queue = new ResultsQueue(); queue.reduced = reduced; decoded.clear(); loading.clear(); sessions = {};
+          resourceLifetime.abort(); resourceLifetime = new AbortController();
+          generation++; headerSlots = new ProgressSlots(); queue = new ResultsQueue(); queue.reduced = reduced; decoded.clear(); loads.clear(); loadStates = {}; sessions = {}; order = 0;
           initialized = false; firstIds = undefined;
         }
         currentDate = next.date; projection = next; anchor = next.serverNow; anchorClock = started;
         queue.duration = next.pageDurationSeconds * 1000;
-        firstIds ??= new Set(readySessions().map(item => item.id));
+        firstIds ??= new Set(serverReadySessions().map(item => item.id));
         error = '';
         issues = next.sessions.filter(item => item.error || item.simulation && item.simulation.status !== 'pending');
-        progress = headerSlots.sync([...next.sessions].sort((a, b) => a.number - b.number || a.id.localeCompare(b.id)));
-        const updated = { ...sessions }; next.sessions.forEach(item => { updated[item.id] = item; }); sessions = updated;
-        readySessions().forEach(item => void prepare(item));
+        updateProgress();
+        const updated = { ...sessions }; next.sessions.forEach(item => { updated[item.id] = withImages(item); }); sessions = updated;
+        serverReadySessions().forEach(item => void prepare(item));
         reconcile(); updateExpiry();
       } catch (cause) {
         if (stopped) return;
         if (cause instanceof ApiError && [401, 403].includes(cause.status)) {
-          stopped = true; clearTimeout(wake); clearTimeout(expiry); sessions = {}; onunauthorized(); return;
+          stopped = true; lifecycle.abort(); clearTimeout(wake); clearTimeout(expiry); sessions = {}; onunauthorized(); return;
         }
         error = 'Нет связи с сервером. Повторяем подключение…';
       } finally {
@@ -165,12 +213,13 @@
     void prepareStage();
     void refresh();
     return () => {
+      lifecycle.abort();
       stopped = true; generation++; clearTimeout(poll); clearTimeout(expiry); clearTimeout(wake); decoded.clear(); stageImage = undefined;
       media.removeEventListener('change', preference); document.removeEventListener('visibilitychange', visibility);
     };
   });
 </script>
-<ResultsScreen {...scene} {sessions} {reduced} {resourcesReady} error={stageError || error} {progress} />
+<ResultsScreen {...scene} {sessions} {reduced} {resourcesReady} error={stageError || error} {progress} {loadStates} />
 
 {#if !publicScreen && issues.length}
   <section class="operator-issues" aria-label="Сообщения обработки">

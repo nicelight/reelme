@@ -1,8 +1,6 @@
-/** Module contract: composes Fastify, Access, Scenarios and Sessions with private storage.
- * Public assets and scoped provider capabilities are served; capture-loader reads the current manifest
- * and imports cloud assets without changing localhost origin. Stable prompt text assets
- * revalidate on every reuse. Source: docs/slot-setup/matrix.md. No device APIs here. Source: docs/slot-setup/matrix.md.
- */
+/** Composes HTTP, private storage and session workers. Startup restores unfinished
+ * publication before workers start; publication uses the configured public origin.
+ * Capture-loader serves the current bundle without changing the local camera origin. */
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
@@ -58,7 +56,7 @@ export async function createApp(config: Config, options: { now?: () => number; l
   app.addHook('onReady', async () => { await cleanup.runOnce(); cleanup.start(); });
   app.addHook('onClose', async () => { await cleanup.stop(); });
   registerReceive(app, db, config.dataDir, config.clientDir, options.now ?? Date.now);
-  const publish = (id: string) => publishReady(db, config.dataDir, id, options.now);
+  const publish = (id: string) => publishReady(db, config.dataDir, id, config.origin, options.now);
   app.addHook('onReady', async () => {
     // A serving client entrypoint is part of ready, also when fal is disabled.
     await readFile(join(config.clientDir, 'index.html'));

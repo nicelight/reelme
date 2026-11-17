@@ -22,3 +22,17 @@ test('missing or terminal entries free their position, other slots never compact
 test('already-ready bootstrap records never occupy preparing header slots', () => {
   const state = new ProgressSlots(); assert.deepEqual(state.sync([item(1,true),item(2)]).map(item => item?.number ?? null), [2,null,null,null,null,null,null,null]);
 });
+
+test('local failures enter once, retain their number and do not requeue after terminal slot reuse', () => {
+  const state = new ProgressSlots(); const failed = new Set(['1']);
+  assert.equal(state.sync([item(1, true)], failed)[0]?.number, 1);
+  assert.equal(state.sync([item(1, true), item(2)], failed)[0]?.number, 2);
+  assert.deepEqual(state.sync([item(1, true), item(2)], failed).filter(Boolean).map(value => value!.number), [2]);
+  const many = Array.from({ length: 10 }, (_, index) => item(index + 1, true));
+  const overflow = new ProgressSlots(); const failures = new Set(many.map(value => value.id));
+  assert.equal(overflow.sync(many, failures).filter(Boolean).length, 8);
+  const next = overflow.sync(many, failures).filter(Boolean);
+  assert.equal(next.some(value => value!.number === 9), true);
+  assert.equal(next.some(value => value!.number === 10), true);
+  assert.equal(new Set(next.map(value => value!.id)).size, 8);
+});
