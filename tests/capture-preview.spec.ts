@@ -7,10 +7,14 @@ import sharp from 'sharp';
 const test = base.extend<{ camera: {
   origin: string; shutters: number; previews: number; holdPreview: boolean; holdPhoto: boolean;
   previewWaiters: Set<ServerResponse>; photoWaiters: Set<ServerResponse>; releasePhoto: () => void;
+  guides: Map<number, ServerResponse>; releaseGuide: (number: number) => void;
 } }>({
   camera: async ({}, use) => {
     const jpeg = await sharp({ create: { width: 640, height: 480, channels: 3, background: '#aa88cc' } }).jpeg().toBuffer();
     const state = { origin: '', shutters: 0, previews: 0, holdPreview: false, holdPhoto: true,
+      guides: new Map<number, ServerResponse>(), releaseGuide(number: number) {
+        this.guides.get(number)?.end(jpeg); this.guides.delete(number);
+      },
       previewWaiters: new Set<ServerResponse>(), photoWaiters: new Set<ServerResponse>(), releasePhoto() {
         this.holdPhoto = false;
         for (const response of this.photoWaiters) response.end(jpeg);
@@ -22,9 +26,13 @@ const test = base.extend<{ camera: {
           const url = new URL(request.url!, 'http://fixture');
           const hold = (set: Set<ServerResponse>) => { set.add(response); response.once('close', () => set.delete(response)); };
           if (url.pathname === '/preview-fixture') {
-            const receipt = { sessionId: 'preview-fixture', date: '2026-11-17', posePlan: [0, 1, 2].map(index => ({ index, participant: 1, key: 'front', instruction: 'Смотрите в объектив' })) };
+            const receipt = { sessionId: 'preview-fixture', date: '2026-11-17', posePlan: [0, 1, 2].map(index => ({ index, participant: 1, key: 'front', instruction: 'Смотрите в объектив', ...(url.searchParams.has('guides') ? { guideNumber: index + 1, guideMediaId: `guide-${index + 1}` } : {}) })) };
             response.setHeader('Content-Type', 'text/html');
             response.end(`<div id="app"></div><script type="module">import { mount, unmount } from '/node_modules/.vite/deps/svelte.js'; import Capture from '/src/client/capture/Capture.svelte'; const app = mount(Capture, { target: document.querySelector('#app'), props: { receipt: ${JSON.stringify(receipt)}, installationKey: 'fixture', oncomplete: () => unmount(app), onscenario: () => unmount(app) } }); window.unmountCapture = () => unmount(app);</script>`);
+          } else if (/\/guides\/\d$/.test(url.pathname)) {
+            response.setHeader('Content-Type', 'image/jpeg');
+            const number = Number(url.pathname.split('/').at(-1)); state.guides.set(number, response);
+            response.once('close', () => { if (state.guides.get(number) === response) state.guides.delete(number); });
           } else if (url.pathname === '/liveview.html') response.end('ok');
           else if (url.pathname === '/liveview.jpg') {
             state.previews++; response.setHeader('Content-Type', 'image/jpeg');
@@ -41,11 +49,11 @@ const test = base.extend<{ camera: {
       },
     }] });
     try { await server.listen(); state.origin = 'http://127.0.0.1:4213'; await use(state); }
-    finally { for (const response of [...state.previewWaiters, ...state.photoWaiters]) response.destroy(); await server.close(); }
+    finally { for (const response of [...state.previewWaiters, ...state.photoWaiters, ...state.guides.values()]) response.destroy(); await server.close(); }
   },
 });
 
-async function open(page: Page, origin: string) {
+async function open(page: Page, origin: string, query = '') {
   await page.clock.install(); await page.clock.pauseAt(new Date(Date.now() + 100));
   await page.addInitScript(() => {
     const fetcher = window.fetch;
@@ -57,7 +65,7 @@ async function open(page: Page, origin: string) {
       return fetcher(input, init);
     };
   });
-  await page.goto(origin + '/preview-fixture');
+  await page.goto(origin + '/preview-fixture' + query);
   await expect(page.locator('.live-preview')).toBeVisible();
 }
 
@@ -161,4 +169,104 @@ test('quick Pause→Play during confirmation waits only the remaining photo hold
   await page.clock.runFor(1);
   await expect(page.locator('.countdown strong')).toHaveText(['3', '3']);
   await expect(page.locator('.captured-frame')).toHaveCount(0);
+});
+
+test('immediate and repeated pose guides always fade for one second without a delay', async ({ page, camera }) => {
+  const jpeg = await sharp({ create: { width: 32, height: 24, channels: 3, background: '#aa88cc' } }).jpeg().toBuffer();
+  await page.addInitScript(base64 => {
+    // Return the same cached bytes immediately, with real native image decoding.
+    const blob = new Blob([Uint8Array.from(atob(base64), value => value.charCodeAt(0))], { type: 'image/jpeg' });
+    const fetcher = window.fetch;
+    window.fetch = (input, init) => /\/guides\/\d$/.test(String(input))
+      ? Promise.resolve(new Response(blob)) : fetcher(input, init);
+  }, jpeg.toString('base64'));
+  await open(page, camera.origin, '?guides'); camera.holdPhoto = false;
+  const image = page.locator('.pose-picture img');
+  const verifyFade = async () => {
+    await expect(image).toHaveCount(1);
+    const result = await image.evaluate(node => {
+      const transition = node.getAnimations().find(value => (value as CSSTransition).transitionProperty === 'opacity');
+      if (!transition) throw new Error('Immediate guide has no opacity transition');
+      transition.pause(); transition.currentTime = 0;
+      const start = getComputedStyle(node).opacity;
+      transition.currentTime = 500; const middle = Number(getComputedStyle(node).opacity);
+      const { duration, delay } = transition.effect!.getTiming();
+      transition.finish();
+      return { start, middle, duration, delay, end: getComputedStyle(node).opacity };
+    });
+    expect(result).toMatchObject({ start: '0', duration: 1000, delay: 0, end: '1' });
+    expect(result.middle).toBeGreaterThan(0); expect(result.middle).toBeLessThan(1);
+  };
+  await verifyFade();
+  const first = await image.getAttribute('src');
+  await page.getByRole('button', { name: 'Начать съёмку', exact: true }).click();
+  await page.clock.runFor(5000); await expect(page.locator('.captured-frame')).toBeVisible();
+  await page.clock.runFor(1000); await expect(image).not.toHaveAttribute('src', first!);
+  await verifyFade();
+  const second = await image.getAttribute('src');
+  await page.getByRole('button', { name: 'Переснять предыдущий кадр', exact: true }).click();
+  await expect(page.locator('.pose-guide')).toHaveAttribute('aria-label', 'Образец позы 1');
+  await expect(image).not.toHaveAttribute('src', second!);
+  await verifyFade();
+});
+
+test('pose guide keeps a transparent frame, reveals after decode and ignores an old decode', async ({ page, camera }) => {
+  // Hold native decode completions independently of network arrival.
+  await page.addInitScript(() => {
+    const decode = HTMLImageElement.prototype.decode;
+    (window as any).guideDecodes = [];
+    HTMLImageElement.prototype.decode = async function () {
+      await decode.call(this);
+      await new Promise<void>(resolve => (window as any).guideDecodes.push({ resolve, src: this.src }));
+    };
+  });
+  await open(page, camera.origin, '?guides'); camera.holdPhoto = false;
+  const frame = page.locator('.pose-picture'); const image = frame.locator('img');
+  await expect.poll(() => camera.guides.has(1)).toBe(true);
+  const geometry = await frame.boundingBox();
+  await expect(image).toHaveCount(0);
+  expect(await frame.locator('.media').evaluate(node => getComputedStyle(node).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
+  expect(await page.locator('.pose-panel').evaluate(node => getComputedStyle(node).backgroundImage)).toBe('none');
+  await page.getByRole('button', { name: 'Начать съёмку', exact: true }).click();
+  await page.clock.runFor(1000); await expect(page.locator('.countdown strong')).toHaveText(['4', '4']);
+  camera.releaseGuide(1);
+  await expect.poll(() => page.evaluate(() => (window as any).guideDecodes.length)).toBe(1);
+  await expect(image).toHaveCount(0); // Fetch alone must not publish undecoded media.
+  await page.evaluate(() => (window as any).guideDecodes[0].resolve());
+  await expect(image).toHaveCount(1);
+  const transition = await image.evaluate(node => {
+    const animation = node.getAnimations().find(value => (value as CSSTransition).transitionProperty === 'opacity');
+    if (!animation) throw new Error('No actual opacity transition');
+    animation.pause(); animation.currentTime = 0;
+    const start = getComputedStyle(node).opacity;
+    animation.currentTime = 500; const middle = getComputedStyle(node).opacity;
+    const duration = animation.effect!.getTiming().duration;
+    animation.finish(); return { start, middle, duration, end: getComputedStyle(node).opacity };
+  });
+  expect(transition.start).toBe('0'); expect(Number(transition.middle)).toBeGreaterThan(0);
+  expect(Number(transition.middle)).toBeLessThan(1); expect(transition.duration).toBe(1000); expect(transition.end).toBe('1');
+  expect(await frame.boundingBox()).toEqual(geometry);
+  await page.clock.runFor(4000); await expect(page.locator('.captured-frame')).toBeVisible();
+  await page.clock.runFor(1000); await expect.poll(() => camera.guides.has(2)).toBe(true);
+  await expect(image).toHaveCount(0); expect(await frame.boundingBox()).toEqual(geometry);
+  camera.releaseGuide(2);
+  await expect.poll(() => page.evaluate(() => (window as any).guideDecodes.length)).toBe(2);
+  await page.clock.runFor(5000); await expect(page.locator('.captured-frame')).toBeVisible();
+  await page.clock.runFor(1000); await expect.poll(() => camera.guides.has(3)).toBe(true);
+  camera.releaseGuide(3);
+  await expect.poll(() => page.evaluate(() => (window as any).guideDecodes.length)).toBe(3);
+  await page.evaluate(() => (window as any).guideDecodes[2].resolve());
+  await expect(image).toHaveCount(1); const latest = await image.getAttribute('src');
+  await page.evaluate(() => (window as any).guideDecodes[1].resolve());
+  await expect(image).toHaveAttribute('src', latest!);
+  await page.emulateMedia({ reducedMotion: 'reduce' }); await page.reload();
+  await expect.poll(() => camera.guides.has(1)).toBe(true); camera.releaseGuide(1);
+  await expect.poll(() => page.evaluate(() => (window as any).guideDecodes.length)).toBe(1);
+  await page.evaluate(() => (window as any).guideDecodes[0].resolve());
+  await expect(image).toHaveCount(1);
+  expect(await image.evaluate(node => ({ opacity: getComputedStyle(node).opacity, transitions: node.getAnimations().length }))).toEqual({ opacity: '1', transitions: 0 });
+  await page.route('**/guides/1', route => route.fulfill({ status: 500 })); await page.reload();
+  await expect(frame.getByText('Изображение не загрузилось.')).toBeVisible();
+  await expect(frame.getByRole('button', { name: 'Повторить загрузку' })).toBeEnabled();
+  expect(await frame.boundingBox()).toEqual(geometry);
 });

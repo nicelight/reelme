@@ -8,7 +8,7 @@
 </script>
 {#if pose.guideNumber}
   <div class="pose-guide" aria-label={`Образец позы ${pose.guideNumber}`}>
-    {#if pose.guideMediaId}<ProtectedMedia mediaId={pose.guideMediaId} {installationKey} path={`/api/capture/sessions/${sessionId}/guides/${pose.guideNumber}`} alt={`Образец позы: ${pose.instruction}`} contain />
+    {#if pose.guideMediaId}<ProtectedMedia mediaId={pose.guideMediaId} {installationKey} path={`/api/capture/sessions/${sessionId}/guides/${pose.guideNumber}`} alt={`Образец позы: ${pose.instruction}`} contain reveal />
     {:else}<div class="guide-placeholder"><span>Образец №{pose.guideNumber} ещё не загружен</span><small>Следуйте инструкции</small></div>{/if}
   </div>
 {:else}
