@@ -32,8 +32,13 @@ export const test = base.extend<{ app: App; capturePort: number; runGeneration: 
     });
     async function stop() {
       if (child && child.exitCode === null) {
-        const stopped = new Promise<void>(resolve => child!.once('exit', () => resolve()));
-        child.kill('SIGTERM'); await stopped;
+        const runningChild = child;
+        const stopped = new Promise<void>(resolve => runningChild.once('exit', () => resolve()));
+        // This isolated fixture must terminate even when graceful HTTP shutdown
+        // waits on a browser connection. Never applies to a production process.
+        const deadline = setTimeout(() => runningChild.kill('SIGKILL'), 5000);
+        runningChild.kill('SIGTERM');
+        try { await stopped; } finally { clearTimeout(deadline); }
       }
     }
     async function start() {
@@ -66,7 +71,7 @@ export const test = base.extend<{ app: App; capturePort: number; runGeneration: 
       await use({ templateVideosDir, prepareTemplate, origin, dataDir: dir, captureOrigin, password, image, jpeg, video, installationKey, sessionCount, photos, restart: async () => { await stop(); await start(); } });
     } finally {
       await stop();
-      if (capture.listening) await new Promise<void>(resolve => capture.close(() => resolve()));
+      if (capture.listening) await new Promise<void>(resolve => { capture.close(() => resolve()); capture.closeAllConnections(); });
       await rm(dir, { recursive: true, force: true });
     }
   }, { scope: 'test' }],

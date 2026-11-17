@@ -1,0 +1,45 @@
+{
+  "date": "2026-11-17",
+  "check": {
+    "result": "PASS",
+    "svelteErrors": 0,
+    "svelteWarnings": 0
+  },
+  "build": "PASS",
+  "browserCasesPassed": 6,
+  "singleFullSuitePass": false,
+  "runs": [
+    {
+      "scope": "initial full requested suite",
+      "results": {
+        "camera": "assertions completed; fixture teardown timeout",
+        "controls": "PASS (8.9s)",
+        "reloadLoss": "PASS (6.0s)",
+        "productionView": "assertions completed; interrupted teardown",
+        "catalog": "not run",
+        "transfer": "not run"
+      }
+    },
+    {
+      "scope": "after bounded fixture cleanup",
+      "results": {
+        "camera": "PASS (34.0s)",
+        "reloadLoss": "PASS (6.2s)",
+        "productionView": "PASS (8.3s)",
+        "catalog": "PASS (10.0s)",
+        "transfer": "interrupted while waiting for missing main landmark"
+      }
+    },
+    {
+      "scope": "after semantic main fix",
+      "results": {
+        "check": "PASS",
+        "build": "PASS",
+        "transfer": "PASS (35.6s)"
+      }
+    }
+  ],
+  "hardware": "Not tested; controlled camera HTTP, real local application/backend",
+  "productionAssets": "No prototype/demo imports",
+  "report": ".tasks/session-production/verification.md"
+}

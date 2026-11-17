@@ -1,0 +1,119 @@
+{
+  "checks": [
+    {
+      "name": "five cards one center",
+      "pass": true
+    },
+    {
+      "name": "native play control works",
+      "pass": false,
+      "detail": {
+        "paused": true,
+        "time": 0.146092,
+        "ready": 4
+      }
+    },
+    {
+      "name": "side selection enters center",
+      "pass": true
+    },
+    {
+      "name": "previous video paused",
+      "pass": true
+    },
+    {
+      "name": "image alternative visible",
+      "pass": true
+    },
+    {
+      "name": "chosen demo state",
+      "pass": true
+    },
+    {
+      "name": "focus moves to back",
+      "pass": true
+    },
+    {
+      "name": "back retains selection",
+      "pass": true
+    },
+    {
+      "name": "focus restored to CTA",
+      "pass": true
+    },
+    {
+      "name": "arrow keyboard selects next",
+      "pass": true
+    },
+    {
+      "name": "keyboard focus visible",
+      "pass": true
+    },
+    {
+      "name": "rapid clicks settle valid single center",
+      "pass": true,
+      "detail": "Путешествие во времени"
+    },
+    {
+      "name": "1280 no document overflow",
+      "pass": false,
+      "detail": {
+        "width": 1280,
+        "height": 734,
+        "innerWidth": 1280,
+        "innerHeight": 720
+      }
+    },
+    {
+      "name": "reduced no spatial transition",
+      "pass": true
+    },
+    {
+      "name": "small no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "no camera calls",
+      "pass": true
+    },
+    {
+      "name": "no backend requests",
+      "pass": true
+    },
+    {
+      "name": "no browser/network errors",
+      "pass": true,
+      "detail": []
+    }
+  ],
+  "requests": [
+    "http://localhost:5173/src/client/capture/story-prototype/index.html",
+    "http://localhost:5173/@vite/client",
+    "http://localhost:5173/src/client/capture/story-prototype/main.ts",
+    "http://localhost:5173/node_modules/.vite/deps/svelte.js?v=e5baf8ef",
+    "http://localhost:5173/src/client/capture/story-prototype/StoryPrototype.svelte",
+    "http://localhost:5173/src/client/capture/story-prototype/assets/fonts.css",
+    "http://localhost:5173/node_modules/vite/dist/client/env.mjs",
+    "http://localhost:5173/node_modules/.vite/deps/runtime-Do_u7Ssq.js?v=e8e2f960",
+    "http://localhost:5173/node_modules/.vite/deps/index-client-DvavOWo3.js?v=e8e2f960",
+    "http://localhost:5173/node_modules/.vite/deps/legacy-client-B4NOc9it.js?v=e8e2f960",
+    "http://localhost:5173/node_modules/.vite/deps/svelte_internal_disclose-version.js?v=e5baf8ef",
+    "http://localhost:5173/node_modules/.vite/deps/svelte_internal_client.js?v=e5baf8ef",
+    "http://localhost:5173/src/client/capture/story-prototype/assets/portraits.png?import",
+    "http://localhost:5173/docs/video%20templates/1794213414058-yjz13u263xc.mp4?import&url",
+    "http://localhost:5173/src/client/capture/story-prototype/StoryPrototype.svelte?svelte&type=style&lang.css",
+    "http://localhost:5173/node_modules/.vite/deps/warnings-eg1vThES.js?v=e8e2f960",
+    "http://localhost:5173/node_modules/.vite/deps/flags-qfBdqUK7.js?v=e8e2f960",
+    "http://localhost:5173/node_modules/.vite/deps/events-jRM3pnpv.js?v=e8e2f960",
+    "http://localhost:5173/node_modules/.vite/deps/create-subscriber-5X-uY-QT.js?v=e8e2f960",
+    "http://localhost:5173/node_modules/.vite/deps/svelte_n_clsx.js?v=e5baf8ef",
+    "http://localhost:5173/node_modules/.vite/deps/shared-CnQOmpvc.js?v=e8e2f960",
+    "http://localhost:5173/src/client/capture/story-prototype/assets/manrope-0.woff2",
+    "http://localhost:5173/src/client/capture/story-prototype/assets/portraits.png",
+    "http://localhost:5173/src/client/capture/story-prototype/assets/manrope-3.woff2",
+    "http://localhost:5173/src/client/capture/story-prototype/assets/manrope-4.woff2",
+    "http://localhost:5173/src/client/capture/story-prototype/assets/manrope-1.woff2",
+    "http://localhost:5173/docs/video%20templates/1794213414058-yjz13u263xc.mp4"
+  ],
+  "errors": []
+}

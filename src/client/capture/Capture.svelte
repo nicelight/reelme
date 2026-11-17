@@ -6,12 +6,14 @@
   import { onMount } from 'svelte';
   import type { StartReceipt } from '../../shared/capture';
   import { DigiCamControl, pause } from './camera';
-  import PoseGuide from './PoseGuide.svelte';
+  import PhotoSessionView, { type CapturePhase, type PhotoThumbnail } from './session/PhotoSessionView.svelte';
   import type { CapturedPhoto } from './photos';
-  let { receipt, installationKey, oncomplete }: { receipt: StartReceipt; installationKey: string; oncomplete: (photos: CapturedPhoto[]) => void } = $props();
+  let { receipt, installationKey, oncomplete, onscenario }: { receipt: StartReceipt; installationKey: string; oncomplete: (photos: CapturedPhoto[]) => void; onscenario: () => void } = $props();
   let photos = $state<CapturedPhoto[]>([]);
   let position = $state(0);
-  let phase = $state<'ready' | 'countdown' | 'camera' | 'confirmation' | 'paused' | 'error' | 'review' | 'complete'>('ready');
+  let phase = $state<CapturePhase>('ready');
+  let thumbnails = $state<PhotoThumbnail[]>([]);
+  let pauseAfterCapture = $state(false);
   let countdown = $state(3);
   let error = $state('');
   let pendingCapture = $state(false);
@@ -33,7 +35,8 @@
     if (preview) URL.revokeObjectURL(preview);
     preview = '';
   }
-  function cancelSequence() { sequence?.abort(); sequence = undefined; running = false; }
+  function cancelSequence() { sequence?.abort(); sequence = undefined; running = false; pauseAfterCapture = false; }
+  function clearThumbnails() { thumbnails.forEach(photo => URL.revokeObjectURL(photo.url)); thumbnails = []; }
   onMount(() => {
     void (async () => {
       try {
@@ -48,7 +51,7 @@
         }
       } catch { if (!previewLife.signal.aborted) stopPreview(); }
     })();
-    return () => { cancelSequence(); lifecycle.abort(); stopPreview(); clearConfirmed(); void audio?.close(); };
+    return () => { cancelSequence(); lifecycle.abort(); stopPreview(); clearConfirmed(); clearThumbnails(); void audio?.close(); };
   });
   function beep() {
     if (!audio || audio.state !== 'running') return;
@@ -67,6 +70,8 @@
     return true;
   }
   function pauseCapture() {
+    // Pausing an exposure stops only the next step; the pending JPEG must survive.
+    if (phase === 'camera') { pauseAfterCapture = true; return; }
     if (cameraLocked || !['countdown', 'confirmation'].includes(phase)) return;
     const completed = phase === 'confirmation';
     cancelSequence();
@@ -74,13 +79,19 @@
   }
   function restart() {
     if (cameraLocked || camera.hasPendingCapture || phase === 'complete') return;
-    cancelSequence(); clearConfirmed(); photos = []; position = 0; error = ''; phase = 'ready';
+    cancelSequence(); clearConfirmed(); clearThumbnails(); photos = []; position = 0; error = ''; phase = 'ready';
+    void run();
   }
   function retake() {
     if (cameraLocked || camera.hasPendingCapture || !photos.length || phase === 'complete') return;
-    cancelSequence(); clearConfirmed(); position = photos.at(-1)!.poseIndex; error = ''; phase = 'ready';
+    cancelSequence(); clearConfirmed(); position = photos.at(-1)!.poseIndex;
+    photos = photos.filter(photo => photo.poseIndex !== position);
+    thumbnails.filter(photo => photo.poseIndex === position).forEach(photo => URL.revokeObjectURL(photo.url));
+    thumbnails = thumbnails.filter(photo => photo.poseIndex !== position);
+    error = ''; phase = 'paused';
   }
   async function run() {
+    if (phase === 'camera' && pauseAfterCapture) { pauseAfterCapture = false; return; }
     if (running || !['ready', 'paused', 'error'].includes(phase)) return;
     running = true; error = '';
     const current = sequence = new AbortController();
@@ -98,7 +109,11 @@
         const blob = await camera.capture(receipt.sessionId, target, liveView, lifecycle.signal);
         lifecycle.signal.throwIfAborted(); current.signal.throwIfAborted(); pendingCapture = false;
         photos = [...photos.filter(photo => photo.poseIndex !== target), { sessionId: receipt.sessionId, poseIndex: target, blob }].sort((a, b) => a.poseIndex - b.poseIndex);
-        confirmed = URL.createObjectURL(blob); phase = 'confirmation';
+        confirmed = URL.createObjectURL(blob);
+        thumbnails.filter(photo => photo.poseIndex === target).forEach(photo => URL.revokeObjectURL(photo.url));
+        thumbnails = [...thumbnails.filter(photo => photo.poseIndex !== target), { poseIndex: target, url: URL.createObjectURL(blob) }].sort((a, b) => a.poseIndex - b.poseIndex);
+        phase = 'confirmation';
+        if (pauseAfterCapture) { pauseAfterCapture = false; advance(true); return; }
         await pause(1500, current.signal);
         if (!advance()) return;
       }
@@ -114,38 +129,6 @@
     cancelSequence(); phase = 'complete'; stopPreview(); oncomplete([...photos]);
   }
 </script>
-<section class="capture-layout" aria-label="Фотосессия">
-  <div class="viewfinder">
-    {#if confirmed}<img class="captured-frame" src={confirmed} alt="Снятый кадр" />
-    {:else if preview}<img class="live-preview" src={preview} alt="Зеркальное превью камеры" onerror={stopPreview} />
-    {:else}<div class="preview-fallback" class:counting={phase === 'countdown'}><span>{previewEnabled ? 'Подключаем превью…' : 'Съёмка без превью'}</span><p>Повторите образец позы</p></div>{/if}
-    {#if phase === 'countdown'}<div class="countdown" role="status"><strong>{countdown}</strong><span>Смотри в объектив</span></div>
-    {:else if phase === 'camera'}<div class="capture-status" role="status">Получаем снимок…</div>
-    {:else if phase === 'confirmation'}<div class="capture-status" role="status">Кадр снят ✓</div>
-    {:else if phase === 'review'}<div class="capture-status" role="status">Все кадры сняты. Проверьте последний снимок.</div>{/if}
-  </div>
-  <aside class="pose-panel">
-    <p class="eyebrow">ФОТО {pose.index + 1} ИЗ {receipt.posePlan.length}</p>
-    {#if pose.participant}<p class="participant-label">{pose.participant === 'group' ? 'Группа' : `Человек ${pose.participant}`}</p>{/if}
-    <h1>{pose.instruction}</h1><PoseGuide {pose} sessionId={receipt.sessionId} {installationKey} />
-    <div class="capture-controls">
-      {#if phase === 'ready'}<button class="primary" onclick={run}>{photos.length === 0 ? 'Начать съёмку' : 'Продолжить'}</button>{/if}
-      {#if phase === 'paused'}<p role="status">Съёмка на паузе</p><button class="primary" onclick={run}>Продолжить</button>{/if}
-      {#if phase === 'ready' && pose.participant === 2}<p class="muted">Подготовьте второго человека и продолжите съёмку.</p>{/if}
-      {#if phase === 'countdown' || phase === 'confirmation'}<button onclick={pauseCapture}>Пауза</button>{/if}
-      {#if phase === 'error'}<div class="error" role="alert"><p>{error}</p>{#if pendingCapture}<p>Ожидается текущий JPEG. Новый спуск и пересъёмки пока недоступны.</p>{/if}<button class="primary" onclick={run}>Повторить</button></div>{/if}
-      <button onclick={restart} disabled={cameraLocked || phase === 'complete'}>Restart фотосессия</button>
-      <button onclick={retake} disabled={cameraLocked || !photos.length || phase === 'complete'}>Перефоткать последнее</button>
-      {#if phase === 'review'}<button class="primary" onclick={finish}>Завершить фотосессию</button>{/if}
-    </div>
-    {#if previewEnabled}<button class="preview-toggle" onclick={stopPreview}>Продолжить без превью</button>{/if}
-    <p class="capture-progress" aria-live="polite">Снято: {photos.length} из {receipt.posePlan.length}</p>
-  </aside>
-</section>
-<style>
-  .preview-fallback.counting > * { visibility:hidden; }
-  .capture-controls { display:grid; gap:10px; margin-top:20px; }
-  .capture-controls button { width:100%; }
-  .participant-label { margin-bottom:10px; font-weight:650; color:var(--accent); }
-  @media(max-width:899px) { .pose-panel { display:grid; grid-template-columns:minmax(0,1fr) minmax(100px,150px); gap:10px; } .pose-panel .eyebrow,.participant-label,.capture-controls,.capture-progress,.preview-toggle { grid-column:1/-1; } .pose-panel h1 { font-size:24px; } }
-</style>
+<PhotoSessionView {receipt} {installationKey} {position} {phase} {countdown} {preview} {previewEnabled} {confirmed} {thumbnails}
+  {error} {pendingCapture} {cameraLocked} {pauseAfterCapture} onrun={() => void run()} onpause={pauseCapture}
+  onretake={retake} onrestart={restart} onfinish={finish} {onscenario} onstoppreview={stopPreview}/>

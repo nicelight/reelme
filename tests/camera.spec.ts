@@ -71,15 +71,15 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
     const originalURL = URL.createObjectURL;
     URL.createObjectURL = function(blob: Blob | MediaSource) { const url = originalURL.call(URL, blob); if (blob instanceof Blob) blobs.set(url, blob); return url; };
     new MutationObserver(() => {
-      const countdown = document.querySelector('.countdown strong')?.textContent;
+      const countdown = document.querySelector('.live .countdown strong')?.textContent;
       if (countdown && observations.countdowns.at(-1) !== countdown) observations.countdowns.push(countdown);
-      const pose = document.querySelector('.pose-panel h1')?.textContent;
+      const pose = document.querySelector('.pose-instruction')?.textContent;
       if (pose && observations.poses.at(-1) !== pose) observations.poses.push(pose);
       const image = document.querySelector<HTMLImageElement>('.captured-frame');
       if (image && !seen.has(image.src)) {
         seen.add(image.src);
         const transform = getComputedStyle(image).transform;
-        const step = document.querySelector('.pose-panel .eyebrow')?.textContent || '';
+        const step = document.querySelector('.progress strong')?.textContent || '';
         void blobs.get(image.src)!.arrayBuffer().then(buffer => observations.frames.push({ bytes: [...new Uint8Array(buffer)], transform, step }));
       }
     }).observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
@@ -90,8 +90,8 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
   await page.getByRole('button', { name: 'Проверить и сохранить' }).click();
   await expect(page.getByRole('status')).toContainText('Ключ проверен и сохранён');
   await page.getByRole('link', { name: 'Открыть каталог' }).click();
-  await page.getByRole('link', { name: 'Выбрать сюжет: Один портрет Recast', exact: true }).click();
-  await page.getByRole('button', { name: 'Мне нравится' }).click();
+  await page.getByRole('button', { name: 'Сюжет 1: Один портрет Recast', exact: true }).click();
+  await page.getByRole('button', { name: 'Выбрать этот сюжет' }).click();
   await expect(page.locator('.live-preview')).toBeVisible();
   await expect.poll(() => page.locator('.live-preview').evaluate(image => getComputedStyle(image).transform)).toBe('matrix(-1, 0, 0, 1, 0, 0)');
   const firstReceipt = await page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!).receipt);
@@ -102,9 +102,9 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
   previewFails = true;
   await expect(page.getByText('Съёмка без превью', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Начать съёмку' }).click();
-  await expect(page.locator('.countdown strong')).toHaveText('3');
-  await expect(page.locator('.countdown strong')).toHaveText('2');
-  await expect(page.locator('.countdown strong')).toHaveText('1');
+  await expect(page.locator('.live .countdown strong')).toHaveText('3');
+  await expect(page.locator('.live .countdown strong')).toHaveText('2');
+  await expect(page.locator('.live .countdown strong')).toHaveText('1');
   await expect(page.getByText('Кадр снят ✓')).toBeVisible();
   await page.screenshot({ path: `${artifacts}/camera-original.png`, fullPage: true });
   await page.getByRole('button', { name: 'Завершить фотосессию' }).click();
@@ -112,15 +112,15 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
   const first = await page.evaluate(() => (window as typeof window & { cameraObservations: Observations }).cameraObservations);
   expect(first.beeps).toBe(3); expect(first.countdowns).toEqual(['3', '2', '1']);
   expect(first.frames).toHaveLength(1); expect(Buffer.from(first.frames[0].bytes)).toEqual(frames[1]);
-  expect(first.frames[0].transform).toBe('none'); expect(first.frames[0].step).toBe('ФОТО 1 ИЗ 1');
+  expect(first.frames[0].transform).toBe('none'); expect(first.frames[0].step).toBe('1 из 1');
   expect(commands).toEqual(['LiveView_Capture']);
   // Release through the product, then reload to start a fresh observation log.
   fallback = true;
   await page.getByRole('button', { name: 'Следующий посетитель' }).click();
-  await expect(page.getByRole('heading', { name: 'Какую историю снимем?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Выберите историю' })).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem('reelme.captureStart'))).toBeNull();
   await page.goto(local + '#slot=' + slots[1]); await page.reload();
-  await page.getByRole('button', { name: 'Мне нравится' }).click();
+  await page.getByRole('button', { name: 'Выбрать этот сюжет' }).click();
   await expect(page.getByText('Съёмка без превью', { exact: true })).toBeVisible();
   const secondReceipt = await page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!).receipt);
   expect(secondReceipt.sessionId).not.toBe(firstReceipt.sessionId); expect(secondReceipt.posePlan).toHaveLength(4);
@@ -142,7 +142,7 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
   expect(second.poses).toEqual(secondReceipt.posePlan.map((pose: { instruction: string }) => pose.instruction));
   expect(second.frames).toHaveLength(4); expect(second.beeps).toBe(12);
   expect(second.countdowns).toEqual(Array.from({ length: 4 }, () => ['3', '2', '1']).flat());
-  for (let i = 0; i < 4; i++) { expect(Buffer.from(second.frames[i].bytes)).toEqual(frames[i + 2]); expect(second.frames[i].step).toBe(`ФОТО ${i + 1} ИЗ 4`); expect(second.frames[i].transform).toBe('none'); }
+  for (let i = 0; i < 4; i++) { expect(Buffer.from(second.frames[i].bytes)).toEqual(frames[i + 2]); expect(second.frames[i].step).toBe(`${i + 1} из 4`); expect(second.frames[i].transform).toBe('none'); }
   expect(downloads).toEqual(['/image/visitor-1.jpg', '/image/visitor-2.jpg', '/image/visitor-3.jpg', '/image/visitor-3.jpg', '/image/visitor-4.jpg', '/image/visitor-5.jpg']);
   expect(commands).toEqual(['LiveView_Capture', 'Capture', 'Capture', 'Capture', 'Capture']);
   expect(localAuthorization).toEqual([]); expect(pageErrors).toEqual([]); expect(app.sessionCount()).toBe(2);

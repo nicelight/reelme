@@ -1,0 +1,126 @@
+{
+  "id": "TASK-022-T2-FT-002-W19",
+  "title": "Внедрить утверждённый экран фотосессии в рабочий CaptureClient",
+  "status": "done",
+  "wave": "W19",
+  "feature": "FT-002",
+  "reqs": [
+    "REQ-004",
+    "REQ-005",
+    "REQ-006"
+  ],
+  "depends_on": [
+    "TASK-019-T2-FT-002-W16",
+    "TASK-021-T1-FT-002-W18"
+  ],
+  "tier": "T2",
+  "purpose": "Заменить прежний экран камеры утверждённым интерактивным дизайном с реальными данными и сохранением надёжной съёмки/передачи.",
+  "success_outcome": "Рабочая фотосессия воспроизводит принятый образец, отображает сюжет и позу, зеркальный поток, отсчёт и миниатюры; управление и передача работают через существующие camera/API.",
+  "touched_files": [
+    "src/client/capture/App.svelte",
+    "src/client/capture/PhotoSession.svelte",
+    "src/client/capture/Capture.svelte",
+    "src/client/capture/session/",
+    "tests/camera.spec.ts",
+    "tests/capture-controls.spec.ts",
+    "tests/capture.spec.ts",
+    "tests/transfer.spec.ts",
+    "src/shared/capture.ts",
+    "src/server/sessions/index.ts",
+    "tests/capture.test.ts",
+    "tests/browser-fixture.ts"
+  ],
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "capture-browser",
+      "command": "npm run test:ui -- tests/camera.spec.ts tests/capture-controls.spec.ts tests/capture.spec.ts tests/transfer.spec.ts",
+      "required": true
+    },
+    {
+      "name": "capture-api",
+      "command": "npx tsx --test tests/capture.test.ts",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-17",
+      "stage": "snapshot-api",
+      "result": "PASS",
+      "summary": "npx tsx --test tests/capture.test.ts: 3/3 PASS на финальном API-коде. Receipt/status возвращают story из snapshot. Thumbnail bytes и описание сохраняются после замены и скрытия слота и перезапуска сервера; запрос без installation key получает 401. Capture UI/браузерные проверки ещё выполняются."
+    },
+    {
+      "date": "2026-11-17",
+      "stage": "production-integration",
+      "result": "PASS",
+      "summary": "Утверждённая поверхность подключена к Capture/PhotoSession и snapshot story. Финальные npm run check (0 ошибок/предупреждений) и npm run build PASS. Все 6 уникальных browser cases прошли по отдельным целевым прогонам; это не один зелёный полный suite. Исправлены fixture teardown timeout и semantic main не-capture фаз; после последнего исправления повторены check/build и затронутый transfer (35.6s). Корневой агент просмотрел код и рабочие 1920/1280 скриншоты.",
+      "evidence": [
+        ".tasks/session-production/verification.md",
+        ".tasks/session-production/verification.json",
+        ".tasks/session-production/review.md",
+        ".tasks/session-production/final/production-session-observations.json",
+        ".tasks/session-production/transfer-final/transfer-observations.json"
+      ],
+      "limitations": [
+        "Canon/Windows/физический звук и реальная digiCamControl Live View не проверены; аппаратура остаётся в TASK-005.",
+        "Только локальная интеграция и сборка; deployment/commit/push не выполнялись."
+      ]
+    }
+  ],
+  "docs": [
+    "DESIGN.md",
+    ".memory-bank/prd.md",
+    ".memory-bank/features/FT-002-photo-session.md",
+    "src/client/capture/session-prototype/BRIEF.md"
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-002-photo-session.md#FT-002-AC-006",
+    ".memory-bank/features/FT-002-photo-session.md#FT-002-AC-001",
+    ".memory-bank/features/FT-002-photo-session.md#FT-002-AC-002"
+  ],
+  "normative_inputs": [
+    "src/client/capture/session-prototype/BRIEF.md",
+    "DESIGN.md",
+    ".memory-bank/constitution.md",
+    ".memory-bank/contracts/integrations.md",
+    ".memory-bank/contracts/http-api.md",
+    "docs/slot-setup/matrix.md"
+  ],
+  "constraints": [
+    "Перенос принятого дизайна, без художественного пересмотра; impeccable/animate.",
+    "Порядок кнопок: переснять, начать заново, прогресс, Pause/Play.",
+    "В production только реальные данные/защищённые assets; никакой demo-панели или фотографии из референса.",
+    "Подтверждение смены сюжета прекращает только незавершённую локальную серию; принятые сервером фото не удалять.",
+    "Аппаратная приёмка Canon/digiCamControl остаётся TASK-005.",
+    "Receipt/status возвращают публичное story из snapshot; новый защищённый thumbnail endpoint сохраняет картинку после изменения слота."
+  ],
+  "invariants": [
+    "Один спуск на кадр; retry pending JPEG не вызывает повторного затвора.",
+    "Pause во время спуска останавливает последующее продолжение, не отменяет получение начатого снимка.",
+    "Пересъёмка сразу убирает последний кадр из серии и миниатюр; остальные сохраняются.",
+    "Нет передачи до явного Finish; потеря локальных JPEG и retry передачи сохраняют существующую защиту.",
+    "Зеркалится только live preview; число мест и поза следуют сохранённому posePlan."
+  ],
+  "verification_targets": [
+    "Полный рабочий путь каталог → серия → Finish → номер; retry камеры/передачи и reload без JPEG.",
+    "Синхронный отсчёт, flash только Live View, реальные миниатюры, pause/retake/restart/scenario confirm/cancel, граница второго человека.",
+    "Визуальный просмотр 1920/1280, доступность узкого экрана, отсутствие demo и утечек таймеров/URL."
+  ],
+  "evidence_required": [
+    "Результаты check/build и browser checks с управляемой камерой, реальные сохранённые JPEG и отсутствие лишнего спуска.",
+    "Скриншоты рабочего экрана, компактный отчёт с фактическими ограничениями."
+  ],
+  "anti_goals": [
+    "Deployment/commit/push; переработка backend, генерации, передачи или соседних экранов без необходимости."
+  ]
+}

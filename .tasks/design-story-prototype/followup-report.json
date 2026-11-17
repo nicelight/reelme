@@ -1,0 +1,20 @@
+{
+  "play": {
+    "paused": false,
+    "time": 0.849354
+  },
+  "inactivePaused": true,
+  "rapid": {
+    "centers": 1,
+    "name": "Арт-реальность"
+  },
+  "bounds": {
+    "width": 1280,
+    "height": 720,
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  "errors": []
+}

@@ -1,0 +1,9 @@
+{
+  "crop": "Sprite uses natural 3:2 tile proportions with centered clipping, matching existing StoryPrototype.",
+  "controlsNoOverlap": true,
+  "overflow": {
+    "horizontal": false,
+    "vertical": false
+  },
+  "note": "Behavior unchanged after 32/32 review; final change only sprite crop."
+}

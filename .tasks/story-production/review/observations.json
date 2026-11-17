@@ -1,0 +1,31 @@
+{
+  "geometry": {
+    "intro": {
+      "x": 55.171875,
+      "y": 127.0625,
+      "width": 1561.65625,
+      "height": 117.125
+    },
+    "center": {
+      "x": 501.6015625,
+      "y": 280.96875,
+      "width": 668.796875,
+      "height": 596.890625
+    },
+    "viewport": {
+      "width": 1672,
+      "height": 941
+    },
+    "overflow": false
+  },
+  "checks": {
+    "all13": true,
+    "fiveVisible": true,
+    "thirteenthAccessible": true,
+    "rapidClicksSettle": true,
+    "previousVideoPaused": true,
+    "videoFallbackRetry": true,
+    "ctaAvailableDuringMediaFailure": true
+  },
+  "pageErrors": []
+}

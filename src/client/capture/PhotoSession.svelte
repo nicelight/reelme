@@ -63,6 +63,7 @@
   function captured(value: CapturedPhoto[]) { photos = value; void proceed(); }
   onMount(() => { void proceed(); return () => lifecycle.abort(); });
 </script>
+<svelte:element this={phase === 'capture' ? 'div' : 'main'} class:session-state={phase !== 'capture'}>
 {#if phase === 'done' && status?.complete && status.finalized}
   <section class="narrow receipt" aria-live="polite">
     <p class="eyebrow">ФОТОГРАФИИ ПРИНЯТЫ</p>
@@ -70,7 +71,7 @@
     <button class="primary" onclick={next}>Следующий посетитель</button>
   </section>
 {:else if phase === 'capture' && status}
-  <Capture receipt={status} {installationKey} oncomplete={captured} />
+  <Capture receipt={status} {installationKey} oncomplete={captured} onscenario={() => { if (phase === 'capture') next(); }} />
 {:else if phase === 'lost'}
   <section class="narrow" aria-live="polite">
     <p class="eyebrow">ПЕРЕДАЧА ОСТАНОВЛЕНА</p><h1>Недостающие кадры потеряны после перезагрузки</h1>
@@ -85,3 +86,10 @@
     {:else if phase === 'transfer' && status}<p class="intro" role="status">Принято фотографий: {status.acceptedPoseIndices.length} из {status.posePlan.length}. Дождитесь подтверждения.</p>{/if}
   </section>
 {/if}
+
+</svelte:element>
+<style>
+  .session-state { max-width:none; width:100%; margin:0; min-height:100svh; padding:6vh 24px; display:grid; place-items:center; background:radial-gradient(ellipse at 50% 10%,#402139,#0d0a13 65%); color:#fff4fb; font-family:Manrope,sans-serif; --paper:#241827; --ink:#fff4fb; --surface:#2f2133; --muted:#e1c9d9; --accent:#f5b0d8; --accent-ink:#281324; --line:#a57594; --error:#ffd0df; }
+  .session-state :global(.narrow) { width:100%; margin:0 auto; }
+  .session-state :global(.visitor-number) { color:#f5b0d8; }
+</style>

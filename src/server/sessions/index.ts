@@ -38,7 +38,10 @@ export function eventDate(timestamp: number): string {
 }
 function receipt(row: SessionRow): StartReceipt {
   const snapshot = JSON.parse(row.snapshot) as SlotSnapshot;
-  return { sessionId: row.id, date: row.event_date, number: row.number, state: row.state, posePlan: snapshotPosePlan(snapshot) };
+  return { sessionId: row.id, date: row.event_date, number: row.number, state: row.state, posePlan: snapshotPosePlan(snapshot), story: sessionStory(snapshot) };
+}
+function sessionStory(snapshot: SlotSnapshot): NonNullable<StartReceipt['story']> {
+  return { description: snapshot.description, thumbnailId: snapshot.thumbnailId };
 }
 export function readSession(db: DB, sessionId: string) {
   const row = db.prepare('SELECT s.* FROM capture_sessions s JOIN events e ON e.date=s.event_date WHERE s.id=? AND e.deleting=0').get(sessionId) as SessionRow | undefined;
@@ -53,7 +56,7 @@ export function captureStatus(db: DB, sessionId: string): CaptureStatus {
   const posePlan = snapshotPosePlan(session.snapshot);
   const complete = acceptedPoseIndices.length === posePlan.length && posePlan.every(pose => acceptedPoseIndices.includes(pose.index));
   const error = db.prepare('SELECT error_code,error_message FROM generation_jobs WHERE session_id=?').get(sessionId) as { error_code: string | null; error_message: string | null } | undefined;
-  return { ...(error?.error_code ? { error: { code: error.error_code, message: error.error_message! } } : {}), sessionId, date: session.event_date, number: session.number, state: session.state, posePlan, acceptedPoseIndices, complete, finalized: complete && session.state !== 'capturing' };
+  return { ...(error?.error_code ? { error: { code: error.error_code, message: error.error_message! } } : {}), sessionId, date: session.event_date, number: session.number, state: session.state, posePlan, story: sessionStory(session.snapshot), acceptedPoseIndices, complete, finalized: complete && session.state !== 'capturing' };
 }
 function requireCapturing(db: DB, sessionId: string, poseIndex: number) {
   const session = readSession(db, sessionId);
@@ -101,6 +104,11 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     const guide = session.snapshot.posePlan?.find(pose => pose.guideNumber === number && pose.guideMediaId);
     if (!guide?.guideMediaId) throw new HttpError(404, 'NOT_FOUND', 'Образец ракурса не задан для этой сессии');
     return sendMedia(dataDir, readMedia(db, guide.guideMediaId), request, reply);
+  });
+  app.get('/api/capture/sessions/:id/thumbnail', { preHandler: access.requireInstallation }, async (request, reply) => {
+    const { id } = sessionParams.parse(request.params);
+    const session = readSession(db, id);
+    return sendMedia(dataDir, readMedia(db, session.snapshot.thumbnailId), request, reply);
   });
   app.get('/api/capture/sessions/:id', { preHandler: access.requireInstallation }, request => {
     const { id } = sessionParams.parse(request.params);

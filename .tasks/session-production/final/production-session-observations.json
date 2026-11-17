@@ -1,0 +1,29 @@
+{
+  "geometry": {
+    "noOverlap": true,
+    "horizontalOverflow": false,
+    "verticalOverflow": false
+  },
+  "order": [
+    "Переснять предыдущий кадр",
+    "Начать заново",
+    "progress",
+    "Начать съёмку"
+  ],
+  "stagger": [
+    0,
+    200,
+    400
+  ],
+  "twoCountdowns": true,
+  "pausePendingPreservesOneJPEG": true,
+  "personBoundaryCancelDoesNotResume": true,
+  "retakeRemovesThumbnail": true,
+  "confirmedScenarioSwitch": true,
+  "noServerDeletion": true,
+  "noUploadBeforeFinish": true,
+  "shutters": 2,
+  "pageErrors": [],
+  "media": "provided reference crops, fixture only",
+  "hardware": "controlled HTTP; no Canon/Windows"
+}

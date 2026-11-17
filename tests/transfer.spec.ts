@@ -127,8 +127,8 @@ test('accepted JPEGs, same-Blob upload retry, lost finalize acknowledgement and 
   await page.getByRole('button', { name: 'Проверить и сохранить' }).click();
   await expect(page.getByRole('status')).toContainText('Ключ проверен и сохранён');
   await page.getByRole('link', { name: 'Открыть каталог' }).click();
-  await page.getByRole('link', { name: 'Выбрать сюжет: Один портрет Recast', exact: true }).click();
-  await page.getByRole('button', { name: 'Мне нравится' }).click();
+  await page.getByRole('button', { name: 'Сюжет 1: Один портрет Recast', exact: true }).click();
+  await page.getByRole('button', { name: 'Выбрать этот сюжет' }).click();
   await expect(page.getByRole('button', { name: 'Начать съёмку' })).toBeVisible();
   const first: StartReceipt = await page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!).receipt);
   firstId = first.sessionId;
@@ -159,13 +159,15 @@ test('accepted JPEGs, same-Blob upload retry, lost finalize acknowledgement and 
 
   // No fixture reset/reload: release and start the next visitor using the UI.
   await page.getByRole('button', { name: 'Следующий посетитель' }).click();
-  await expect(page.getByRole('heading', { name: 'Какую историю снимем?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Выберите историю' })).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem('reelme.captureStart'))).toBeNull();
   await expect(page.locator('.captured-frame, .visitor-number')).toHaveCount(0);
   await expect(page.locator('input')).toHaveCount(0);
   expect((await status(firstId)).state).toBe('submit_pending');
-  await page.getByRole('link', { name: 'Выбрать сюжет: Четыре разные позы', exact: true }).click();
-  await page.getByRole('button', { name: 'Мне нравится' }).click();
+  await page.getByRole('button', { name: 'Сюжет 2: Четыре разные позы', exact: true }).click();
+  // Do not retain the outgoing CTA while the carousel swaps accessible content.
+  await expect(page.locator('.center .story-heading h2')).toHaveText('Четыре разные позы');
+  await page.getByRole('button', { name: 'Выбрать этот сюжет' }).click();
   await expect(page.getByRole('button', { name: 'Начать съёмку' })).toBeVisible();
   const second: StartReceipt = await page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!).receipt);
   secondId = second.sessionId;

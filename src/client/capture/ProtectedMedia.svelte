@@ -3,9 +3,11 @@
    * then expose a short-lived object URL. Changes/unmount cancel requests and URLs.
    * Source: docs/slot-setup/matrix.md. Never sends credentials to camera URLs. */
   import { request } from './api';
-  let { slotId, mediaId, installationKey, video = false, alt = '', path: explicitPath, contain = false }: {
-    slotId?: string; mediaId: string; installationKey: string; video?: boolean; alt?: string; path?: string; contain?: boolean;
+  let { slotId, mediaId, installationKey, video = false, alt = '', path: explicitPath, contain = false, active = true }: {
+    slotId?: string; mediaId: string; installationKey: string; video?: boolean; alt?: string; path?: string; contain?: boolean; active?: boolean;
   } = $props();
+  let player = $state<HTMLVideoElement>();
+  $effect(() => { if (!active) player?.pause(); });
   let url = $state('');
   let failed = $state(false);
   let attempt = $state(0);
@@ -23,11 +25,12 @@
     return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
   });
 </script>
+<svelte:document onvisibilitychange={() => { if (document.hidden) player?.pause(); }}/>
 <div class:video class:contain class="media">
   {#if failed}
     <div class="fallback" role="status"><span>{video ? 'Видео' : 'Изображение'} не загрузилось.</span><button type="button" onclick={(event) => { event.stopPropagation(); attempt += 1; }}>Повторить загрузку</button></div>
   {:else if url}
-    {#if video}<video src={url} controls playsinline preload="metadata" onerror={() => failed = true}><track kind="captions" /></video>
+    {#if video}<video bind:this={player} src={url} controls playsinline preload="metadata" onerror={() => failed = true}><track kind="captions" /></video>
     {:else}<img src={url} {alt} onerror={() => failed = true} />{/if}
   {:else}<div class="fallback" role="status">Загружаем {video ? 'видео' : 'изображение'}…</div>{/if}
 </div>

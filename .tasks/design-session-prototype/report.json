@@ -1,0 +1,178 @@
+{
+  "checks": [
+    {
+      "name": "four slots initially",
+      "pass": true
+    },
+    {
+      "name": "retake initially disabled",
+      "pass": true
+    },
+    {
+      "name": "controls order",
+      "pass": true
+    },
+    {
+      "name": "wave stagger 0/200/400",
+      "pass": true,
+      "detail": [
+        [
+          0
+        ],
+        [
+          200
+        ],
+        [
+          400
+        ]
+      ]
+    },
+    {
+      "name": "synchronized countdown",
+      "pass": true
+    },
+    {
+      "name": "pause cancels countdown capture",
+      "pass": true
+    },
+    {
+      "name": "flash confined to live",
+      "pass": true
+    },
+    {
+      "name": "capture creates thumbnail",
+      "pass": true
+    },
+    {
+      "name": "preview mirrored photos not",
+      "pass": true
+    },
+    {
+      "name": "retake clears previous",
+      "pass": true
+    },
+    {
+      "name": "dialog stops automatic capture",
+      "pass": true
+    },
+    {
+      "name": "cancel resumes previous running state",
+      "pass": true
+    },
+    {
+      "name": "scenario changes after confirmation",
+      "pass": true
+    },
+    {
+      "name": "scenario cancel preserves",
+      "pass": true
+    },
+    {
+      "name": "one frame plan",
+      "pass": true
+    },
+    {
+      "name": "honest fallback",
+      "pass": true
+    },
+    {
+      "name": "capture failure creates no thumbnail",
+      "pass": true
+    },
+    {
+      "name": "retry completes one frame",
+      "pass": true
+    },
+    {
+      "name": "explicit finish",
+      "pass": true
+    },
+    {
+      "name": "eight frame plan",
+      "pass": true
+    },
+    {
+      "name": "1280 no overflow",
+      "pass": true
+    },
+    {
+      "name": "controls do not overlap",
+      "pass": true
+    },
+    {
+      "name": "pause during capture preserves one result and stops",
+      "pass": true
+    },
+    {
+      "name": "automatic four-frame completion",
+      "pass": true
+    },
+    {
+      "name": "retake complete returns fourth pose",
+      "pass": true
+    },
+    {
+      "name": "restart cancel retains photos",
+      "pass": true
+    },
+    {
+      "name": "restart confirm clears photos and restarts countdown",
+      "pass": true
+    },
+    {
+      "name": "reduced countdown no animation",
+      "pass": true
+    },
+    {
+      "name": "reduced flash invisible",
+      "pass": true
+    },
+    {
+      "name": "narrow no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "no API or camera requests",
+      "pass": true
+    },
+    {
+      "name": "no browser exceptions",
+      "pass": true,
+      "detail": []
+    }
+  ],
+  "errors": [],
+  "requests": [
+    "http://localhost:5173/src/client/capture/session-prototype/index.html?tools=0",
+    "http://localhost:5173/@vite/client",
+    "http://localhost:5173/src/client/capture/session-prototype/main.ts?t=1794891475058",
+    "http://localhost:5173/node_modules/.vite/deps/svelte.js?v=7e20ad47",
+    "http://localhost:5173/src/client/capture/session-prototype/SessionPrototype.svelte?t=1794891475058",
+    "http://localhost:5173/src/client/capture/story-prototype/assets/fonts.css",
+    "http://localhost:5173/node_modules/vite/dist/client/env.mjs",
+    "http://localhost:5173/node_modules/.vite/deps/runtime-Do_u7Ssq.js?v=7e20ad47",
+    "http://localhost:5173/node_modules/.vite/deps/index-client-DvavOWo3.js?v=7e20ad47",
+    "http://localhost:5173/node_modules/.vite/deps/legacy-client-B4NOc9it.js?v=7e20ad47",
+    "http://localhost:5173/node_modules/.vite/deps/svelte_internal_disclose-version.js?v=7e20ad47",
+    "http://localhost:5173/node_modules/.vite/deps/svelte_internal_client.js?v=7e20ad47",
+    "http://localhost:5173/src/client/capture/session-prototype/motion.ts",
+    "http://localhost:5173/src/client/cloud/results-prototype/motion.ts",
+    "http://localhost:5173/src/client/capture/session-prototype/assets/reference.png?import",
+    "http://localhost:5173/src/client/capture/story-prototype/assets/reelme-mark.png?import",
+    "http://localhost:5173/src/client/capture/story-prototype/assets/portraits.png?import",
+    "http://localhost:5173/src/client/capture/session-prototype/SessionPrototype.svelte?t=1794891350245&svelte&type=style&lang.css",
+    "http://localhost:5173/node_modules/.vite/deps/warnings-eg1vThES.js?v=7e20ad47",
+    "http://localhost:5173/node_modules/.vite/deps/flags-qfBdqUK7.js?v=7e20ad47",
+    "http://localhost:5173/node_modules/.vite/deps/events-jRM3pnpv.js?v=7e20ad47",
+    "http://localhost:5173/node_modules/.vite/deps/create-subscriber-5X-uY-QT.js?v=7e20ad47",
+    "http://localhost:5173/node_modules/.vite/deps/svelte_n_clsx.js?v=7e20ad47",
+    "http://localhost:5173/node_modules/.vite/deps/shared-CnQOmpvc.js?v=7e20ad47",
+    "http://localhost:5173/src/client/capture/story-prototype/assets/reelme-mark.png",
+    "http://localhost:5173/src/client/capture/story-prototype/assets/portraits.png",
+    "http://localhost:5173/src/client/capture/session-prototype/assets/reference.png",
+    "http://localhost:5173/src/client/capture/story-prototype/assets/manrope-0.woff2",
+    "http://localhost:5173/src/client/capture/story-prototype/assets/manrope-2.woff2",
+    "http://localhost:5173/src/client/capture/story-prototype/assets/manrope-3.woff2",
+    "http://localhost:5173/src/client/capture/story-prototype/assets/manrope-4.woff2"
+  ]
+}

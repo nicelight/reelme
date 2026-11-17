@@ -1,0 +1,73 @@
+{
+  "id": "TASK-021-T1-FT-002-W18",
+  "title": "Создать интерактивный тестовый образец экрана фотосессии",
+  "status": "done",
+  "wave": "W18",
+  "feature": "FT-002",
+  "reqs": [
+    "REQ-004",
+    "REQ-005"
+  ],
+  "depends_on": [],
+  "tier": "T1",
+  "purpose": "Проверить заданную композицию, свет и управление серией до переноса в рабочий экран.",
+  "success_outcome": "Отдельно открываемый образец по референсу с динамическими местами кадров и воспроизводимыми взаимодействиями.",
+  "touched_files": [
+    "src/client/capture/session-prototype",
+    ".tasks/design-session-prototype/"
+  ],
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-17",
+      "result": "PASS",
+      "summary": "Отдельный интерактивный прототип реализован. npm run check: 0 ошибок/предупреждений. Browser: 32/32 PASS; ручной просмотр 1920 и 1280. После последней правки только crop повторены typecheck и визуальная проверка без переполнений/пересечений.",
+      "evidence": [
+        ".tasks/design-session-prototype/report.json",
+        ".tasks/design-session-prototype/final-visual.json",
+        ".tasks/design-session-prototype/session-1920.png",
+        ".tasks/design-session-prototype/session-1280.png",
+        ".tasks/design-session-prototype/motion-preview.webm",
+        ".tasks/design-session-prototype/interaction-review.webm"
+      ],
+      "limitations": [
+        "Демонстрационный источник изображения и образцы, не настоящий поток камеры; локальная загрузка в памяти.",
+        "Canon/Windows/digiCamControl не проверялись; production-перенос не выполнен; художественное принятие пользователем ещё не проводилось."
+      ]
+    }
+  ],
+  "docs": [
+    "src/client/capture/session-prototype/BRIEF.md"
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-002-photo-session.md#FT-002-AC-005"
+  ],
+  "normative_inputs": [
+    "src/client/capture/session-prototype/BRIEF.md",
+    "DESIGN.md",
+    ".memory-bank/contracts/integrations.md"
+  ],
+  "constraints": [
+    "Использовать creator-vibe, impeccable, prototype (UI), animate; один вариант по заданному референсу.",
+    "Соблюдать границы и точный порядок управления из BRIEF."
+  ],
+  "invariants": [
+    "Прототип не изменяет реальные сессии и не запускает генерацию.",
+    "Демонстрация камеры не считается аппаратной приёмкой."
+  ],
+  "verification_targets": [
+    "Визуальное сравнение 1920×1080/1280×720, просмотр motion и интерактивный проход случаев из BRIEF."
+  ],
+  "evidence_required": [
+    "Скриншоты, короткая запись движения, фактические результаты проходов и ограничения камеры."
+  ],
+  "anti_goals": [
+    "Production-перенос, новый дизайн соседних экранов, commit/publish."
+  ]
+}

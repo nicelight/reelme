@@ -2,12 +2,12 @@
   import { onMount } from 'svelte';
   import type { CatalogItem, CatalogPage, StartReceipt } from '../../shared/capture';
   import { ApiError, installationKeyStorage, request, startStorage } from './api';
-  import ProtectedMedia from './ProtectedMedia.svelte';
+  import StoryCatalog from './story/StoryCatalog.svelte';
   import PhotoSession from './PhotoSession.svelte';
   import './style.css';
   /** Module contract: visitor catalog → durable start → PhotoSession owns capture
    * and transfer. sessionStorage recovers the server receipt; only confirmed
-   * completion or explicit abandonment of lost local JPEGs permits returning to
+   * completion or confirmed abandonment (including lost local JPEGs) permits returning to
    * the catalog. Source: docs/slot-setup/matrix.md. Server photos are never erased here. */
   type StartState = { startRequestId: string; slotId: string; receipt?: StartReceipt };
   let key = $state('');
@@ -21,41 +21,53 @@
   let busy = $state(false);
   let loading = $state(false);
   let error = $state('');
-  let page = $state(1);
+  let catalogAbort: AbortController | undefined;
   let loadVersion = 0;
-  const title = (item: CatalogItem) => item.description.trim().split(/\s+/).slice(0, 3).join(' ');
+
   function message(cause: unknown) {
     if (cause instanceof ApiError && [401, 403].includes(cause.status)) return 'Нужна помощь сотрудника: проверьте настройку установки.';
     if (cause instanceof ApiError && cause.status === 404) return 'Этот сюжет больше недоступен. Выберите другой в каталоге.';
     return 'Не удалось связаться с сервером. Проверьте соединение и повторите.';
   }
-  async function loadCatalog(targetPage = page) {
+  async function loadCatalog(preferredId = selected?.id) {
     const version = ++loadVersion;
-    loading = true; error = ''; selected = undefined;
+    catalogAbort?.abort();
+    const controller = new AbortController(); catalogAbort = controller;
+    loading = true; error = '';
     try {
-      const result: CatalogPage = await (await request(`/api/catalog?page=${targetPage}`, key)).json();
+      const first: CatalogPage = await (await request('/api/catalog?page=1', key, { signal: controller.signal })).json();
+      const rest = await Promise.all(Array.from({ length: Math.max(0, first.totalPages - 1) }, async (_, index): Promise<CatalogPage> =>
+        (await request(`/api/catalog?page=${index + 2}`, key, { signal: controller.signal })).json()));
       if (version !== loadVersion) return;
-      catalog = result; page = result.page;
-    } catch (cause) { if (version === loadVersion) error = message(cause); }
-    finally { if (version === loadVersion) loading = false; }
+      // API pages are transport only: the visitor browses every currently eligible slot.
+      const items = Array.from(new Map([first, ...rest].flatMap(result => result.items).map(item => [item.id, item])).values());
+      catalog = { ...first, items };
+      selected = preferredId ? items.find(item => item.id === preferredId) : undefined;
+      if (preferredId && !selected) {
+        history.replaceState(null, '', '#catalog');
+        if (items.length) error = 'Этот сюжет больше недоступен. Выберите другой в каталоге.';
+      }
+    } catch (cause) {
+      if (version === loadVersion && !controller.signal.aborted) {
+        catalog = undefined; selected = undefined; error = message(cause);
+      }
+    } finally { if (version === loadVersion) loading = false; }
   }
-  async function openSlot(id: string) {
-    const version = ++loadVersion;
-    loading = true; error = ''; selected = undefined;
-    try {
-      const result: CatalogItem = await (await request(`/api/catalog/${encodeURIComponent(id)}`, key)).json();
-      if (version === loadVersion) selected = result;
-    } catch (cause) { if (version === loadVersion) error = message(cause); }
-    finally { if (version === loadVersion) loading = false; }
+  function browse(item: CatalogItem) {
+    selected = item;
+    const hash = `#slot=${encodeURIComponent(item.id)}`;
+    if (location.hash.startsWith('#slot=')) history.replaceState(null, '', hash);
+    else history.pushState(null, '', hash);
   }
   function route() {
     setup = location.hash === '#setup';
     error = ''; enteredKey = ''; setupMessage = '';
     if (setup || !key || start) return;
     const slot = location.hash.match(/^#slot=(.+)$/)?.[1];
-    if (slot) void openSlot(slot); else void loadCatalog();
+    void loadCatalog(slot ? decodeURIComponent(slot) : undefined);
   }
-  function back() { if (location.hash) location.hash = ''; else void loadCatalog(); }
+  function back() { selected = undefined; history.replaceState(null, '', '#catalog'); void loadCatalog(); }
+  function refresh() { if (storageReady && key && !setup && !start && !loading) void loadCatalog(); }
   onMount(() => {
     try {
       key = localStorage.getItem(installationKeyStorage) || '';
@@ -68,7 +80,8 @@
     } catch { storageReady = false; error = 'Не удалось прочитать данные установки. Попросите сотрудника проверить профиль браузера.'; }
     if (storageReady) route();
     window.addEventListener('hashchange', route);
-    return () => window.removeEventListener('hashchange', route);
+    window.addEventListener('focus', refresh);
+    return () => { catalogAbort?.abort(); loadVersion++; window.removeEventListener('hashchange', route); window.removeEventListener('focus', refresh); };
   });
   async function saveKey(event: SubmitEvent) {
     event.preventDefault(); busy = true; error = ''; setupMessage = '';
@@ -111,12 +124,18 @@
   function nextVisitor() {
     try { sessionStorage.removeItem(startStorage); }
     catch { error = 'Не удалось завершить сессию в браузере. Обратитесь к сотруднику.'; return; }
-    start = undefined; selected = undefined; catalog = undefined; page = 1;
+    start = undefined; selected = undefined; catalog = undefined;
     history.replaceState(null, '', '#catalog');
-    void loadCatalog(1);
+    void loadCatalog();
   }
 </script>
-<svelte:head><title>ReelMe — {setup ? 'Настройка установки' : 'Выберите сюжет'}</title></svelte:head>
+<svelte:head><title>ReelMe — {setup ? 'Настройка установки' : start?.receipt ? 'Фотосессия' : 'Выберите сюжет'}</title></svelte:head>
+{#if !setup && storageReady && key && !start}
+  <StoryCatalog items={catalog?.items ?? []} activeId={selected?.id} installationKey={key} {loading} {error} {busy} onbrowse={browse} onbegin={(item) => { selected = item; void begin(); }} onback={back} onrefresh={() => loadCatalog()}/>
+{:else if !setup && storageReady && key && start?.receipt}
+  {#key start.receipt.sessionId}<PhotoSession receipt={start.receipt} installationKey={key} onnext={nextVisitor} />{/key}
+  {#if error}<div class="session-storage-error error" role="alert"><p>{error}</p></div>{/if}
+{:else}
 <header><div class="brand">Reel<span>Me</span></div><span class="header-note">{setup ? 'Настройка установки' : 'Ваша история в кадре'}</span></header>
 <main>
   {#if setup}
@@ -133,18 +152,12 @@
     {:else}
       <section class="narrow handoff" aria-live="polite"><p class="eyebrow">ВАШ СЮЖЕТ ВЫБРАН</p><h1>Готовимся к съёмке</h1><p class="intro">{busy ? 'Создаём сессию…' : 'Нужно подтвердить начало вашей сессии.'}</p><button class="primary" onclick={begin} disabled={busy}>{busy ? 'Подождите…' : 'Повторить старт'}</button></section>
     {/if}
-  {:else if loading}
-    <section class="narrow" role="status"><h1>Загружаем сюжеты…</h1></section>
-  {:else if selected}
-    <button class="back" onclick={back}>← Назад в каталог</button>
-    <section class="detail"><div><p class="eyebrow">ВАШ БУДУЩИЙ РОЛИК</p><h1 class="description">{selected.description}</h1><button class="primary like" onclick={begin} disabled={busy}>Мне нравится</button></div>
-      <div class="preview">{#if selected.previewId}<ProtectedMedia slotId={selected.id} mediaId={selected.previewId} installationKey={key} video />{:else}<div class="no-preview"><p>У этого сюжета пока нет демовидео.</p><span>Вы можете выбрать его и перейти к съёмке.</span></div>{/if}<p class="caption">{selected.mode === 'V2V' ? 'Исходное видео сюжета' : 'Демонстрация сюжета'}</p></div>
-    </section>
-  {:else}
-    <section class="catalog-heading"><p class="eyebrow">НАЧНИТЕ С ИДЕИ</p><h1>Какую историю снимем?</h1><p class="intro">Выберите сюжет, который вам нравится.</p></section>
-    {#if catalog?.items.length}<div class="catalog">{#each catalog.items as item (item.id)}<article class="card"><ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} installationKey={key} alt={title(item)} /><a href={`#slot=${item.id}`} aria-label={`Выбрать сюжет: ${title(item)}`}><h2>{title(item)}</h2><span aria-hidden="true">↗</span></a></article>{/each}</div>
-      {#if catalog.totalPages > 1}<nav class="pagination" aria-label="Страницы каталога"><button onclick={() => loadCatalog(page - 1)} disabled={page <= 1}>← Назад</button><span aria-live="polite">{page} / {catalog.totalPages}</span><button onclick={() => loadCatalog(page + 1)} disabled={page >= catalog.totalPages}>Далее →</button></nav>{/if}
-    {:else if !error}<p class="empty">Сюжеты скоро появятся. Сотрудник поможет вам начать.</p>{/if}
   {/if}
   {#if error}<div class="error" role="alert"><p>{error}</p>{#if key && !setup && !start && storageReady}<button onclick={() => { location.hash = ''; void loadCatalog(); }}>Вернуться к каталогу</button>{/if}</div>{/if}
 </main>
+
+{/if}
+
+<style>
+  .session-storage-error { position:fixed; bottom:16px; left:16px; right:16px; z-index:30; margin:auto; background:#351f30; color:#fff1f5; }
+</style>

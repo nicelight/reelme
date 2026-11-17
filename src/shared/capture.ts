@@ -41,6 +41,8 @@ export interface StartReceipt {
   number: number;
   state: SessionState;
   posePlan: Pose[];
+  /** Session-pinned visitor artwork; optional for receipts saved by older clients. */
+  story?: { description: string; thumbnailId: string };
 }
 export type SessionState = 'capturing' | 'submit_pending' | 'observing' | 'preparing' | 'ready' | 'failed' | 'simulated';
 /** complete means every position is stored; finalized additionally confirms

@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import sharp from 'sharp';
 import { fixture, imageBytes, videoBytes } from './helpers.js';
 import { openDatabase } from '../src/server/db.js';
 import { readMedia } from '../src/server/scenarios/media.js';
@@ -127,7 +128,8 @@ test('session snapshots preserve replaced settings and bytes across restart; P2V
   const a = await start(f, slotId);
   const old = snapshot(f, a.sessionId);
   assert.deepEqual(old, { slotId, description: s.recast.description, thumbnailId: s.thumbnail.id, expectedPhotos: 1, posePlan: a.posePlan, generation: { participants: 1, photosPerParticipant: 1, orientation: 'landscape', simulateGeneration: false, mode: 'V2V', model: s.recast.model, referenceIds: [], videoId: s.clip.id, resolution: '768P', recastShotsConfirmed: true } });
-  const newThumbnail = await f.upload(s.cookie, s.image);
+  const newImage = await sharp(s.image).negate().png().toBuffer();
+  const newThumbnail = await f.upload(s.cookie, newImage);
   const reference = await f.upload(s.cookie, s.image);
   const demo = await f.upload(s.cookie, s.video, 'video/mp4', 'demo.mp4');
   const p2v: SlotInput = { participants: 1, photosPerParticipant: 4, orientation: 'landscape', aspectRatio: '16:9', description: 'Новый сюжет и модель', visible: true, simulateGeneration: false, thumbnailId: newThumbnail.id, mode: 'P2V', model: 'kling/v4/reference-to-video', referenceIds: [reference.id], demoId: demo.id, prompt: 'Посетитель @Element1 в новом сюжете', resolution: '1080p', duration: 7 };
@@ -146,11 +148,22 @@ test('session snapshots preserve replaced settings and bytes across restart; P2V
   const { demoId: _demo, ...noDemo } = p2v;
   await s.save(noDemo, slotId);
   assert.equal((await f.app.inject({ url: `/api/catalog/${slotId}`, headers: installation })).json().previewId, undefined);
+  await s.save({ ...noDemo, visible: false }, slotId);
   async function checkSaved() {
     assert.deepEqual(snapshot(f, a.sessionId), old); assert.deepEqual(snapshot(f, b.sessionId), fresh);
+    for (const [saved, bytes] of [[a, s.image], [b, newImage]] as const) {
+      const story = { description: saved === a ? s.recast.description : p2v.description, thumbnailId: saved === a ? s.thumbnail.id : newThumbnail.id };
+      assert.deepEqual(saved.story, story);
+      const current = await f.app.inject({ url: `/api/capture/sessions/${saved.sessionId}`, headers: installation });
+      assert.deepEqual(current.json().story, story);
+      const path = `/api/capture/sessions/${saved.sessionId}/thumbnail`;
+      const image = await f.app.inject({ url: path, headers: installation });
+      assert.equal(image.statusCode, 200); assert.deepEqual(image.rawPayload, bytes);
+      assert.equal((await f.app.inject({ url: path })).statusCode, 401);
+    }
     const db = openDatabase(f.config.dataDir);
     try {
-      for (const [id, bytes] of [[s.thumbnail.id, s.image], [s.clip.id, s.video], [newThumbnail.id, s.image], [reference.id, s.image], [demo.id, s.video]] as const) {
+      for (const [id, bytes] of [[s.thumbnail.id, s.image], [s.clip.id, s.video], [newThumbnail.id, newImage], [reference.id, s.image], [demo.id, s.video]] as const) {
         const media = readMedia(db, id);
         assert.deepEqual(await readFile(join(f.config.dataDir, 'media', media.path)), bytes);
       }
