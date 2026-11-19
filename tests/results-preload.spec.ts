@@ -29,7 +29,7 @@ test('results recover a failed stage preload without hiding its error on success
       eggAttempts++;
       return allowEgg ? route.continue() : route.abort('failed');
     });
-    await page.goto(origin + '/?screen=results');
+    await page.goto(origin + '/results');
     const error = page.getByText('Не удалось подготовить экран. Повторяем загрузку…', { exact: true });
     await expect(error).toBeVisible();
     await expect.poll(() => polls, { timeout: 8000 }).toBeGreaterThanOrEqual(3);

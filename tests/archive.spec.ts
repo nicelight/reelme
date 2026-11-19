@@ -42,7 +42,7 @@ test('Chromium archive: both accounts browse dates, original thumbnails and thei
     }
     expect(started).toBe(true);
     await page.setViewportSize({width:1440,height:900}); await page.emulateMedia({colorScheme:'light'});
-    await page.goto(origin); await login('operator');
+    await page.goto(origin + '/operator'); await login('operator');
     await expect(page.locator('[data-session="1"]')).toBeVisible();
     expect((await request.post(`${origin}/api/receive/${firstDelivery.receive_token}/email`,{data:{email:'visitor@example.test'}})).status()).toBe(200);
     now += 180_000; await clock(); await page.reload();
@@ -82,7 +82,9 @@ test('Chromium archive: both accounts browse dates, original thumbnails and thei
         await page.getByRole('button',{name:'Закрыть видео'}).click();
       }
       if(role==='admin') {
-        await page.getByRole('button',{name:'Тёмная тема'}).click(); await page.setViewportSize({width:375,height:812});
+        if (await page.getByRole('button',{name:'Тёмная тема'}).count()) await page.getByRole('button',{name:'Тёмная тема'}).click();
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+        await page.setViewportSize({width:375,height:812});
         await page.getByRole('button',{name:'Смотреть видео № 1',exact:true}).click();
         expect(await page.evaluate(() => document.documentElement.scrollWidth<=innerWidth)).toBe(true);
         await page.screenshot({path:join(artifacts,'archive-mobile-dark-player.png'),fullPage:true});

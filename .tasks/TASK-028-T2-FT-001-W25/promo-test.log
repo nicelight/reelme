@@ -1,0 +1,13 @@
+
+> reelme@0.1.0 test:ui
+> playwright test tests/promo.spec.ts
+
+
+Running 2 tests using 1 worker
+
+(node:237479) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/promo.spec.ts:12:1 › public promo browses all visible stories and playable previews without capture or account requests (4.2s)
+  ✓  2 tests/promo.spec.ts:94:1 › account routes preserve public root, separate operator workspace and fullscreen results for both roles (4.0s)
+
+  2 passed (10.1s)

@@ -1,4 +1,4 @@
-# Build only on the workstation; production receives this complete image.
+# Build on nskserver or the workstation; the VPS only proxies traffic.
 FROM node:22.23.5-bookworm-slim AS build
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
@@ -6,7 +6,9 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY tsconfig*.json vite.config.ts index.html ./
 COPY src ./src
+COPY WebServer/reelme.html ./WebServer/reelme.html
 COPY public/slot-prompts ./public/slot-prompts
+COPY public/test-videos ./public/test-videos
 RUN npm run check && npm run build && npm prune --omit=dev
 
 FROM node:22.23.5-bookworm-slim AS runtime

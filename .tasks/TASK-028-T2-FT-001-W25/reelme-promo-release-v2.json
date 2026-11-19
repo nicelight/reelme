@@ -1,0 +1,15 @@
+{
+  "release": "20261119T191045Z-993844d-promo-v2",
+  "commit": "993844d02effc3ab53de138b3af9d8d7eb6258dd",
+  "source_sha256": "12489a27c4d1dd6e729f1433a0f9251477053437a5865a8cecd9166fa724c308",
+  "source_archive": "/tmp/20261119T191045Z-993844d-promo-source.tar.gz",
+  "changes": "working tree: public promo read-only catalog; /admin /operator /results routes; test-video Dockerfile and configurable deployment UID/GID; explicit disabled promo button with visible booth-only label",
+  "verified": "local and nskserver check/build PASS; full API/shared sequential 120/120 PASS; 20 UI cases confirmed, final promo2/2 PASS; production HTTP/roles/public media and imported slots PASS; Chromium anonymous desktop/mobile PASS",
+  "base_release": "20261119T191045Z-993844d-promo",
+  "patch_sha256": "fe888e9c79bcd6dca7c22e9e4c0c3cffcad184b4c07d65444bb4d09fc4b06663",
+  "source_file_manifest_sha256": "7e50dc8e55068f34b23a722a897d96c4e01f38f56808588a86e669548e663675",
+  "image_id": "sha256:0d520a6f2c1b68d9e8b47d27717b13d93bb673ebacda3b4b42837bec00e62cbd",
+  "verification_completed_utc": "2026-11-19T19:27:49.392197+00:00",
+  "backup": "/var/backups/reelme/before-20261119T191045Z-993844d-promo-v2",
+  "limitations": "One transient camera abort test failure under parallel load; isolated and sequential repeats passed. One initial public HTTP connect timeout; full repeat passed. Real camera/fal/SMTP not verified; fal/SMTP not configured."
+}

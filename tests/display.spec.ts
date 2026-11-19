@@ -43,7 +43,7 @@ test('Chromium preparation header: stable preparation slots, hide/restore, hatch
     await start();
     for (const [i, state] of ['submit_pending', 'observing', 'preparing'].entries()) db.prepare('UPDATE capture_sessions SET state=? WHERE id=?').run(state, seeds[i].id);
     await page.setViewportSize({ width: 1672, height: 941 });
-    await page.goto(origin + '/?screen=results');
+    await page.goto(origin + '/results');
     await page.getByLabel('Логин').fill('operator'); await page.getByLabel('Пароль', { exact: true }).fill('test-password');
     await page.getByRole('button', { name: 'Войти', exact: true }).click();
     await expect(page.locator('.progress-panel')).toBeVisible();
@@ -74,7 +74,7 @@ test('Chromium preparation header: stable preparation slots, hide/restore, hatch
     await expect(page.locator('[data-progress-session="3"]')).toHaveCount(0, { timeout: 6000 });
     await expect(page.locator('.operator-issues')).toHaveCount(0);
     await page.screenshot({ path: join(artifacts, 'production-progress-header.png') });
-    await page.goto(origin);
+    await page.goto(origin + '/operator');
     await expect(page.locator('[data-issue-session="3"]')).toContainText('Не удалось создать видео');
     const payload = await (await page.request.get(origin + '/api/display/today')).text();
     expect(payload).not.toMatch(/fixture.test|download_token/);
@@ -96,7 +96,7 @@ test('Chromium simulation: actual no-key worker shows honest success and safe pr
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     if (!db) throw new Error('Simulation fixture did not start');
-    await page.setViewportSize({ width: 1440, height: 900 }); await page.goto(origin);
+    await page.setViewportSize({ width: 1440, height: 900 }); await page.goto(origin + '/operator');
     await page.getByLabel('Логин').fill('operator'); await page.getByLabel('Пароль', { exact: true }).fill('test-password');
     await page.getByRole('button', { name: 'Войти', exact: true }).click();
     const success = page.locator('[data-issue-session="1"]'); const failed = page.locator('[data-issue-session="2"]');

@@ -70,7 +70,7 @@ test('admin keeps editor access beside a reloadable results popup; operator sees
   const popup = await popupPromise;
   watch(popup);
   await popup.setViewportSize({ width: 1672, height: 941 });
-  await expect(popup).toHaveURL(app.origin + '/?screen=results');
+  await expect(popup).toHaveURL(app.origin + '/results');
   await results(popup, 'admin');
   await popup.screenshot({ path: join(artifacts, 'admin-results-desktop.png') });
   const editorRequests: string[] = [];
@@ -87,7 +87,7 @@ test('admin keeps editor access beside a reloadable results popup; operator sees
   try {
     const operatorPage = await operator.newPage();
     watch(operatorPage);
-    await login(operatorPage, 'operator', '/?screen=results');
+    await login(operatorPage, 'operator', '/results');
     await results(operatorPage, 'operator');
     await operatorPage.screenshot({ path: join(artifacts, 'operator-results-desktop.png') });
     await operatorPage.goto(app.origin + '/admin');
@@ -95,8 +95,8 @@ test('admin keeps editor access beside a reloadable results popup; operator sees
     await expect(operatorPage.getByRole('region', { name: 'Редактор сюжета' })).toHaveCount(0);
     expect((await operatorPage.request.get(app.origin + '/api/admin/slots')).status()).toBe(403);
     await operatorPage.screenshot({ path: join(artifacts, 'operator-admin-denied.png') });
-    await operatorPage.getByRole('link', { name: 'Перейти к результатам' }).click();
-    await expect(operatorPage).toHaveURL(app.origin + '/');
+    await operatorPage.getByRole('link', { name: 'Перейти к рабочему экрану' }).click();
+    await expect(operatorPage).toHaveURL(app.origin + '/operator');
     await expect(operatorPage.getByRole('region', { name: 'Экран результатов ReelMe' })).toBeVisible();
   } finally { await operator.close(); await popup.close(); }
   expect(errors).toEqual([]);

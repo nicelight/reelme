@@ -32,8 +32,9 @@ test('saved test-video mode: camera → ordinary worker → visible QR → playa
   } });
   expect(saved.status()).toBe(201); const slotId = (await saved.json()).id;
   await page.reload(); await page.getByRole('button', { name: /Полный проход без/ }).click();
-  await page.getByRole('button', { name: 'Открыть тесты', exact: true }).click();
+  // Saved simulation mode already expands the test controls.
   const mode = page.getByLabel('Режим генерации', { exact: true });
+  await expect(mode).toBeVisible();
   await expect(mode).toHaveValue('inputs'); await mode.selectOption('video');
   await expect(page.getByText(/Письмо отправляется через настроенный SMTP/)).toBeVisible();
   await page.getByRole('button', { name: 'Сохранить сюжет', exact: true }).click();
@@ -68,7 +69,7 @@ test('saved test-video mode: camera → ordinary worker → visible QR → playa
   const operatorContext = await browser.newContext({ reducedMotion: 'reduce' });
   const operator = await operatorContext.newPage(); operator.on('pageerror', error => errors.push(error.message));
   try {
-    await operator.goto(app.origin);
+    await operator.goto(app.origin + '/operator');
     await operator.getByLabel('Логин').fill('operator'); await operator.getByLabel('Пароль', { exact: true }).fill(app.password);
     await operator.getByRole('button', { name: 'Войти', exact: true }).click();
     const qr = operator.locator('.card[data-session="1"] img.qr');

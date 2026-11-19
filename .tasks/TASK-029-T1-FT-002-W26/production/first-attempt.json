@@ -1,0 +1,19 @@
+{
+  "origin": "https://reelme.natureonzoom.win",
+  "status": "FAIL",
+  "navigationRetries": 0,
+  "pageErrors": [],
+  "unexpectedMutations": [],
+  "layouts": [],
+  "logout": true,
+  "download": {
+    "filename": "reelme.html",
+    "bytes": 437,
+    "canonicalBytesMatch": true,
+    "noSecrets": true
+  },
+  "failure": {
+    "phase": "desktop layout",
+    "type": "TimeoutError"
+  }
+}

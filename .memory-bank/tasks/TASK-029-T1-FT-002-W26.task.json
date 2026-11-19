@@ -1,0 +1,83 @@
+{
+  "id": "TASK-029-T1-FT-002-W26",
+  "title": "Вкладка «Фотобудка»: краткий первый запуск и скачивание страницы",
+  "status": "done",
+  "wave": "W26",
+  "feature": "FT-002",
+  "tier": "T1",
+  "reqs": [
+    "REQ-017",
+    "REQ-018"
+  ],
+  "depends_on": [],
+  "touched_files": [
+    "src/client/cloud/Photobooth.svelte",
+    "src/client/cloud/App.svelte",
+    "WebServer/reelme.html",
+    "Dockerfile",
+    ".dockerignore"
+  ],
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-20",
+      "result": "PASS",
+      "summary": "Локальный и серверный check/build PASS; 942 source hashes проверены до Docker build. Isolated Chromium smoke PASS: admin-only вкладка, exclusive navigation, cancel/accept и сохранение черновика, 7 native details с Enter/Space; download reelme.html побайтно совпадает с каноническим шаблоном после замены origin, без ключей. Просмотрены 8 screenshots desktop/mobile и dark/light, закрытый план/раскрытый первый шаг; fresh visual reviewer ship. Развёрнут reelme:20261119T202532Z-993844d-photobooth, healthy; backup, integrity_check=ok, schema 11 / accounts 2 / slots 3 / events 0 сохранены. Production browser: login admin, вкладка, download 437 bytes (канонический production HTML), desktop/mobile closed/all-open без horizontal overflow/JS ошибок; logout выполнен.",
+      "evidence": [
+        ".tasks/TASK-029-T1-FT-002-W26/reelme-photobooth-check.log",
+        ".tasks/TASK-029-T1-FT-002-W26/reelme-photobooth-build.log",
+        ".tasks/TASK-029-T1-FT-002-W26/reelme-photobooth-server-build.log",
+        ".tasks/TASK-029-T1-FT-002-W26/observations.json",
+        ".tasks/TASK-029-T1-FT-002-W26/run.log",
+        ".tasks/TASK-029-T1-FT-002-W26/visual-review.md",
+        ".tasks/TASK-029-T1-FT-002-W26/reelme-photobooth-activation.log",
+        ".tasks/TASK-029-T1-FT-002-W26/production/observations.json",
+        "deploy_to_nskserver.md"
+      ],
+      "limitations": [
+        "Первый production screenshot превысил 60 секунд в ожидании Manrope 700. Ограниченный повтор дождался шрифта и завершился PASS; первый failure сохранён.",
+        "Chromium; mobile — viewport эмуляция. digiCamControl не устанавливался, физическая камера не проверялась. fal/SMTP не настраивались.",
+        "Постоянные regression tests для инструкции не добавлялись; временный QA runner удалён из tests. Полный серверный suite не повторяли: backend не менялся."
+      ]
+    }
+  ],
+  "docs": [
+    "docs/MANUAL.md",
+    ".memory-bank/features/FT-002-photo-session.md",
+    "deploy_to_nskserver.md"
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-002-photo-session.md#ft-002-ac-004"
+  ],
+  "normative_inputs": [
+    ".memory-bank/prd.md",
+    ".memory-bank/contracts/integrations.md",
+    "DESIGN.md"
+  ],
+  "constraints": [
+    "Дополнительная вкладка admin, сжатая инструкция с раскрывающимися подробностями в существующем дизайне.",
+    "HappyStart трактуется как полный быстрый старт фотобудки; предположение сообщено пользователю."
+  ],
+  "invariants": [
+    "Скачивается канонический WebServer/reelme.html с origin текущего сервера; ключи не включаются.",
+    "Вкладка не меняет настройки/данные и не запускает съёмку."
+  ],
+  "verification_targets": [
+    "Admin-only navigation, native details keyboard, download filename/bytes/origin, draft сохранён при возвращении; desktop/mobile и обе темы.",
+    "Сборка в Docker содержит канонический HTML."
+  ],
+  "evidence_required": [
+    "Локальный browser smoke и визуальные снимки, check/build; hardware не подменять fixtures."
+  ]
+}

@@ -1,11 +1,13 @@
 <script lang="ts">
   /** Module contract: fetch protected catalog/pose bytes with installation auth,
    * then expose a short-lived object URL. Changes/unmount cancel requests and URLs.
+   * Explicit publicCatalog mode uses only public promo URLs with native Range loading;
+   * it never falls back to private endpoints or sends an installation key.
    * Guide reveal waits for decode; a replaced request cannot publish its image.
    * Source: docs/slot-setup/matrix.md. Never sends credentials to camera URLs. */
   import { request } from './api';
-  let { slotId, mediaId, installationKey, video = false, alt = '', path: explicitPath, contain = false, active = true, reveal = false }: {
-    slotId?: string; mediaId: string; installationKey: string; video?: boolean; alt?: string; path?: string; contain?: boolean; active?: boolean; reveal?: boolean;
+  let { slotId, mediaId, installationKey, video = false, alt = '', path: explicitPath, contain = false, active = true, reveal = false, publicCatalog = false }: {
+    slotId?: string; mediaId: string; installationKey: string; video?: boolean; alt?: string; path?: string; contain?: boolean; active?: boolean; reveal?: boolean; publicCatalog?: boolean;
   } = $props();
   const revealImage = $derived(reveal && !video);
   let player = $state<HTMLVideoElement>();
@@ -21,6 +23,10 @@
     const controller = new AbortController();
     let objectUrl = '';
     url = ''; failed = false;
+    if (publicCatalog) {
+      url = `/api/public/catalog/${encodeURIComponent(slotId ?? '')}/media/${encodeURIComponent(mediaId)}`;
+      return;
+    }
     void request(path, key, { signal: controller.signal }).then(r => r.blob()).then(async blob => {
       if (controller.signal.aborted) return;
       objectUrl = URL.createObjectURL(blob);

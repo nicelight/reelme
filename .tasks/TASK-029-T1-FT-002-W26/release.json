@@ -1,0 +1,14 @@
+{
+  "release": "20261119T202532Z-993844d-photobooth",
+  "base_release": "20261119T191045Z-993844d-promo-v2",
+  "commit": "993844d02effc3ab53de138b3af9d8d7eb6258dd",
+  "patch_archive": "/tmp/20261119T202532Z-993844d-photobooth-patch.tar.gz",
+  "patch_sha256": "92227cd898146f398009a7f99a900c7c26ff4df9ef70143bd91559b0d9618f89",
+  "source_manifest_sha256": "8828f49dbaf9bd3e2c9583158753e06dffadeeb6213cad6dd29276b899993dc9",
+  "changes": "admin Photobooth guide, canonical HTML download for current origin, Docker build includes WebServer template",
+  "verified": "local/nskserver check/build PASS; isolated admin guide/download/navigation and desktop/mobile dark/light PASS; fresh visual ship; production authenticated guide/download and desktop/mobile closed/all-open PASS, logged out",
+  "image_id": "sha256:92ce0a35e001a51999e60af8828f93802a52489ba8505b2d0b6f7b9386f20b58",
+  "verification_completed_utc": "2026-11-19T20:36:49.191091+00:00",
+  "backup": "/var/backups/reelme/before-20261119T202532Z-993844d-photobooth",
+  "limitations": "First production screenshot timed out waiting for Manrope700, bounded retry loaded the font and passed. No physical camera/digiCamControl installation; fal/SMTP not configured."
+}

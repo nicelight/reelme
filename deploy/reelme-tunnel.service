@@ -1,0 +1,19 @@
+[Unit]
+Description=ReelMe HTTP reverse SSH tunnel to nskigorprod
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=facetime
+ExecStart=/usr/bin/ssh -N -T -i /home/facetime/.ssh/id_ed25519_reelme -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -R 127.0.0.1:23000:127.0.0.1:3000 revtunnel@46.8.200.99
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

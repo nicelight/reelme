@@ -1,0 +1,139 @@
+{
+  "status": "PASS",
+  "draftPreserved": true,
+  "cancelPreservedEditor": true,
+  "exclusiveActiveTab": true,
+  "keyboardDetails": [
+    "1\nУстановите digiCamControl и подключите камеру\nСначала проверьте обычный снимок в программе.",
+    "2\nВключите веб-сервер digiCamControl\nОн соединяет локальную страницу с камерой.",
+    "3\nСохраните страницу ReelMe в папку WebServer\nОдин HTML-файл; интерфейс обновляется с сервера.",
+    "4\nВведите ключ установки один раз\nИспользуйте постоянный профиль браузера.",
+    "5\nПройдите путь до готового ролика\nПроверьте съёмку, результат, QR и получение видео.",
+    "Перед каждым мероприятием",
+    "Если что-то не заработало"
+  ],
+  "download": {
+    "filename": "reelme.html",
+    "bytes": 428,
+    "canonicalBytesMatch": true,
+    "loaderOrigin": "http://localhost:39263",
+    "secrets": false
+  },
+  "links": [
+    {
+      "text": "Скачать digiCamControl",
+      "href": "https://digicamcontrol.com/download",
+      "target": "_blank",
+      "rel": "noopener noreferrer"
+    },
+    {
+      "text": "Проверить поддержку камеры",
+      "href": "https://digicamcontrol.com/cameras",
+      "target": "_blank",
+      "rel": "noopener noreferrer"
+    },
+    {
+      "text": "http://localhost:5513/",
+      "href": "http://localhost:5513/",
+      "target": "_blank",
+      "rel": "noopener noreferrer"
+    },
+    {
+      "text": "Настройки в документации digiCamControl",
+      "href": "https://digicamcontrol.com/learn/userguide/settings",
+      "target": "_blank",
+      "rel": "noopener noreferrer"
+    },
+    {
+      "text": "http://localhost:5513/reelme.html",
+      "href": "http://localhost:5513/reelme.html",
+      "target": "_blank",
+      "rel": "noopener noreferrer"
+    },
+    {
+      "text": "страницу настройки фотобудки",
+      "href": "http://localhost:5513/reelme.html#setup",
+      "target": "_blank",
+      "rel": "noopener noreferrer"
+    },
+    {
+      "text": "страницу съёмки",
+      "href": "http://localhost:5513/reelme.html",
+      "target": "_blank",
+      "rel": "noopener noreferrer"
+    },
+    {
+      "text": "«Сегодня / Архив»",
+      "href": "/operator",
+      "target": "_blank",
+      "rel": "noopener"
+    },
+    {
+      "text": "экран результатов",
+      "href": "/results",
+      "target": "_blank",
+      "rel": "noopener"
+    }
+  ],
+  "operatorDenied": true,
+  "layout": [
+    {
+      "surface": "desktop",
+      "theme": "dark",
+      "state": "closed",
+      "screenshot": "/tmp/reelme-photobooth-qa/desktop-dark-closed.png"
+    },
+    {
+      "surface": "desktop",
+      "theme": "dark",
+      "state": "open",
+      "screenshot": "/tmp/reelme-photobooth-qa/desktop-dark-open.png"
+    },
+    {
+      "surface": "desktop",
+      "theme": "light",
+      "state": "closed",
+      "screenshot": "/tmp/reelme-photobooth-qa/desktop-light-closed.png"
+    },
+    {
+      "surface": "desktop",
+      "theme": "light",
+      "state": "open",
+      "screenshot": "/tmp/reelme-photobooth-qa/desktop-light-open.png"
+    },
+    {
+      "surface": "mobile",
+      "theme": "dark",
+      "state": "closed",
+      "screenshot": "/tmp/reelme-photobooth-qa/mobile-dark-closed.png"
+    },
+    {
+      "surface": "mobile",
+      "theme": "dark",
+      "state": "open",
+      "screenshot": "/tmp/reelme-photobooth-qa/mobile-dark-open.png"
+    },
+    {
+      "surface": "mobile",
+      "theme": "light",
+      "state": "closed",
+      "screenshot": "/tmp/reelme-photobooth-qa/mobile-light-closed.png"
+    },
+    {
+      "surface": "mobile",
+      "theme": "light",
+      "state": "open",
+      "screenshot": "/tmp/reelme-photobooth-qa/mobile-light-open.png"
+    }
+  ],
+  "horizontalOverflow": false,
+  "pageErrors": [],
+  "guideMutations": [],
+  "externalLinksVisited": false,
+  "visualReview": {
+    "allEightScreenshotsOpened": true,
+    "incumbentReference": "/tmp/reelme-promo-qa/admin-editor-preserved.png",
+    "finding": "No blocking visual issue. Existing admin colors, header, typography and active-tab treatment preserved. Mobile horizontal nav scroll is contained; clicking Photobooth brings its active tab into view. Content has no horizontal overflow in either theme.",
+    "mobileTabReachable": true
+  }
+}

@@ -29,8 +29,10 @@ AI-фотобудка для корпоративов, вечеринок и д�
 
 Пока видео готовится, фотобудка уже может принимать следующего гостя. Никому не нужно стоять у камеры и ждать 💜
 
+[Посмотреть сюжеты](https://reelme.natureonzoom.win/) · [Админка](https://reelme.natureonzoom.win/admin) · [Сегодня / Архив](https://reelme.natureonzoom.win/operator) · [Экран результатов](https://reelme.natureonzoom.win/results)
+
 ## 🛠️ Запустить у себя
 
 **Svelte · TypeScript · Fastify · SQLite · fal · digiCamControl**
 
-[Установка и работа с проектом](docs/MANUAL.md) · [Настройка сюжетов](docs/slot-setup/matrix.md) · [Развёртывание](deploy_to_nskigorprod.md)
+[Установка и работа с проектом](docs/MANUAL.md) · [Настройка сюжетов](docs/slot-setup/matrix.md) · [Развёртывание](deploy_to_nskserver.md)

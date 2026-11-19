@@ -1,0 +1,12 @@
+Opening admin
+Authenticated; opening Photobooth
+Canonical download verified
+Capturing desktop closed screenshot {"phase":"desktop closed screenshot","fonts":{"status":"loading","loading":[{"family":"Manrope","weight":"700"}]}}
+desktop closed verified
+Capturing desktop all-open screenshot {"phase":"desktop all-open screenshot","fonts":{"status":"loaded","loading":[]}}
+desktop all-open verified
+Capturing mobile closed screenshot {"phase":"mobile closed screenshot","fonts":{"status":"loaded","loading":[]}}
+mobile closed verified
+Capturing mobile all-open screenshot {"phase":"mobile all-open screenshot","fonts":{"status":"loaded","loading":[]}}
+mobile all-open verified
+Logged out

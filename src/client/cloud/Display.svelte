@@ -20,7 +20,7 @@
   let progress = $state<(DisplaySession | null)[]>([]);
   let issues = $state<DisplaySession[]>([]);
   let loadStates = $state<Record<string, 'delayed' | 'deprecated'>>({});
-  const publicScreen = new URLSearchParams(location.search).get('screen') === 'results';
+  const publicScreen = location.pathname === '/results';
   let resourcesReady = $state(false);
   let reduced = $state(false);
   let revision = $state(0);

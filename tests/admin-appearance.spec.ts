@@ -3,12 +3,12 @@ import { mkdir } from 'node:fs/promises';
 
 test.use({ capturePort: 0, reducedMotion: 'reduce' });
 test('admin workspace: responsive editor, themes and shared sections', async ({ page, app }) => {
-  const output = '.tasks/admin-design';
+  const output = process.env.REELME_BROWSER_ARTIFACTS ?? '.tasks/admin-design';
   await mkdir(output, { recursive: true });
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto(app.origin);
+  await page.goto(app.origin + '/admin');
   await page.getByLabel('Логин').fill('admin');
   await page.getByLabel('Пароль', { exact: true }).fill(app.password);
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
@@ -22,10 +22,12 @@ test('admin workspace: responsive editor, themes and shared sections', async ({ 
   await page.getByRole('button', { name: 'Экран результатов', exact: true }).click();
   await expect(page.getByLabel('Длительность показа страницы')).toBeEnabled();
   await page.screenshot({ path: `${output}/settings-desktop.png` });
+  await page.getByRole('link', { name: 'Сегодня / Архив', exact: true }).click();
   await page.getByRole('button', { name: 'Архив', exact: true }).click();
   await expect(page.getByText('Пока нет прошедших мероприятий.')).toBeVisible();
   await page.screenshot({ path: `${output}/archive-desktop.png` });
-  await page.getByRole('button', { name: 'Сюжеты', exact: true }).click();
+  await page.goto(app.origin + '/admin');
+  await expect(page.getByRole('heading', { name: 'Новый сюжет', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Светлая тема' }).click();
   await page.screenshot({ path: `${output}/editor-light.png`, fullPage: true });
   await page.getByRole('button', { name: 'Тёмная тема' }).click();

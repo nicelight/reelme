@@ -1,0 +1,101 @@
+{
+  "origin": "https://reelme.natureonzoom.win",
+  "status": "PASS",
+  "navigationRetries": 0,
+  "pageErrors": [],
+  "fontStates": [
+    {
+      "phase": "desktop closed screenshot",
+      "fonts": {
+        "status": "loading",
+        "loading": [
+          {
+            "family": "Manrope",
+            "weight": "700"
+          }
+        ]
+      }
+    },
+    {
+      "phase": "desktop all-open screenshot",
+      "fonts": {
+        "status": "loaded",
+        "loading": []
+      }
+    },
+    {
+      "phase": "mobile closed screenshot",
+      "fonts": {
+        "status": "loaded",
+        "loading": []
+      }
+    },
+    {
+      "phase": "mobile all-open screenshot",
+      "fonts": {
+        "status": "loaded",
+        "loading": []
+      }
+    }
+  ],
+  "failedResources": [],
+  "unexpectedMutations": [],
+  "layouts": [
+    {
+      "surface": "desktop",
+      "state": "closed",
+      "viewportWidth": 1440,
+      "scrollWidth": 1440,
+      "height": 1136,
+      "open": 0
+    },
+    {
+      "surface": "desktop",
+      "state": "all-open",
+      "viewportWidth": 1440,
+      "scrollWidth": 1440,
+      "height": 3775,
+      "open": 7
+    },
+    {
+      "surface": "mobile",
+      "state": "closed",
+      "viewportWidth": 390,
+      "scrollWidth": 390,
+      "height": 1342,
+      "open": 0
+    },
+    {
+      "surface": "mobile",
+      "state": "all-open",
+      "viewportWidth": 390,
+      "scrollWidth": 390,
+      "height": 5366,
+      "open": 7
+    }
+  ],
+  "logout": true,
+  "download": {
+    "filename": "reelme.html",
+    "bytes": 437,
+    "canonicalBytesMatch": true,
+    "noSecrets": true
+  },
+  "firstAttempt": {
+    "result": "screenshot timeout after 60 seconds; logged out",
+    "log": "first-attempt.log",
+    "observations": "first-attempt.json"
+  },
+  "repeat": {
+    "count": 1,
+    "result": "PASS without bypassing font readiness",
+    "diagnosis": "Manrope weight700 was loading before the first screenshot; it completed, all later font snapshots were loaded, and no resources failed."
+  },
+  "visualReview": {
+    "allFourScreenshotsOpened": true,
+    "closedAndSevenOpenValidated": true,
+    "longPathsWrap": true,
+    "horizontalOverflow": false,
+    "authStateSaved": false
+  }
+}

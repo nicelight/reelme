@@ -1,12 +1,14 @@
 <script lang="ts">
+  /** Shared story carousel. Capture mode may begin a session through its callback;
+   * previewOnly uses public media and permits browsing only, never selection/start. */
   import { onDestroy } from 'svelte';
   import type { CatalogItem } from '../../../shared/capture';
   import ProtectedMedia from '../ProtectedMedia.svelte';
   import { ribbonLight } from './motion';
   import brandMark from './assets/reelme-mark.png';
   import './assets/fonts.css';
-  let { items, activeId, installationKey, loading, error, busy, onbrowse, onbegin, onback, onrefresh }: {
-    items: CatalogItem[]; activeId?: string; installationKey: string; loading: boolean; error: string; busy: boolean;
+  let { items, activeId, installationKey, loading, error, busy, onbrowse, onbegin, onback, onrefresh, previewOnly = false }: {
+    items: CatalogItem[]; activeId?: string; installationKey: string; loading: boolean; error: string; busy: boolean; previewOnly?: boolean;
     onbrowse: (item: CatalogItem) => void; onbegin: (item: CatalogItem) => void; onback: () => void; onrefresh: () => void;
   } = $props();
   const ribbons = [
@@ -64,7 +66,7 @@
     if (disposed || revision !== movement) return;
     wrapped = []; teleported = false; previousId = undefined; transitioning = false;
   }
-  function choose(item: CatalogItem) { if (transitioning || busy || loading) return; pauseVideos(); onbegin(item); }
+  function choose(item: CatalogItem) { if (previewOnly || transitioning || busy || loading) return; pauseVideos(); onbegin(item); }
   function keyboard(event: KeyboardEvent) {
     if (loading || busy || event.target instanceof HTMLVideoElement || !(event.target instanceof HTMLElement)) return;
     if (event.target.closest('input,textarea,select,video')) return;
@@ -92,9 +94,9 @@
     <div class="event">Ваша киноистория</div>
   </header>
   <main>
-    <div class="story-intro"><h1>Выберите историю</h1><p>Сделайте фото, а мы превратим его в эффектное видео</p></div>
+    <div class="story-intro"><h1>{previewOnly ? 'Ваша киноистория' : 'Выберите историю'}</h1><p>{previewOnly ? 'Посмотрите, каким может стать ваше фото' : 'Сделайте фото, а мы превратим его в эффектное видео'}</p></div>
     {#if loading}<div class="catalog-state" role="status">Загружаем сюжеты…</div>
-    {:else if !items.length}<div class="catalog-state"><h2>Сюжеты скоро появятся</h2><p>Сотрудник поможет вам начать.</p><button onclick={onrefresh}>Обновить каталог</button></div>
+    {:else if !items.length}<div class="catalog-state"><h2>Сюжеты скоро появятся</h2>{#if !previewOnly}<p>Сотрудник поможет вам начать.</p>{/if}<button onclick={onrefresh}>Обновить каталог</button></div>
     {:else}
       <section bind:this={gallery} class="gallery" aria-label="Галерея сюжетов" aria-roledescription="карусель">
         {#if items.length > 1}<button class="arrow previous" onclick={() => select(requested - 1)} aria-label="Предыдущий сюжет"><svg viewBox="0 0 24 24"><path d="m14 5-7 7 7 7"/></svg></button>{/if}
@@ -107,16 +109,16 @@
               <div class="center-content" inert={offset !== 0} aria-hidden={offset !== 0}>
                 <div class="story-heading"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 13h23v15H5zM4 8l22-5 2 6-23 5zM10 7l5 5m4-7 5 5M11 18l8 4-8 4z"/></svg><div><h2>{title(item)}</h2></div></div>
                 <div class="story-preview" class:portrait={item.previewOrientation === 'portrait'}>
-                  {#if item.previewId && item.previewOrientation === 'portrait' && (offset === 0 || previousId === item.id)}<div class="preview-backdrop" aria-hidden="true" inert><ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} {installationKey} /></div>{/if}
+                  {#if item.previewId && item.previewOrientation === 'portrait' && (offset === 0 || previousId === item.id)}<div class="preview-backdrop" aria-hidden="true" inert><ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} {installationKey} publicCatalog={previewOnly} /></div>{/if}
                   {#if offset === 0 || previousId === item.id}
-                    {#if item.previewId}<ProtectedMedia slotId={item.id} mediaId={item.previewId} {installationKey} video active={offset === 0}/>
-                    {:else}<ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} {installationKey} alt={title(item)}/>{/if}
+                    {#if item.previewId}<ProtectedMedia slotId={item.id} mediaId={item.previewId} {installationKey} publicCatalog={previewOnly} video active={offset === 0}/>
+                    {:else}<ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} {installationKey} publicCatalog={previewOnly} alt={title(item)}/>{/if}
                   {/if}
                 </div>
-                <button class="choose" onclick={() => choose(item)} disabled={busy || transitioning}>Выбрать этот сюжет <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></button>
+                <button class="choose" class:preview-only={previewOnly} onclick={() => choose(item)} disabled={previewOnly || busy || transitioning} title={previewOnly ? 'Выбор сюжета доступен в фотобудке' : undefined}>{previewOnly ? 'Выбор доступен в фотобудке' : 'Выбрать этот сюжет'}{#if !previewOnly} <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg>{/if}</button>
               </div>
               <div class="side-button" inert={offset === 0} aria-hidden={offset === 0}>
-                <div class="side-media">{#if visible}<ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} {installationKey} alt={title(item)}/>{/if}</div>
+                <div class="side-media">{#if visible}<ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} {installationKey} publicCatalog={previewOnly} alt={title(item)}/>{/if}</div>
                 <a class="side-copy" href={`#slot=${encodeURIComponent(item.id)}`} onclick={(event) => { event.preventDefault(); void select(index); }} aria-label={`Выбрать сюжет: ${title(item)}`}><h2>{title(item)}</h2><span class="template"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 4 10 6-10 6z"/></svg>Шаблон</span></a>
               </div>
             </div>
@@ -125,7 +127,7 @@
         {#if items.length > 1}<button class="arrow next" onclick={() => select(requested + 1)} aria-label="Следующий сюжет"><svg viewBox="0 0 24 24"><path d="m10 5 7 7-7 7"/></svg></button>{/if}
       </section>
       <div class="catalog-controls">
-        <button class="catalog-back" onclick={onback}>← Назад в каталог</button>
+        {#if !previewOnly}<button class="catalog-back" onclick={onback}>← Назад в каталог</button>{/if}
         <nav class="dots" aria-label="Выбор сюжета">{#each items as item, index}<button class:active={selected === index} aria-label={`Сюжет ${index + 1}: ${title(item)}`} aria-current={selected === index ? 'true' : undefined} onclick={() => select(index)}></button>{/each}</nav>
         <span class="catalog-count" aria-live="polite">{selected + 1} / {items.length}</span>
         <button class="catalog-refresh" onclick={onrefresh}>Обновить каталог</button>
@@ -154,7 +156,9 @@
   .rim-halo:before{padding:.42vw}
   .rim-hotspot{position:absolute;top:-.025vw;left:8%;width:14%;height:.12vw;background:linear-gradient(90deg,transparent,#ffb0da 18%,#fffaf4 38%,#fffaf4 57%,#ffc3e3 72%,transparent);filter:drop-shadow(0 0 .15vw #ffe5f2) drop-shadow(0 0 .32vw #ff7fcaa6)}
   .story-heading{display:flex;gap:1.2vw;align-items:flex-start;height:6.1vw}.story-heading>svg{width:2.7vw;height:2.7vw;flex:none;border:1px solid #df99bc;border-radius:50%;padding:.5vw;stroke:#f2b4d2;fill:none;stroke-width:1.4}.story h2{font-size:1.9vw;margin:0 0 .2vw;font-weight:800;letter-spacing:-.025em}.story-preview{height:17.6vw;position:relative;border-radius:1.1vw;overflow:hidden;background:#130e17}.choose{display:flex;justify-content:center;align-items:center;gap:1vw;width:27vw;margin:auto;border:1px solid #ffe2d4;border-radius:99px;background:linear-gradient(110deg,#ffe5bf,#f58cca 65%,#dc8ee2);color:#241120;min-height:4.2vw;font-size:1.35vw;font-weight:800;box-shadow:0 .4vw 1.5vw #ed89c64a;transition:transform 160ms cubic-bezier(.23,1,.32,1)}.choose svg{width:1.8vw;height:1.8vw;fill:none;stroke:currentColor;stroke-width:1.8}.choose:active{transform:scale(.98)}.side-button{position:absolute;inset:0;display:block;width:100%;height:100%;background:transparent;border:0;padding:0;text-align:left;opacity:1;transition:opacity 260ms ease 170ms}.center .side-button{opacity:0;pointer-events:none;transition:opacity 150ms ease}.side-copy{text-decoration:none;color:inherit;position:absolute;top:0;bottom:0;left:50%;width:12.5vw;transform:translateX(-50%);display:flex;flex-direction:column;justify-content:flex-end;padding:1.6vw 1.3vw;background:linear-gradient(transparent 40%,#1b1019a0 70%,#1a111bef)}.side-copy h2{font-size:1.32vw;line-height:1.25;margin-bottom:1.15vw}.template{font-size:.9vw;display:flex;align-items:center;justify-content:center;gap:.4vw;border:1px solid #bb809c60;border-radius:99px;padding:.5vw .5vw;background:#51304465;color:#ffe0e1}.template svg{width:1vw;height:1vw;fill:#ffcfc9}.arrow{position:absolute;top:14.5vw;z-index:3;width:2.8vw;height:2.8vw;padding:.6vw;border-radius:50%;border:1px solid #ffd0cf;background:#3e2536aa;box-shadow:0 0 .8vw #eeb0b840}.arrow svg{fill:none;stroke:currentColor;stroke-width:2;width:100%;height:100%}.previous{left:-3.2vw}.next{right:-3.2vw}.dots{display:flex;justify-content:center;flex-wrap:wrap;gap:.65vw;max-width:45vw;margin:0}.dots button{padding:0;border:0;background:#65505e;width:.8vw;height:.8vw;border-radius:50%}.dots button.active{background:#fff0f8;box-shadow:0 0 .7vw #ff8cd2}
-  @media(hover:hover) and (pointer:fine){.choose:hover{transform:translateY(-2px)}.side-copy:hover .template{background:#75405c99}.arrow:hover{background:#76435f}}
+  @media(hover:hover) and (pointer:fine){.choose:hover:not(:disabled){transform:translateY(-2px)}.side-copy:hover .template{background:#75405c99}.arrow:hover{background:#76435f}}
+  .choose:disabled{cursor:default}
+  .choose.preview-only:disabled{background:#352030;border-color:#785367;color:#dcb9cc;box-shadow:none}
   .center-content{height:32.7vw;display:flex;flex-direction:column;gap:1vw}
   .story-heading{height:auto;flex:none;min-height:2.7vw}
   .story-preview{height:auto;flex:1;min-height:0}

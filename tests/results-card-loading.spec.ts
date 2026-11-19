@@ -44,7 +44,7 @@ test('first window delays its card behind healthy waiters; old card returns with
     if (attempts.size <= 2) return route.fulfill({ status: 404 });
     await release.promise; return fulfilImage(route);
   });
-  await page.goto(origin + '/?screen=results');
+  await page.goto(origin + '/results');
   await expect(page.locator('.card[data-session="2"]')).toBeVisible();
   await expect(page.locator('.card[data-session="1"]')).toHaveCount(0);
   await expect.poll(() => attempts.size).toBe(3);
@@ -63,7 +63,7 @@ test('two exhausted windows deprecate once; late responses and polling cannot re
     if (!route.request().url().includes('/1/frame')) return fulfilImage(route);
     attempts.add(route.request().url()); held.push(route);
   });
-  await page.goto(origin + '/?screen=results');
+  await page.goto(origin + '/results');
   await expect(page.locator('.card[data-session="2"]')).toBeVisible({ timeout: 8500 });
   await expect(page.locator('[data-progress-session="1"]')).toHaveText(/пройдите фотосессию снова/, { timeout: 8500 });
   expect(attempts.size).toBe(4);
@@ -83,7 +83,7 @@ test('unmount cancels the active window without retries or a failure report', as
     if (!route.request().url().includes('/1/frame')) return fulfilImage(route);
     attempts++;
   });
-  await page.goto(origin + '/?screen=results');
+  await page.goto(origin + '/results');
   await expect.poll(() => attempts).toBe(1);
   await page.goto('about:blank');
   await page.waitForTimeout(3500);
@@ -100,7 +100,7 @@ test('multiple delayed cards get their final turn without circular waiting', asy
     const seen = attempts.get(id) ?? new Set(); seen.add(url.href); attempts.set(id, seen);
     return route.fulfill({ status: 404 });
   });
-  await page.goto(origin + '/?screen=results');
+  await page.goto(origin + '/results');
   await expect(page.locator('.card[data-session="3"]')).toBeVisible();
   await expect(page.locator('.progress-label').filter({ hasText: 'пройдите фотосессию снова' }).first()).toBeVisible();
   await expect.poll(() => reports.length).toBe(2);
@@ -114,7 +114,7 @@ test('a new day ignores the previous pending image and resets local loading stat
     if (!route.request().url().includes('/1/frame')) return fulfilImage(route);
     attempts++; old = route;
   });
-  await page.goto(origin + '/?screen=results');
+  await page.goto(origin + '/results');
   await expect.poll(() => attempts).toBe(1);
   date = '2026-11-18';
   await expect(page.locator('.card[data-session="2"]')).toBeVisible();

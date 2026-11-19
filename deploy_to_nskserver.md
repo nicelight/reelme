@@ -1,4 +1,302 @@
-# Развёртывание ReelMe на igornskprod
+# Развёртывание ReelMe: nskserver через VPS nskigorprod
+
+## Текущая схема: nskserver, 20 ноября 2026 — запущено
+
+Размещение приложения — **nskserver (AlmaLinux 10.3, за CGNAT)**. VPS
+**nskigorprod** (46.8.200.99, AlmaLinux 9.8; прежний alias `igornskprod`)
+остаётся точкой входа HTTPS. Домен — https://reelme.natureonzoom.win.
+
+```text
+Интернет → VPS Caddy :443 → 127.0.0.1:23000 на VPS
+         → обратный SSH-туннель → nskserver 127.0.0.1:3000 → контейнер ReelMe
+```
+
+Сервер сам устанавливает исходящие SSH-соединения к VPS, поэтому публичный IP
+и проброс входящих портов за CGNAT не нужны. DNS и сертификат остаются на VPS.
+Порты приложения на обоих хостах привязаны только к loopback.
+
+### Текущий релиз: вкладка «Фотобудка» — 20 ноября 2026
+
+Работает **`reelme:20261119T202532Z-993844d-photobooth`**, image ID
+`sha256:92ce0a35e001a51999e60af8828f93802a52489ba8505b2d0b6f7b9386f20b58`.
+Добавлены инструкция первого запуска в админке и скачивание канонического HTML
+для текущего origin. Docker build теперь включает `WebServer/reelme.html`.
+
+- Base source: предыдущая поставка `20261119T191045Z-993844d-promo-v2`;
+  overlay SHA256 `92227cd898146f398009a7f99a900c7c26ff4df9ef70143bd91559b0d9618f89`.
+  Сервер проверил SHA256 всех 942 файлов перед сборкой. Исходники, manifest,
+  release.json и build.log: `/srv/reelme/releases/20261119T202532Z-993844d-photobooth/`.
+- Check/build PASS локально и на сервере. Browser smoke: admin-only вкладка,
+  переходы/черновик, keyboard details и реальные байты скачанного HTML; desktop/mobile,
+  обе темы. Постоянные тесты для инструкции не добавлялись, backend не менялся.
+- Backup: `/var/backups/reelme/before-20261119T202532Z-993844d-photobooth/`.
+  До/после: schema 11, 2 аккаунта, 3 слота, 0 мероприятий; integrity_check=ok,
+  контейнер healthy с SELinux container_t. Прежний runtime image сохранён.
+- Production browser: вход admin, вкладка и скачивание HTML размером 437 байт подтверждены;
+  desktop/mobile с закрытыми и всеми раскрытыми разделами, без horizontal overflow
+  и JS ошибок; logout выполнен. Первый screenshot ждал Manrope 700 более 60 секунд;
+  ограниченный повтор дождался шрифта и прошёл.
+- Доказательства и ограничения: [TASK-029](.memory-bank/tasks/TASK-029-T1-FT-002-W26.task.json).
+  Установка digiCamControl и реальная камера не проверялись; fal/SMTP не настраивались.
+
+### Предыдущий релиз: промогалерея — 20 ноября 2026
+
+Работает **`reelme:20261119T191045Z-993844d-promo-v2`**; image ID
+`sha256:0d520a6f2c1b68d9e8b47d27717b13d93bb673ebacda3b4b42837bec00e62cbd`.
+Это commit `993844d` с изменениями рабочей копии: публичная промогалерея, отдельные
+рабочие маршруты, явная неактивная кнопка выбора на главной и изменения деплоя ниже.
+
+- `/` — публичные сюжеты/превью без выбора и съёмки; `/admin` — редактор admin;
+  `/operator` — сегодня/архив обеих ролей; `/results` — fullscreen обеих ролей.
+  Старый `/?screen=results` возвращает 308 на `/results`.
+- Исходники, `release.json`, `source-files.json`, `build.log` и архивы поставки —
+  `/srv/reelme/releases/20261119T191045Z-993844d-promo-v2/`.
+  Базовый архив SHA256: `12489a27c4d1dd6e729f1433a0f9251477053437a5865a8cecd9166fa724c308`;
+  поверх него patch SHA256: `fe888e9c79bcd6dca7c22e9e4c0c3cffcad184b4c07d65444bb4d09fc4b06663`.
+  Перед сборкой сервер проверил SHA256 всех 940 файлов по manifest.
+- Локальный и серверный check/build PASS; полный последовательный API/shared suite
+  — 120/120 PASS. При параллельном прогоне один раз упал прежний camera abort test;
+  отдельный повтор 4/4 и последовательный полный прогон успешны.
+- Chromium на изолированных данных: 20 сценариев подтверждены; два устаревших
+  ожидания тестов исправлены и перепроверены. После финального оформления disabled
+  кнопки promo 2/2 PASS, desktop/mobile и image/video screenshots просмотрены.
+- Backup перед переключением: `/var/backups/reelme/before-20261119T191045Z-993844d-promo-v2/`.
+  Он уже содержит импортированные слоты. До/после: schema 11, 2 аккаунта, 3 слота,
+  0 мероприятий; `integrity_check=ok`, контейнер healthy, SELinux `container_t`.
+  Предыдущий runtime image `reelme:20261119T172650Z-993844d` сохранён.
+- Публичные страницы/loader, redirect, публичные медиа с Range, анонимные запреты,
+  login/session/logout обеих ролей и защита admin API подтверждены через HTTPS.
+  Настройки 3 слотов и метаданные/Range всех 7 материалов совпали после обновления.
+  Один первоначальный HTTP smoke получил connect timeout; повторный полный проход,
+  публичный HTTPS с VPS и loopback-туннель — PASS/200.
+- Production Chromium anonymous: desktop 1440×1000 и mobile 390×844, все 3 слота,
+  оба видео воспроизводятся, изображение загружено, листание работает. Нет JS/HTTP
+  ошибок, private API/mutation requests и horizontal overflow; ожидаемые отмены
+  загрузки предыдущего видео при смене карточки отмечены отдельно.
+- Проверки и артефакты: [TASK-028](.memory-bank/tasks/TASK-028-T2-FT-001-W25.task.json).
+  Реальные камера, fal и SMTP не проверялись; fal/SMTP пока не настроены.
+
+### Перенос локальных слотов — 20 ноября 2026
+
+Перенесены 3 слота, 7 записей медиа и все связанные файлы: 7 материалов,
+2 исходных шаблона MP4 и README каталога шаблонов. Таблица образцов ракурсов пуста.
+JSON настроек сохранён точно, включая `simulateGeneration=true` у двух слотов.
+Аккаунты, installation key, история и display settings сервера не заменялись.
+
+- Архив: `reelme-slots-20261119T184710Z.tar.gz`, 58 422 295 bytes; SHA256
+  `2eaa33bebdbfed8d29cfe3320a8bbfaa20f41a108953f08be5c8a0105a118272`.
+- Backup до импорта: `/var/backups/reelme/before-slots-20261119T184710Z/`.
+  Импорт выполнялся при остановленном приложении, только в пустые таблицы;
+  проверены SHA256 файлов, foreign keys и `integrity_check=ok`.
+- После запуска через публичный домен подтверждены все настройки 3 слотов,
+  метаданные 7 материалов и защищённая Range-выдача каждого файла.
+
+### Предыдущий релиз — 19 ноября 2026
+
+На nskserver собран и запущен **`reelme:20261119T172650Z-993844d`** из текущего
+commit `993844d02effc3ab53de138b3af9d8d7eb6258dd`. Дополнительно исправлен Dockerfile:
+в образ включены `public/test-videos` для симуляции генерации. Изменения Compose —
+настраиваемые UID/GID и поддержка образа, собранного на сервере.
+
+- Image ID: `sha256:370155d9aa8f2c9b150522a1883b706b35101585ee5db7e79d96b48215bea095`.
+- SHA256 архива исходников: `90da54815ce985c66433acd37d0fc10dcc8b0e86dce47aec9bec3a59a44d6b20`.
+  Исходники, `release.json`, `build.log` и результат локальных тестов хранятся в
+  `/srv/reelme/releases/20261119T172650Z-993844d/` (root, 0700).
+- Docker build на сервере успешен: Svelte/TypeScript check — 0 ошибок/предупреждений,
+  Vite/TypeScript build PASS, npm audit — 0 vulnerabilities. `npm test` для исходников
+  поставки на рабочем компьютере — 118 PASS, 0 fail/skip.
+- Перед переключением сохранён `/var/backups/reelme/before-20261119T172650Z-993844d/`:
+  весь каталог данных, app.env, Compose и прежний тег. Миграция SQLite 9 → 11 прошла,
+  `integrity_check=ok`, 2 аккаунта сохранены; контейнер healthy с SELinux `container_t`.
+- HTTP через VPS и публичный HTTPS — 200; sharp и декодирование обоих тестовых MP4
+  через FFmpeg проверены. Сборщик ресурсов видит новый контейнер. Свободно около 60 GiB на `/`.
+- Через публичный домен проверены login/session/logout admin/operator, `/admin`
+  и `/capture-loader.js`. Chromium: desktop 1440×1000 и mobile viewport 390×844;
+  новый центрированный login, фон `#0d0a13`, кнопка `#f5a4df`, без horizontal overflow.
+  JS exceptions/failed requests нет; 401 `/api/auth/session` ожидаем до входа.
+  Первый browser `networkidle` превысил 30 секунд, повторная проверка завершилась успешно.
+- fal/SMTP не настраивались; реальная камера, платная генерация и email не проверялись.
+
+### Доступ и расположение файлов
+
+- `ssh nskserver`: пользователь `facetime`, passwordless `sudo`; локальный SSH alias
+  использует `ProxyJump nskigorprod`, `HostName 127.0.0.1`, `Port 22022`.
+- `ssh nskigorprod`: root на VPS. `nskserver` — кодовое имя; системный hostname
+  пока `localhost.localdomain`.
+- Доступ к SSH поддерживает существующий `nsk-reverse-ssh.service` на nskserver:
+  VPS `127.0.0.1:22022` → nskserver `127.0.0.1:22`. Не останавливать его при деплое.
+- HTTP поддерживает отдельный [reelme-tunnel.service](deploy/reelme-tunnel.service).
+  Ключ `/home/facetime/.ssh/id_ed25519_reelme` хранится только на nskserver;
+  его public key добавлен пользователю VPS `revtunnel` с `restrict`,
+  `permitlisten="127.0.0.1:23000"`, `permitopen="127.0.0.1:23000"` и запретом команд.
+  Проверка host key включена; keepalive 30 секунд × 3, systemd перезапускает SSH
+  через 5 секунд после завершения. Tunnel и Docker включены в автозагрузку независимо.
+- Контекст ОС: `/home/facetime/OS_context.md` на nskserver; содержит сведения
+  об ОС, службах, дисках и эксплуатации без секретов.
+- Compose и тег образа: `/srv/reelme/compose.yaml`, `/srv/reelme/.env`.
+  Секреты: `/etc/reelme/app.env` (0600, root).
+- Данные: `/srv/reelme-data` (0700); резервные копии: `/var/backups/reelme`.
+  Здесь корневой раздел 70 GiB, а `/home` — отдельный раздел 843 GiB:
+  свободное место `/home` **не увеличивает** ёмкость `/srv` или `/var/lib/docker`.
+- Пользователь приложения на nskserver: `reelme`, UID 978 / GID 977. Эти значения
+  записаны в `/srv/reelme/.env` как `REELME_UID` / `REELME_GID`. Значения по умолчанию
+  989:988 оставлены для старого VPS, но на AlmaLinux 10 они заняты другими службами.
+- Изоляция контейнера и отсутствие дополнительных лимитов ресурсов сохранены.
+  SELinux Enforcing; для Docker явно включён `selinux-enabled: true`, mount `:Z`.
+  Docker Engine 29.10.0 / Compose 5.8.0; существующий Podman сохранён.
+- Сбор ресурсов — `reelme-observe.service`, `/var/log/reelme/resources.jsonl`
+  на nskserver; формат и ограничения описаны ниже.
+
+### История: первоначальная миграция 19 ноября
+
+Перенесена действовавшая на VPS версия `reelme:20261116-e979835-deploy1`,
+без обновления кода до текущего checkout. Image ID на обоих хостах:
+`sha256:774a409a25e40b5b7264ba5f65604e3df89253d0eaf3f730bc660cbf75edd843`.
+SHA256 архива образа: `eb07aebcb1b0bb7b8e57cecf048098d8e0fbd5350dfbd5abf05aef4c1234d0f4`;
+архива данных: `8c3eb4518bc70b7764d22e7a0318a391f81209d6c58028d4cb9f351b01bb842e`.
+Архивы проверены после передачи. Для прямого скачивания образа использовался
+временный ключ с доступом только к чтению одного архива; ключ и разрешение удалены.
+
+- SQLite `integrity_check=ok`; сохранены 2 аккаунта. На момент переноса сюжетов,
+  событий, сессий съёмки и заданий генерации не было.
+- HTTP nskserver `:3000`, VPS `:23000` и публичный HTTPS — 200;
+  `/capture-loader.js` — 200. Через публичный домен проверены login/session/logout
+  admin и operator, включая Secure/HttpOnly cookie.
+- Контейнер healthy; проверены sharp JPEG и FFmpeg/libx264. После перезапуска
+  контейнера данные доступны. После restart HTTP-туннеля маршрут восстановился,
+  административный SSH остался доступен. Полный reboot хоста не выполнялся.
+- Docker, оба туннеля и сборщик ресурсов active/enabled. Лог наблюдений содержит
+  новый контейнер. После развёртывания свободно около 63 GiB на `/`.
+- Caddy изменён только в upstream ReelMe (`3000` → `23000`), validate/reload успешны;
+  PID Caddy/FRP не изменились, конфигурации FRP и Caddy env совпали по SHA256.
+  Старые домены сохранили исходный 502; их недоступный backend не исправлялся.
+- Старый контейнер на VPS остановлен, резервная копия и образ сохранены.
+- fal и SMTP **не настроены** в перенесённом окружении. Исходящий HTTPS к fal.run
+  доступен (ответ 404 корневого URL); это не проверка API или генерации.
+  Реальная камера, генерация, email и нагрузка не проверялись.
+- Новая сборка, `npm run check` и `npm test` не выполнялись: исходники приложения
+  не менялись и переносился готовый работающий образ. Compose validation и
+  `git diff --check` успешны.
+
+### Обновление приложения на nskserver
+
+По решению оператора от 19 ноября сборка и пересборка **разрешены на nskserver**:
+у сервера 32 GB RAM (ОС показывает около 30 GiB). Полный `docker build`, включая
+`npm ci`, Svelte/TypeScript checks и Vite build, выполняется в build stage.
+Сборка на рабочем компьютере с передачей готового образа также допустима.
+Ограничение прежнего маломощного VPS больше не относится к серверу приложения;
+`nskigorprod` остаётся HTTPS-прокси и не участвует в сборке.
+
+На рабочем компьютере упаковать **текущий исходный код**, без `.env`, данных,
+`node_modules` и Git. Изменения checkout входят в архив; фиксировать commit,
+добавленные изменения и SHA256, не переиспользовать тег предыдущей поставки:
+
+```bash
+set -euo pipefail
+RELEASE="$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD)"
+SOURCE_ARCHIVE="/tmp/$RELEASE-source.tar.gz"
+tar -czf "$SOURCE_ARCHIVE" Dockerfile .dockerignore package.json package-lock.json \
+  tsconfig*.json vite.config.ts index.html src public/slot-prompts public/test-videos \
+  deploy/compose.yaml WebServer/reelme.html
+(cd /tmp && sha256sum "$RELEASE-source.tar.gz" > "$RELEASE-source.tar.gz.sha256")
+scp "$SOURCE_ARCHIVE" "$SOURCE_ARCHIVE.sha256" nskserver:/tmp/
+```
+
+На nskserver под root, подставив тот же RELEASE:
+
+```bash
+set -euo pipefail
+RELEASE='ЗНАЧЕНИЕ_ИЗ_ПРЕДЫДУЩЕГО_ШАГА'
+cd /tmp
+sha256sum -c "$RELEASE-source.tar.gz.sha256"
+install -d -m 0700 "/srv/reelme/releases/$RELEASE"
+tar -xzf "$RELEASE-source.tar.gz" -C "/srv/reelme/releases/$RELEASE"
+cd "/srv/reelme/releases/$RELEASE"
+docker build --platform linux/amd64 -t "reelme:$RELEASE" .
+docker image inspect "reelme:$RELEASE" --format '{{.Id}} {{.Os}}/{{.Architecture}}'
+```
+
+Сборка идёт при работающей прежней версии. Если checks или build завершились
+ошибкой, не менять runtime. Dockerfile включает промпты и `public/test-videos`:
+ролики нужны встроенному режиму тестовой генерации. `npm test` проверять для
+исходного кода поставки отдельно; production-образ не содержит тестовый runner.
+
+После успешной сборки остановить приложение и создать согласованный backup,
+затем заменить Compose и **только REELME_IMAGE** в `.env`, сохраняя UID/GID:
+
+```bash
+cd /srv/reelme
+BACKUP="/var/backups/reelme/before-$RELEASE"
+install -d -m 0700 "$BACKUP"
+cp -a .env compose.yaml /etc/reelme/app.env "$BACKUP/"
+docker compose stop app
+if ! tar --acls --xattrs --selinux -C /srv -czf "$BACKUP/data.tar.gz" reelme-data; then
+  docker compose up -d --no-build --pull never
+  exit 1
+fi
+install -m 0640 -o root -g reelme "/srv/reelme/releases/$RELEASE/deploy/compose.yaml" compose.yaml
+sed -i "s/^REELME_IMAGE=.*/REELME_IMAGE=reelme:$RELEASE/" .env
+docker compose config --quiet
+docker compose up -d --no-build --pull never
+# Дождаться healthy, проверить HTTP и журнал контейнера:
+docker compose ps
+curl --fail http://127.0.0.1:3000/ -o /dev/null
+```
+
+Старый образ и backup сохранять для отката. После старта проверить публичный
+вход и нужные сценарии; при несовместимых миграциях откатывать данные вместе с кодом.
+
+Затем с рабочего компьютера проверить весь маршрут:
+
+```bash
+ssh nskigorprod 'curl --fail http://127.0.0.1:23000/ -o /dev/null'
+curl --fail https://reelme.natureonzoom.win/ -o /dev/null
+```
+
+При обычном обновлении не менять Caddy и не перезапускать SSH-туннели.
+Setup при переносе существующих данных повторно не нужен: аккаунты, сессии,
+installation key и материалы сохраняются. Секреты не помещать в Git и отчёты.
+
+### Прокси, диагностика и откат переноса
+
+На VPS блок ReelMe в `/etc/caddy/Caddyfile` должен содержать
+`reverse_proxy 127.0.0.1:23000`. Старые блоки face-moment/FRP сохраняются.
+После изменения: `caddy validate --config /etc/caddy/Caddyfile --envfile
+/etc/caddy/face-moment.env`, затем `systemctl reload caddy`.
+
+Проверять цепочку от приложения наружу:
+
+1. nskserver: `sudo docker compose --project-directory /srv/reelme ps`,
+   `curl -f http://127.0.0.1:3000/`, журнал контейнера.
+2. nskserver: `systemctl status reelme-tunnel`,
+   `sudo journalctl -u reelme-tunnel -n 50 --no-pager`.
+3. VPS: `ss -lnt` (loopback 23000), `curl -f http://127.0.0.1:23000/`.
+4. Публичный HTTPS и журнал Caddy. При 502 проверить туннель и backend;
+   сертификат или DNS менять без свидетельств проблемы не нужно.
+
+Для восстановления HTTP-туннеля можно выполнить
+`sudo systemctl restart reelme-tunnel` на nskserver: административный SSH остаётся
+на независимом туннеле. Если недоступен сам nskserver, проверить питание/сеть
+на месте; VPS не способен восстановить выключенный сервер за CGNAT.
+
+Старый контейнер и исходные данные на VPS сохраняются остановленными для отката.
+Перед возвратом трафика **остановить приложение на nskserver**, перенести на VPS
+согласованную свежую копию данных и назначить владельца 989:988; затем запустить
+старый образ и вернуть upstream Caddy на `127.0.0.1:3000` с validate/reload.
+Без обратного переноса данных откат вернёт состояние на момент миграции и потеряет
+последующие изменения. Не запускать две доступные пользователям копии приложения.
+
+Резервная копия при переносе: `/var/backups/reelme/migrate-nskserver-20261119`
+на VPS (данные, app.env, Compose, .env и Caddyfile). Старый runtime и архив образа
+не удалять до принятия переноса. Перезагрузка хоста не заменяется проверкой
+перезапуска служб; факт её выполнения фиксировать отдельно.
+
+## История первоначального развёртывания на VPS
+
+Ниже — сведения и команды первоначального запуска 14–16 ноября. Упоминания
+запуска приложения на VPS и upstream `:3000` относятся к старой схеме.
+Для текущих обновлений использовать nskserver и инструкции выше; описание
+backup, структуры данных, локальной сборки и формата наблюдений остаётся применимо.
 
 Состояние подготовки: 14 ноября 2026; наблюдение и настройки ресурсов обновлены 16 ноября 2026. SSH alias — **`igornskprod`** (порядок букв отличается от имени этого файла). Приложение **запущено 16 ноября 2026**; актуальный результат — в разделе первого деплоя ниже. DNS настроен оператором.
 
@@ -85,7 +383,7 @@ Production smoke/login/restart не выполнялись. fal/SMTP не нас
 ## Файлы поставки и память
 
 - [Dockerfile](Dockerfile): multi-stage build, Node 22.23.5, production dependencies и FFmpeg в итоговом Debian Bookworm образе. Сборка запускает `npm run check` и `npm run build`.
-- [.dockerignore](.dockerignore): разрешает исходники, build manifests и `public/slot-prompts`; `.env`, Git, локальные данные и `node_modules` не отправляются в build context.
+- [.dockerignore](.dockerignore): разрешает исходники, build manifests, `public/slot-prompts` и `public/test-videos`; `.env`, Git, локальные данные и `node_modules` не отправляются в build context.
 - [deploy/compose.yaml](deploy/compose.yaml): только `image`, без `build`, `pull_policy: never`, порт `127.0.0.1:3000`, непривилегированный UID, read-only rootfs, отдельный writable `/data`, `TEMPLATE_VIDEOS_DIR=/data/template-videos`, SELinux `:Z`, tmpfs `/tmp`, ротация логов, healthcheck.
 - [deploy/app.env.example](deploy/app.env.example): шаблон server-only credentials. Compose читает значения буквально (`format: raw`): без shell-кавычек, по одной строке на значение.
 

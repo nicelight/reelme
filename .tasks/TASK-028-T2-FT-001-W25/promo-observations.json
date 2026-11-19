@@ -1,0 +1,21 @@
+{
+  "visibleStories": 13,
+  "hiddenExcluded": true,
+  "realImageDecoded": true,
+  "realVideoPlayed": true,
+  "browsing": [
+    "arrows",
+    "keyboard",
+    "side card",
+    "dots",
+    "wrap",
+    "refresh"
+  ],
+  "chooseDisabled": true,
+  "sessions": 0,
+  "mutations": [],
+  "privateRequests": [],
+  "pageErrors": [],
+  "badResponses": [],
+  "horizontalOverflow": false
+}

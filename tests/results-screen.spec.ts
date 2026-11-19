@@ -41,7 +41,7 @@ test('production results: admin timing, real preload/QR, first fill and stable p
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     expect((await request.get(origin + '/api/display/today')).status()).toBe(401);
-    await settings.goto(origin);
+    await settings.goto(origin + '/admin');
     await settings.getByLabel('Логин').fill('admin'); await settings.getByLabel('Пароль', { exact: true }).fill('test-password');
     await settings.getByRole('button', { name: 'Войти', exact: true }).click();
     await settings.getByRole('button', { name: 'Экран результатов', exact: true }).click();
@@ -51,7 +51,7 @@ test('production results: admin timing, real preload/QR, first fill and stable p
     await expect.poll(async () => (await (await settings.request.get(origin + '/api/admin/display-settings')).json()).pageDurationSeconds).toBe(20);
     expect((await settings.request.get(origin + '/api/display/today')).status()).toBe(200);
     await page.setViewportSize({ width: 1672, height: 941 });
-    await page.goto(origin + '/?screen=results');
+    await page.goto(origin + '/results');
     await page.getByLabel('Логин').fill('operator'); await page.getByLabel('Пароль', { exact: true }).fill('test-password');
     await page.getByRole('button', { name: 'Войти', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Экран результатов ReelMe' })).toBeVisible();

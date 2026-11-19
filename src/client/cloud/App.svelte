@@ -1,5 +1,7 @@
 <script lang="ts">
-  /** Module contract: account entry, shared archive/results for both accounts and admin-only scenario editor. Model
+  /** Module contract: account entry at /admin, /operator and /results.
+   * Both accounts use the operator workspace and fullscreen results;
+   * only admin at /admin loads the scenario editor. Model
    * changes remove incompatible fields; API remains the authority for access,
    * validation and persistence. Manual tests call Sessions; camera and generation
    * processing remain outside this editor. Source: docs/slot-setup/matrix.md. */
@@ -13,6 +15,7 @@
   import SlotEditor from './SlotEditor.svelte';
   import CaptureGuides from './CaptureGuides.svelte';
   import DisplaySettings from './DisplaySettings.svelte';
+  import Photobooth from './Photobooth.svelte';
   import Login from './Login.svelte';
   import brandMark from '../capture/story-prototype/assets/reelme-mark.png';
   import './admin.css';
@@ -20,10 +23,12 @@
   let archive = $state(false);
   let guides = $state(false);
   let displaySettings = $state(false);
-  const dedicatedScreen = new URLSearchParams(location.search).get('screen') === 'results';
+  let photobooth = $state(false);
+  const dedicatedScreen = location.pathname === '/results';
   let ready = $state(false);
   let role = $state<'admin' | 'operator' | null>(null);
   const adminRoute = location.pathname === '/admin';
+  const adminWorkspace = $derived(role === 'admin' && adminRoute);
   const publicScreen = $derived(ready && !!role && dedicatedScreen);
   const adminDenied = $derived(ready && role === 'operator' && adminRoute && !dedicatedScreen);
   let username = $state('');
@@ -58,7 +63,7 @@
     try {
       role = (await api<{ role: 'admin' | 'operator' }>('/auth/session')).role;
       if (role === 'operator') theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      if (role === 'admin' && !dedicatedScreen) await loadSlots();
+      if (adminWorkspace) await loadSlots();
     } catch (value) { if (!(value instanceof ApiError && value.status === 401)) fail(value); }
     finally { ready = true; }
   });
@@ -69,17 +74,17 @@
       role = (await api<{ role: 'admin' | 'operator' }>('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) })).role;
       theme = role === 'admin' || matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       password = '';
-      if (role === 'admin' && !dedicatedScreen) await loadSlots();
+      if (adminWorkspace) await loadSlots();
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
   function canLeave() { return !dirty || confirm('Есть несохранённые изменения. Продолжить без сохранения?'); }
   async function logout() {
-    if (role === 'admin' && !canLeave()) return;
+    if (adminWorkspace && !canLeave()) return;
     busy = true;
     try {
       await api('/auth/logout', { method: 'POST' });
-      role = null; archive = false; guides = false; displaySettings = false; slots = []; selectedId = null; draftId = crypto.randomUUID(); slotSelection++; photoCaches.clear(); draft = blankSlot(); baseline = JSON.stringify(draft); notice = ''; error = ''; videoMedia = undefined;
+      role = null; archive = false; guides = false; displaySettings = false; photobooth = false; slots = []; selectedId = null; draftId = crypto.randomUUID(); slotSelection++; photoCaches.clear(); draft = blankSlot(); baseline = JSON.stringify(draft); notice = ''; error = ''; videoMedia = undefined;
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
@@ -126,16 +131,16 @@
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
-  function beforeUnload(event: BeforeUnloadEvent) { if (role === 'admin' && !dedicatedScreen && dirty) event.preventDefault(); }
+  function beforeUnload(event: BeforeUnloadEvent) { if (adminWorkspace && dirty) event.preventDefault(); }
 </script>
 
 <svelte:window onbeforeunload={beforeUnload} />
-<svelte:head><title>ReelMe — {dedicatedScreen || displaySettings ? 'Экран результатов' : guides ? 'Образцы ракурсов' : archive ? 'Архив' : role === 'admin' ? 'Сюжеты' : role === 'operator' ? 'Ваши видео' : 'Вход'}</title></svelte:head>
+<svelte:head><title>ReelMe — {photobooth ? 'Фотобудка' : dedicatedScreen || displaySettings ? 'Экран результатов' : guides ? 'Образцы ракурсов' : archive ? 'Архив' : adminWorkspace ? 'Сюжеты' : role ? 'Ваши видео' : 'Вход'}</title></svelte:head>
 
-<div class:admin-shell={role === 'admin' && !publicScreen} data-admin-theme={theme}>
+<div class:admin-shell={adminWorkspace} data-admin-theme={theme}>
 {#if role && !publicScreen}
 <header class="app-header">
-  <a class="brand" href="/" aria-label="ReelMe — главная">{#if role === 'admin'}<img src={brandMark} alt="" /><span class="admin-wordmark">REELME</span>{:else}Reel<span>Me</span><span class="brand-caption">STUDIO</span>{/if}</a>
+  <a class="brand" href="/" aria-label="ReelMe — главная">{#if adminWorkspace}<img src={brandMark} alt="" /><span class="admin-wordmark">REELME</span>{:else}Reel<span>Me</span><span class="brand-caption">STUDIO</span>{/if}</a>
   <div class="header-actions">
     <button class="quiet theme-toggle" onclick={() => theme = theme === 'light' ? 'dark' : 'light'} aria-label={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></button>
     {#if role}<span class="role-label">{role === 'admin' ? 'Администратор' : 'Оператор'}</span><button class="quiet" onclick={logout} disabled={formDisabled}>Выйти</button>{/if}
@@ -144,11 +149,12 @@
 
 {#if ready && role && !adminDenied}
   <nav class="surface-nav" aria-label="Разделы">
-    <button class="quiet" aria-current={!archive && !guides && !displaySettings ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = false; guides = false; displaySettings = false; }}>{role === 'admin' ? 'Сюжеты' : 'Сегодня'}</button>
-    {#if role === 'admin'}<button class="quiet" aria-current={guides ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { guides = true; archive = false; displaySettings = false; } }}>Образцы ракурсов</button>{/if}
-    {#if role === 'admin'}<button class="quiet" aria-current={displaySettings ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { displaySettings = true; archive = false; guides = false; } }}>Экран результатов</button>{/if}
-    <button class="quiet" aria-current={archive ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (role !== 'admin' || canLeave()) { archive = true; guides = false; displaySettings = false; } }}>Архив</button>
-    <a class="button" href="/?screen=results" target="_blank" rel="noopener">Открыть экран</a>
+    <button class="quiet" aria-current={!archive && !guides && !displaySettings && !photobooth ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = false; guides = false; displaySettings = false; photobooth = false; }}>{adminWorkspace ? 'Сюжеты' : 'Сегодня'}</button>
+    {#if adminWorkspace}<button class="quiet" aria-current={guides ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { guides = true; archive = false; displaySettings = false; photobooth = false; } }}>Образцы ракурсов</button>{/if}
+    {#if adminWorkspace}<button class="quiet" aria-current={displaySettings ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { displaySettings = true; photobooth = false; archive = false; guides = false; } }}>Экран результатов</button>{/if}
+    {#if adminWorkspace}<button class="quiet" aria-current={photobooth ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { photobooth = true; archive = false; guides = false; displaySettings = false; } }}>Фотобудка</button>{/if}
+    {#if adminWorkspace}<a class="button" href="/operator">Сегодня / Архив</a>{:else}<button class="quiet" aria-current={archive ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = true; guides = false; displaySettings = false; photobooth = false; }}>Архив</button>{/if}
+    <a class="button" href="/results" target="_blank" rel="noopener">Открыть экран</a>
   </nav>
 {/if}
 {/if}
@@ -160,14 +166,16 @@
 {:else if publicScreen}
   <Display onunauthorized={() => role = null} />
 {:else if adminDenied}
-  <main class="centered"><h1>Админка доступна администратору</h1><p>Вы вошли как оператор.</p><a class="button" href="/">Перейти к результатам</a></main>
-{:else if displaySettings && role === 'admin'}
+  <main class="centered"><h1>Админка доступна администратору</h1><p>Вы вошли как оператор.</p><a class="button" href="/operator">Перейти к рабочему экрану</a></main>
+{:else if photobooth && adminWorkspace}
+  <Photobooth />
+{:else if displaySettings && adminWorkspace}
   <DisplaySettings onunauthorized={() => role = null} />
-{:else if guides && role === 'admin'}
+{:else if guides && adminWorkspace}
   <CaptureGuides onunauthorized={() => role = null} onBusy={uploadBusy} />
 {:else if archive}
   <Archive {role} onunauthorized={() => role = null} />
-{:else if role === 'operator'}
+{:else if !adminWorkspace}
   <Display onunauthorized={() => role = null} />
 {:else}
   <main class="workspace">

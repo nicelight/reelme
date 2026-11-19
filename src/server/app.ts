@@ -1,6 +1,7 @@
 /** Composes HTTP, private storage and session workers. Startup restores unfinished
  * publication before workers start; publication uses the configured public origin.
- * Capture-loader serves the current bundle without changing the local camera origin. */
+ * Serves public promo /, account workspaces /admin, /operator and results /results;
+ * private APIs retain their role checks. Capture-loader keeps the local camera origin. */
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
@@ -79,8 +80,13 @@ export async function createApp(config: Config, options: { now?: () => number; l
   await app.register(fastifyStatic, { root: join(config.clientDir, 'assets'), prefix: '/assets/', decorateReply: false, immutable: true, maxAge: '1y', index: false });
   // Stable prompt filenames must revalidate; empty Recast files are valid assets.
   await app.register(fastifyStatic, { root: join(config.clientDir, 'slot-prompts'), prefix: '/slot-prompts/', decorateReply: false, immutable: false, maxAge: 0, index: false, setHeaders: response => { response.header('Cache-Control', 'no-cache'); } });
-  app.get('/', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
+  app.get('/', async (request, reply) => {
+    if (new URL(request.url, config.origin).searchParams.get('screen') === 'results') return reply.redirect('/results', 308);
+    return reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8'));
+  });
   app.get('/admin', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
+  app.get('/operator', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
+  app.get('/results', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
   app.get('/capture-loader.js', async (_request, reply) => {
     type Entry = { file: string; css?: string[]; imports?: string[] };
     const manifest = JSON.parse(await readFile(join(config.clientDir, '.vite/manifest.json'), 'utf8')) as Record<string, Entry>;

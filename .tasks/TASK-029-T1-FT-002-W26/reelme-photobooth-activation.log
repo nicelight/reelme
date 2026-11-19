@@ -1,0 +1,10 @@
+ Container reelme-app-1 Stopping 
+ Container reelme-app-1 Stopped 
+ Container reelme-app-1 Recreate 
+ Container reelme-app-1 Recreated 
+ Container reelme-app-1 Starting 
+ Container reelme-app-1 Started 
+{"schema":11,"accounts":2,"slots":3,"events":0}
+{"schema":11,"accounts":2,"slots":3,"events":0}
+image=reelme:20261119T202532Z-993844d-photobooth health=healthy user=978:977 process=system_u:system_r:container_t:s0:c508,c649
+Backup: /var/backups/reelme/before-20261119T202532Z-993844d-photobooth

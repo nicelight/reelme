@@ -25,7 +25,7 @@ test('Chromium: operator cannot delete; admin cancel preserves files, confirmati
   try {
     child=spawn(process.execPath,['--import','tsx','tests/cleanup-browser-server.ts'],{env:{...process.env,DATA_DIR:dataDir},stdio:'ignore'});
     let started=false;for(let i=0;i<100;i++){if(child.exitCode!==null)throw Error('Cleanup fixture exited');try{if((await fetch(origin)).ok){started=true;break;}}catch{}await new Promise(r=>setTimeout(r,100));}expect(started).toBe(true);
-    await page.goto(origin);await login('operator');await expect(page.getByRole('button',{name:/Удалить мероприятие/})).toHaveCount(0);
+    await page.goto(origin + '/operator');await login('operator');await expect(page.getByRole('button',{name:/Удалить мероприятие/})).toHaveCount(0);
     await page.getByRole('button',{name:'Выйти',exact:true}).click();await login('admin');
     await expect(page.getByRole('button',{name:/Удалить мероприятие/})).toHaveCount(2);
     await page.getByRole('button',{name:'Удалить мероприятие 14 ноября 2026 г.',exact:true}).click();

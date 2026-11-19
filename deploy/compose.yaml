@@ -1,11 +1,11 @@
 name: reelme
 services:
   app:
-    image: ${REELME_IMAGE:?Set REELME_IMAGE to the locally built release tag}
+    image: ${REELME_IMAGE:?Set REELME_IMAGE to the built release tag}
     pull_policy: never
     restart: unless-stopped
     init: true
-    user: "989:988"
+    user: "${REELME_UID:-989}:${REELME_GID:-988}"
     env_file:
       - path: /etc/reelme/app.env
         format: raw

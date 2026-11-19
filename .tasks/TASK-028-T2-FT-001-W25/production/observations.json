@@ -1,0 +1,136 @@
+{
+  "origin": "https://reelme.natureonzoom.win",
+  "surfaces": [
+    {
+      "name": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "errors": [],
+      "mutations": [],
+      "privateRequests": [],
+      "failedRequests": [],
+      "abortedRequests": [
+        {
+          "url": "https://reelme.natureonzoom.win/api/public/catalog/676b063f-d1bd-47c1-aa1e-8b21ebc2b3fe/media/3e2ad42b-673d-41d8-b0ca-e1c7a37a27f6",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://reelme.natureonzoom.win/api/public/catalog/676b063f-d1bd-47c1-aa1e-8b21ebc2b3fe/media/3e2ad42b-673d-41d8-b0ca-e1c7a37a27f6",
+          "error": "net::ERR_ABORTED"
+        }
+      ],
+      "badResponses": [],
+      "stories": [
+        {
+          "index": 0,
+          "title": "Гном утешает белоснежку,",
+          "video": true,
+          "playback": {
+            "currentTime": 0.317074,
+            "duration": 27.072,
+            "readyState": 3,
+            "width": 854,
+            "height": 480
+          }
+        },
+        {
+          "index": 1,
+          "title": "Танец на стиле",
+          "video": true,
+          "playback": {
+            "currentTime": 0.207528,
+            "duration": 15.7,
+            "readyState": 2,
+            "width": 1080,
+            "height": 1920
+          }
+        },
+        {
+          "index": 2,
+          "title": "Наконец то получился",
+          "video": false,
+          "image": {
+            "width": 1254,
+            "height": 1254
+          }
+        }
+      ],
+      "httpStatus": 200,
+      "layout": {
+        "scrollWidth": 1440,
+        "viewportWidth": 1440,
+        "scrollHeight": 1000
+      },
+      "cookies": [],
+      "title": "ReelMe — Ваша киноистория"
+    },
+    {
+      "name": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "errors": [],
+      "mutations": [],
+      "privateRequests": [],
+      "failedRequests": [],
+      "abortedRequests": [
+        {
+          "url": "https://reelme.natureonzoom.win/api/public/catalog/676b063f-d1bd-47c1-aa1e-8b21ebc2b3fe/media/3e2ad42b-673d-41d8-b0ca-e1c7a37a27f6",
+          "error": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://reelme.natureonzoom.win/api/public/catalog/676b063f-d1bd-47c1-aa1e-8b21ebc2b3fe/media/3e2ad42b-673d-41d8-b0ca-e1c7a37a27f6",
+          "error": "net::ERR_ABORTED"
+        }
+      ],
+      "badResponses": [],
+      "stories": [
+        {
+          "index": 0,
+          "title": "Гном утешает белоснежку,",
+          "video": true,
+          "playback": {
+            "currentTime": 0.321768,
+            "duration": 27.072,
+            "readyState": 4,
+            "width": 854,
+            "height": 480
+          }
+        },
+        {
+          "index": 1,
+          "title": "Танец на стиле",
+          "video": true,
+          "playback": {
+            "currentTime": 0.226911,
+            "duration": 15.7,
+            "readyState": 2,
+            "width": 1080,
+            "height": 1920
+          }
+        },
+        {
+          "index": 2,
+          "title": "Наконец то получился",
+          "video": false,
+          "image": {
+            "width": 1254,
+            "height": 1254
+          }
+        }
+      ],
+      "httpStatus": 200,
+      "layout": {
+        "scrollWidth": 390,
+        "viewportWidth": 390,
+        "scrollHeight": 851
+      },
+      "cookies": [],
+      "title": "ReelMe — Ваша киноистория"
+    }
+  ],
+  "status": "PASS"
+}

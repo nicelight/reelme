@@ -1,0 +1,96 @@
+{
+  "id": "TASK-028-T2-FT-001-W25",
+  "title": "Публичная галерея и отдельные рабочие страницы с переносом слотов на nskserver",
+  "status": "done",
+  "wave": "W25",
+  "feature": "FT-001",
+  "tier": "T2",
+  "reqs": [
+    "REQ-022",
+    "REQ-018"
+  ],
+  "depends_on": [],
+  "touched_files": [
+    "src/server/scenarios/catalog.ts",
+    "src/server/app.ts",
+    "src/client/cloud/Promo.svelte",
+    "src/client/cloud/App.svelte",
+    "src/client/cloud/main.ts",
+    "src/client/capture/story/StoryCatalog.svelte",
+    "src/client/capture/ProtectedMedia.svelte",
+    "tests/promo.test.ts",
+    "tests/promo.spec.ts"
+  ],
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "tests",
+      "command": "npm test",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-20",
+      "result": "PASS",
+      "summary": "Локальный и серверный check/build PASS (0 Svelte ошибок/предупреждений). API/shared suite 120/120 PASS последовательно; 20 distinct UI сценариев подтверждены после исправления двух устаревших тестовых ожиданий, финальный promo 2/2 PASS. Public projection/Range/hidden/replaced/capture denial и обе роли по новым маршрутам проверены. Fresh visual verdict ship для исправленного disabled CTA. На nskserver healthy reelme:20261119T191045Z-993844d-promo-v2, backup сохранён. Импорт 3 слотов/7 медиа проверен по конфигурации, SHA256 файлов и Range; после деплоя конфигурация и медиа повторно совпали. Production HTTPS/account/public media smoke PASS; Chromium anonymous desktop/mobile: все3 слота, оба видео воспроизводятся, изображение загружено, нет JS/private/mutation/HTTP errors и horizontal overflow.",
+      "evidence": [
+        ".tasks/TASK-028-T2-FT-001-W25/reelme-routes-check.log",
+        ".tasks/TASK-028-T2-FT-001-W25/reelme-routes-build.log",
+        ".tasks/TASK-028-T2-FT-001-W25/reelme-routes-test-serial.log",
+        ".tasks/TASK-028-T2-FT-001-W25/ui-suite-summary.json",
+        ".tasks/TASK-028-T2-FT-001-W25/promo-test.log",
+        ".tasks/TASK-028-T2-FT-001-W25/promo-observations.json",
+        ".tasks/TASK-028-T2-FT-001-W25/visual-verdict.md",
+        ".tasks/TASK-028-T2-FT-001-W25/reelme-promo-activation.log",
+        ".tasks/TASK-028-T2-FT-001-W25/reelme-promo-smoke-retry.log",
+        ".tasks/TASK-028-T2-FT-001-W25/reelme-promo-slots-recheck.log",
+        ".tasks/TASK-028-T2-FT-001-W25/production/observations.json",
+        "deploy_to_nskserver.md"
+      ],
+      "limitations": [
+        "Первый параллельный API suite после исправления promo fixture:119/120, существующий camera abort test однажды дал12!==11. Отдельный camera4/4 и полный последовательный120/120 PASS; код камеры не менялся.",
+        "Первый HTTP smoke получил connect timeout; повторный полный проход и HTTPS с VPS успешны. При смене карточки браузер штатно отменяет незавершённую загрузку предыдущего видео.",
+        "Chromium; mobile — эмуляция viewport. Локальные данные синтетические; production smoke anonymous/read-only. Реальные камера/fal/SMTP не проверялись, fal/SMTP не настроены."
+      ]
+    }
+  ],
+  "docs": [
+    ".memory-bank/contracts/access.md",
+    ".memory-bank/contracts/http-api.md",
+    "docs/MANUAL.md",
+    "deploy_to_nskserver.md"
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-001-scenarios.md#ft-001-ac-005"
+  ],
+  "normative_inputs": [
+    ".memory-bank/prd.md",
+    ".memory-bank/contracts/access.md",
+    "DESIGN.md"
+  ],
+  "constraints": [
+    "Сохранить существующий StoryCatalog; разрешены перенос локальных слотов и деплой на nskserver.",
+    "Переносить только настройки/материалы слотов, сохраняя серверные аккаунты и ключ установки; при реальной сложности остановить перенос."
+  ],
+  "invariants": [
+    "Public API не открывает настройки, дополнительные референсы, историю или capture.",
+    "Сроки аккаунтных сессий, установка и права удаления не меняются."
+  ],
+  "verification_targets": [
+    "Public projection/Range/hidden/replaced/capture denial; браузерное листание/preview и обе роли по маршрутам.",
+    "Совпадение 3 слотов/7 медиа после импорта и деплоя, backup и production health."
+  ],
+  "evidence_required": [
+    "API, UI и production smoke; реальные камера/fal/SMTP не подменять fixtures."
+  ]
+}

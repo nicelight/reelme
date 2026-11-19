@@ -1,0 +1,84 @@
+{
+  "scope": "Local isolated Fastify/SQLite fixtures; no production access or changes",
+  "initialSuite": {
+    "specs": [
+      "promo",
+      "results-access",
+      "admin-appearance",
+      "archive",
+      "cleanup",
+      "display",
+      "results-screen",
+      "results-card-loading",
+      "results-preload",
+      "event-creation",
+      "test-video"
+    ],
+    "passed": 16,
+    "failed": 2,
+    "duration": "6.8m",
+    "failures": [
+      {
+        "spec": "archive",
+        "reason": "Stale test assumed admin theme starts light; admin is already dark",
+        "correction": "Set dark only when necessary and assert html[data-theme=dark]",
+        "rerun": "PASS"
+      },
+      {
+        "spec": "test-video",
+        "reason": "Stale test clicked Open tests although persisted simulateGeneration already expands controls",
+        "correction": "Assert generation mode visible and continue",
+        "rerun": "PASS"
+      }
+    ]
+  },
+  "reruns": [
+    {
+      "specs": [
+        "archive",
+        "promo"
+      ],
+      "passed": 3,
+      "duration": "16.5s",
+      "artifacts": "/tmp/reelme-promo-qa/rerun"
+    },
+    {
+      "specs": [
+        "test-video"
+      ],
+      "passed": 1,
+      "duration": "22.1s",
+      "artifacts": "/tmp/reelme-promo-qa/test-video-rerun"
+    }
+  ],
+  "additionalChecks": {
+    "spec": "editor",
+    "cases": [
+      "sequential setup",
+      "draft source binding"
+    ],
+    "passed": 2,
+    "duration": "19.9s",
+    "artifacts": "/tmp/reelme-promo-qa/editor"
+  },
+  "distinctCasesPassedBeforeFinalButtonStyleChange": 20,
+  "finalPromoRerunLog": "/tmp/reelme-promo-qa/final/promo-test.log",
+  "limitations": [
+    "Synthetic image/video fixtures",
+    "Chromium only; mobile viewport emulation",
+    "No real camera, fal or external SMTP"
+  ],
+  "finalPromoRerun": {
+    "passed": 2,
+    "duration": "10.1s",
+    "log": "/tmp/reelme-promo-qa/final/promo-test.log",
+    "observations": "/tmp/reelme-promo-qa/final/promo-observations.json",
+    "screenshots": [
+      "/tmp/reelme-promo-qa/final/promo-desktop.png",
+      "/tmp/reelme-promo-qa/final/promo-mobile.png",
+      "/tmp/reelme-promo-qa/final/promo-preview-desktop.png",
+      "/tmp/reelme-promo-qa/final/promo-preview-mobile.png"
+    ],
+    "visualReview": "All four images opened and inspected. Existing StoryCatalog composition retained. Disabled selection is muted and explicitly says selection is available at the booth. Text fits desktop/mobile. No horizontal overflow or loading spinner."
+  }
+}

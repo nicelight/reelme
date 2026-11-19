@@ -1,0 +1,8 @@
+/ 200
+/admin 200
+/operator 200
+/results 200
+/capture-loader.js 200
+admin session / display / admin boundary PASS
+operator session / display / admin boundary PASS
+Public catalog, media Range, anonymous boundaries and legacy redirect PASS; visible slots: 3

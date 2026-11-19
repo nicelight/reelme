@@ -95,7 +95,7 @@ for (const action of ['save', 'skip'] as const) {
     const account = await browser.newContext();
     try {
       const archive = await account.newPage();
-      await archive.goto(app.origin);
+      await archive.goto(app.origin + '/operator');
       await archive.getByLabel('Логин', { exact: true }).fill('operator');
       await archive.getByLabel('Пароль', { exact: true }).fill(app.password);
       await archive.getByRole('button', { name: 'Войти', exact: true }).click();
