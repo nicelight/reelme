@@ -106,6 +106,9 @@ test('five admin guides are pinned to sessions, protected from cleanup and absen
     assert.equal((await f.app.inject({ method: 'PUT', url: '/api/admin/capture-guides/1', headers: { ...headers, origin: f.config.origin }, payload: { mediaId: jpeg.id } })).statusCode, expected);
   }
   const assign = (number: number, mediaId: string | null) => f.app.inject({ method: 'PUT', url: `/api/admin/capture-guides/${number}`, headers: admin, payload: { mediaId } });
+  const caption = (number: number, text: string) => f.app.inject({ method: 'PUT', url: `/api/admin/capture-guides/${number}`, headers: admin, payload: { caption: text } });
+  assert.equal((await caption(1, '  Приподнимите подбородок  ')).json().caption, 'Приподнимите подбородок');
+  assert.equal((await caption(1, 'я'.repeat(121))).statusCode, 400);
   assert.equal((await assign(1, demo.id)).statusCode, 400); assert.equal((await assign(6, jpeg.id)).statusCode, 400);
   for (let number = 1; number <= 5; number++) assert.equal((await assign(number, number === 1 ? jpeg.id : thumbnail.id)).statusCode, 200);
   const input = { participants: 1, photosPerParticipant: 4, orientation: 'landscape', aspectRatio: '16:9', description: 'Guided session', visible: true, thumbnailId: thumbnail.id, demoId: demo.id, model: p2v, mode: 'P2V', resolution: '720p', duration: 5, referenceIds: [], prompt: 'Keep @Element1' };
@@ -117,6 +120,11 @@ test('five admin guides are pinned to sessions, protected from cleanup and absen
   };
   const day1 = await start(); f.advance(86400_000); const day2 = await start();
   assert.deepEqual(day1.posePlan.map(pose => pose.guideMediaId), [jpeg.id, thumbnail.id, thumbnail.id, thumbnail.id]);
+  assert.deepEqual(day1.posePlan.map(pose => pose.caption), ['Приподнимите подбородок', undefined, undefined, undefined]);
+  const sharedGuide = `/api/capture/guides/${jpeg.id}`;
+  assert.equal((await f.app.inject({ url: sharedGuide })).statusCode, 401);
+  assert.deepEqual((await f.app.inject({ url: sharedGuide, headers: installation })).rawPayload, image);
+  assert.equal((await f.app.inject({ url: `/api/capture/guides/${nextImage.id}`, headers: installation })).statusCode, 404);
   const sampleUrl = `/api/capture/sessions/${day2.sessionId}/guides/1`;
   for (const [headers, expected] of [[{}, 401], [{ cookie }, 403], [{ cookie: operator }, 403]] as const) assert.equal((await f.app.inject({ url: sampleUrl, headers })).statusCode, expected);
   const guide = await f.app.inject({ url: sampleUrl, headers: installation });
@@ -127,8 +135,13 @@ test('five admin guides are pinned to sessions, protected from cleanup and absen
   const payload = buildModelInput(snap, { photos: ['camera-0','camera-1','camera-2','camera-3'], references: [] });
   assert.deepEqual(payload, { prompt: input.prompt, elements: [{ frontal_image_url: 'camera-0', reference_image_urls: ['camera-1','camera-2','camera-3'] }], image_urls: [], duration: 5, resolution: '720p', aspect_ratio: '16:9' });
   assert.ok(materialIds(snap).includes(jpeg.id)); assert.equal(JSON.stringify(snap.generation).includes(jpeg.id), false);
+  await caption(1, ' '); await caption(3, 'Левым плечом к камере');
   await assign(1, nextImage.id); await assign(3, null);
+  assert.equal((await f.app.inject({ url: sharedGuide, headers: installation })).statusCode, 404);
   const fresh = await start(); assert.equal(fresh.posePlan[0].guideMediaId, nextImage.id); assert.equal(fresh.posePlan[2].guideMediaId, undefined);
+  assert.equal(fresh.posePlan[0].caption, undefined);
+  assert.equal(fresh.posePlan[2].caption, 'Левым плечом к камере');
+  assert.equal(readSession(db, day2.sessionId).snapshot.posePlan![0].caption, 'Приподнимите подбородок');
   assert.equal((await f.app.inject({ url: `/api/capture/sessions/${fresh.sessionId}/guides/3`, headers: installation })).statusCode, 404);
   assert.deepEqual((await f.app.inject({ url: sampleUrl, headers: installation })).rawPayload, image);
   const cleanup = createEventCleanup(db, f.config.dataDir, f.app.log); t.after(() => cleanup.stop());

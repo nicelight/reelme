@@ -323,6 +323,10 @@ test('draft source binding and five-guide page show actual immutable media on de
   }
   const before = await (await page.request.get(app.origin + '/api/admin/capture-guides')).json();
   const firstCard = page.getByRole('region', { name: 'Ракурс 1', exact: true });
+  const captionInput = firstCard.getByLabel('Подпись под образцом');
+  await captionInput.fill('Поднимите подбородок');
+  await firstCard.getByRole('button', { name: 'Сохранить подпись' }).click();
+  await expect.poll(async () => (await (await page.request.get(app.origin + '/api/admin/capture-guides')).json())[0].caption).toBe('Поднимите подбородок');
   await firstCard.locator('input[type=file]').setInputFiles(app.image);
   await expect.poll(async () => (await (await page.request.get(app.origin + '/api/admin/capture-guides')).json())[0].mediaId).not.toBe(before[0].mediaId);
   await page.screenshot({ path: join(artifacts, 'pose-guides-desktop.png'), fullPage: true });
@@ -332,7 +336,16 @@ test('draft source binding and five-guide page show actual immutable media on de
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: join(artifacts, 'pose-guides-mobile.png'), fullPage: true });
   await page.reload(); await page.getByRole('button', { name: 'Параметры', exact: true }).click();
-  await expect(page.locator('.guide-card img')).toHaveCount(4);
+  const guideImages = page.locator('.guide-card img');
+  await expect(guideImages).toHaveCount(4);
+  for (const image of await guideImages.all()) {
+    await expect(image).toHaveJSProperty('naturalWidth', 512);
+    const transfer = await image.evaluate((img: HTMLImageElement) =>
+      (performance.getEntriesByName(img.currentSrc).at(-1) as PerformanceResourceTiming).transferSize);
+    // Resource Timing reports zero for a local hit or 300 for headers-only validation.
+    expect([0, 300]).toContain(transfer);
+  }
+  await expect(captionInput).toHaveValue('Поднимите подбородок');
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await login(page, app.origin, app.password, 'operator');
   await expect(page.getByRole('button', { name: 'Параметры', exact: true })).toHaveCount(0);

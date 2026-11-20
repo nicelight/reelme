@@ -6,10 +6,10 @@
    * it never falls back to private endpoints or sends an installation key.
    * Guide reveal waits for decode; a replaced request cannot publish its image.
    * Source: docs/slot-setup/matrix.md. Never sends credentials to camera URLs. */
-  import { request } from './api';
+  import { requestArtwork } from './session/artwork';
   import type { StoryMedia } from './story/media';
-  let { slotId, mediaId, installationKey, video = false, alt = '', path: explicitPath, contain = false, active = true, reveal = false, publicCatalog = false, prepared }: {
-    slotId?: string; mediaId: string; installationKey: string; video?: boolean; alt?: string; path?: string; contain?: boolean; active?: boolean; reveal?: boolean; publicCatalog?: boolean; prepared?: StoryMedia;
+  let { slotId, mediaId, installationKey, video = false, alt = '', path: explicitPath, sessionPath, contain = false, active = true, reveal = false, publicCatalog = false, prepared, onsettled }: {
+    slotId?: string; mediaId: string; installationKey: string; video?: boolean; alt?: string; path?: string; sessionPath?: string; contain?: boolean; active?: boolean; reveal?: boolean; publicCatalog?: boolean; prepared?: StoryMedia; onsettled?: () => void;
   } = $props();
   const revealImage = $derived(reveal && !video);
   let player = $state<HTMLVideoElement>();
@@ -36,14 +36,15 @@
     }
     // The session status has already authorized these immutable, session-pinned URLs.
     const cache = retries ? 'reload' : explicitPath ? 'force-cache' : 'default';
-    void request(path, key, { signal: controller.signal, cache }).then(r => r.blob()).then(async blob => {
+    void requestArtwork(path, sessionPath, key, { signal: controller.signal, cache, priority: 'high' }).then(r => r.blob()).then(async blob => {
       if (controller.signal.aborted) return;
       objectUrl = URL.createObjectURL(blob);
       if (decodeBeforeReveal) {
         const image = new Image(); image.src = objectUrl; await image.decode();
       }
       if (!controller.signal.aborted) url = objectUrl;
-    }).catch(() => { if (!controller.signal.aborted) failed = true; });
+    }).catch(() => { if (!controller.signal.aborted) failed = true; })
+      .finally(() => { if (!controller.signal.aborted) onsettled?.(); });
     return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
   });
   function mountPlayer(node: HTMLElement, video: HTMLVideoElement) {

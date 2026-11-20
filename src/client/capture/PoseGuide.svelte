@@ -2,13 +2,14 @@
   /** Module contract: displays the session-pinned guide, or an honest missing-image
    * placeholder. Legacy sessions alone retain their original SVG pose meaning.
    * Source: docs/slot-setup/matrix.md. Guides never enter captured JPEGs/provider input. */
+  import { guideImagePath, sessionGuidePath } from './session/artwork';
   import ProtectedMedia from './ProtectedMedia.svelte';
   import type { Pose } from '../../shared/capture';
-  let { pose, sessionId, installationKey }: { pose: Pose; sessionId: string; installationKey: string } = $props();
+  let { pose, sessionId, installationKey, onsettled }: { pose: Pose; sessionId: string; installationKey: string; onsettled?: () => void } = $props();
 </script>
 {#if pose.guideNumber}
   <div class="pose-guide" aria-label={`Образец позы ${pose.guideNumber}`}>
-    {#if pose.guideMediaId}<ProtectedMedia mediaId={pose.guideMediaId} {installationKey} path={`/api/capture/sessions/${sessionId}/guides/${pose.guideNumber}`} alt={`Образец позы: ${pose.instruction}`} contain reveal />
+    {#if pose.guideMediaId}<ProtectedMedia mediaId={pose.guideMediaId} {installationKey} path={guideImagePath(pose.guideMediaId)} sessionPath={sessionGuidePath(sessionId, pose.guideNumber)} {onsettled} alt={`Образец позы: ${pose.instruction}`} contain reveal />
     {:else}<div class="guide-placeholder"><span>Образец №{pose.guideNumber} ещё не загружен</span><small>Следуйте инструкции</small></div>{/if}
   </div>
 {:else}

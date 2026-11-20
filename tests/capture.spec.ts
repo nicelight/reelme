@@ -18,6 +18,7 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
     expect(response.status()).toBe(201); return (await response.json()).id as string;
   };
   const thumbnailId = await upload(app.image, 'image/png');
+  expect((await admin.put('/api/admin/capture-guides/1', { data: { mediaId: thumbnailId } })).status()).toBe(200);
   const portraitVideo = join(app.dataDir, 'portrait-demo.mp4');
   execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=360x640:d=2:r=24', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', portraitVideo]);
   const videoId = await upload(portraitVideo, 'video/mp4');
@@ -52,8 +53,9 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   await cdp.send('Network.enable');
   const mediaRequests = new Set<string>();
   const transfers: number[] = [];
+  let measuredMedia = /\/api\/catalog\/[^/]+\/media\//;
   cdp.on('Network.requestWillBeSent', ({ requestId, request }) => {
-    if (request.method === 'GET' && /\/api\/catalog\/[^/]+\/media\//.test(request.url)) mediaRequests.add(requestId);
+    if (request.method === 'GET' && measuredMedia.test(request.url)) mediaRequests.add(requestId);
   });
   cdp.on('Network.loadingFinished', ({ requestId, encodedDataLength }) => {
     if (mediaRequests.delete(requestId)) transfers.push(encodedDataLength);
@@ -106,7 +108,6 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   expect(transfers).toHaveLength(1);
   expect(transfers[0]).toBeGreaterThan(0);
   await page.unroute('**' + replacementPath);
-  await cdp.detach();
 
   const coldPage = await page.context().newPage();
   const firstSlotMedia = `**/api/catalog/${slots[0].id}/media/**`;
@@ -172,6 +173,8 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.getByRole('button', { name: 'Выбрать этот сюжет' })).toBeVisible();
   await page.screenshot({ path: `${artifacts}/browser-mobile.png`, fullPage: true });
+  measuredMedia = new RegExp(`/api/(?:catalog/${slots[0].id}/media/${thumbnailId}|capture/guides/${thumbnailId})$`);
+  transfers.length = 0;
   const responsePromise = page.waitForResponse(response => response.url().endsWith('/api/capture/sessions'));
   await page.getByRole('button', { name: 'Выбрать этот сюжет' }).click();
   const response = await responsePromise;
@@ -180,10 +183,31 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   expect(receipt.sessionId).toBeTruthy(); expect(receipt.posePlan).toHaveLength(1);
   await expect(page.locator('.progress strong')).toHaveText('1 из 1');
   expect(await page.locator('main').innerText()).not.toMatch(/Ищите видео под номером|Ваш номер|Фото отправлены/);
+  const sessionImages = page.locator('.pose-guide img, .story-media img');
+  await expect(sessionImages).toHaveCount(2);
+  await expect.poll(() => transfers.length).toBe(2);
+  expect(transfers.filter(bytes => bytes === 0)).toHaveLength(1); // Cover already loaded by the catalog.
+  expect(transfers.some(bytes => bytes > 0)).toBe(true); // First use of the pose guide.
+  transfers.length = 0;
   await page.reload();
   await expect(page.locator('.progress strong')).toHaveText('1 из 1');
+  await expect(sessionImages).toHaveCount(2);
+  for (const image of await sessionImages.all()) await expect(image).toHaveJSProperty('naturalWidth', 512);
+  await expect.poll(() => transfers).toEqual([0, 0]);
   expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!).receipt.sessionId) === receipt.sessionId).toBe(true);
   await page.screenshot({ path: `${artifacts}/browser-handoff.png`, fullPage: true });
+  // Another visitor starts a distinct session for the same story and pose.
+  await page.getByRole('button', { name: 'Выбрать другой сценарий' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Выбрать сценарий' }).click();
+  await page.getByRole('button', { name: 'Сюжет 1: История номер 1', exact: true }).click();
+  transfers.length = 0;
+  const nextStart = page.waitForResponse(response => response.url().endsWith('/api/capture/sessions') && response.status() === 201);
+  await page.getByRole('button', { name: 'Выбрать этот сюжет' }).click();
+  expect((await (await nextStart).json()).sessionId).not.toBe(receipt.sessionId);
+  await expect(sessionImages).toHaveCount(2);
+  for (const image of await sessionImages.all()) await expect(image).toHaveJSProperty('naturalWidth', 512);
+  await expect.poll(() => transfers).toEqual([0, 0]);
+  await cdp.detach();
   // Lose the acknowledgement after the server commits. A reload/retry must reuse the request.
   await page.evaluate(() => sessionStorage.removeItem('reelme.captureStart'));
   await page.goto(local + '#slot=' + slots[1].id);

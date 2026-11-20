@@ -28,3 +28,10 @@
 .photo-session-view .manual-shutter:focus-visible { outline-offset:-5px; }
 .photo-session-view .live-note { white-space:normal; text-align:center; width:max-content; max-width:90%; }
 .photo-session-view .live-surface .preview-toggle { z-index:6; }
+
+.photo-session-view .pose-panel.captioned { display:grid; grid-template-rows:minmax(0,1fr) auto; }
+.photo-session-view .captioned .pose-picture { position:relative; inset:auto; min-height:0; border-radius:2.2cqw 2.2cqw 0 0; }
+.photo-session-view .captioned .pose-shade { display:none; }
+.photo-session-view .captioned .pose-copy { position:relative; inset:auto; z-index:3; padding:.8cqw .8cqw 1cqw; background:#211223; border-radius:0 0 2.2cqw 2.2cqw; }
+.photo-session-view .pose-copy .guide-caption { font-size:1.05cqw; line-height:1.3; font-weight:650; overflow-wrap:anywhere; }
+.photo-session-view .captioned .countdown { grid-area:1 / 1; }

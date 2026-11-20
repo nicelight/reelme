@@ -29,6 +29,7 @@ export interface Pose {
   participant?: SlotParticipants;
   guideNumber?: GuideNumber;
   guideMediaId?: string;
+  caption?: string;
 }
 export const photoPoses: readonly Pose[] = [
   { index: 0, key: 'front', instruction: 'Смотрите прямо в объектив' },
@@ -57,7 +58,7 @@ export interface StartReceipt {
   state: SessionState;
   posePlan: Pose[];
   /** Session-pinned visitor artwork; optional for receipts saved by older clients. */
-  story?: { description: string; thumbnailId: string };
+  story?: { description: string; thumbnailId: string; slotId?: string };
 }
 export type SessionState = 'capturing' | 'submit_pending' | 'observing' | 'preparing' | 'ready' | 'failed' | 'simulated';
 /** complete means every position is stored; finalized additionally confirms

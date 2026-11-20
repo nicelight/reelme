@@ -13,7 +13,7 @@ export function materialIds(value: Slot | SlotSnapshot): string[] {
   return [value.thumbnailId, value.demoId, value.testPhotoId, ...(value.testPhotoIds ?? []), ...('generation' in value ? value.posePlan?.map(pose => pose.guideMediaId) ?? [] : []), generation.videoId, ...(generation.referenceIds ?? [])].filter((id): id is string => !!id);
 }
 export function removeUnusedMaterials(db: DB, dataDir: string, candidates: string[], deletingDate: string) {
-  const used = new Set<string>((db.prepare('SELECT media_id FROM capture_guides').all() as { media_id: string }[]).map(row => row.media_id));
+  const used = new Set<string>((db.prepare('SELECT media_id FROM capture_guides WHERE media_id IS NOT NULL').all() as { media_id: string }[]).map(row => row.media_id));
   for (const row of db.prepare('SELECT config FROM slots').all() as { config: string }[]) {
     materialIds(JSON.parse(row.config)).forEach(id => used.add(id));
   }

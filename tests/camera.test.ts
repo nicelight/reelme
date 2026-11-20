@@ -77,6 +77,39 @@ test('retry recovers list/download errors at current pose and never replaces ear
   assert.deepEqual(Buffer.from(await second.arrayBuffer()), f.other);
 });
 
+test('a zero-byte poll gives the current JPEG two more list reads before manual resume', async t => {
+  const jpeg = await sharp({ create: { width: 32, height: 24, channels: 3, background: 'red' } }).jpeg().toBuffer();
+  const old = { FileName: 'old.jpg', Original: '/image/old.jpg' };
+  const fresh = { FileName: 'new.jpg', Original: '/image/new.jpg' };
+  let shutters = 0; let polls = 0; let downloads = 0;
+  const camera = new DigiCamControl(async url => {
+    if (url === '/?CMD=Capture') { shutters++; return new Response('OK'); }
+    if (url === '/filelist.json') {
+      if (!shutters) return Response.json([old]);
+      polls++;
+      if (polls === 1) return new Response(null, { headers: { 'Content-Type': 'text/html' } });
+      return Response.json(polls < 4 ? [old] : [old, fresh]);
+    }
+    assert.equal(url, fresh.Original);
+    downloads++; return new Response(new Uint8Array(jpeg));
+  });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  async function advance(ms: number) {
+    t.mock.timers.tick(ms);
+    await new Promise<void>(resolve => setImmediate(resolve));
+  }
+  const failure = assert.rejects(camera.capture('a', 0, false, signal()), /Повторить/);
+  await advance(0); assert.equal(polls, 1);
+  await advance(299); assert.equal(polls, 1);
+  await advance(1); assert.equal(polls, 2);
+  await advance(999); assert.equal(polls, 2);
+  await advance(1); await failure;
+  assert.equal(polls, 3); assert.equal(downloads, 0); assert.equal(camera.hasPendingCapture, true);
+  const photo = await camera.capture('a', 0, false, signal());
+  assert.deepEqual(Buffer.from(await photo.arrayBuffer()), jpeg);
+  assert.equal(polls, 4); assert.equal(downloads, 1); assert.equal(shutters, 1);
+});
+
 test('timeout or lost shutter response resumes the pending exposure; overlapping commands are refused', async t => {
   const f = await cameraFixture(); t.after(() => f.close());
   const camera = new DigiCamControl(f.fetcher, 80, 5);

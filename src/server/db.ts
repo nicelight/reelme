@@ -127,10 +127,17 @@ export function openDatabase(dataDir: string) {
   for (const column of ['template_slot_id', 'template_orientation']) {
     if (!mediaColumns.has(column)) db.exec(`ALTER TABLE slot_media ADD COLUMN ${column} TEXT`);
   }
-  db.exec(`CREATE TABLE IF NOT EXISTS capture_guides (
-    number INTEGER PRIMARY KEY CHECK(number BETWEEN 1 AND 5),
-    media_id TEXT NOT NULL REFERENCES slot_media(id)
-  )`);
+  db.transaction(() => {
+    const columns = db.prepare('PRAGMA table_info(capture_guides)').all() as { name: string }[];
+    if (columns.some(column => column.name === 'caption')) return;
+    if (columns.length) db.exec('ALTER TABLE capture_guides RENAME TO capture_guides_previous');
+    db.exec(`CREATE TABLE capture_guides (
+      number INTEGER PRIMARY KEY CHECK(number BETWEEN 1 AND 5),
+      media_id TEXT REFERENCES slot_media(id), caption TEXT
+    )`);
+    if (columns.length) db.exec(`INSERT INTO capture_guides(number,media_id) SELECT number,media_id FROM capture_guides_previous;
+      DROP TABLE capture_guides_previous;`);
+  }).immediate();
   db.exec(`CREATE TABLE IF NOT EXISTS display_settings (
     id INTEGER PRIMARY KEY CHECK(id=1),
     page_duration_seconds INTEGER NOT NULL CHECK(page_duration_seconds IN (10,20,30,40,50,60))
@@ -145,7 +152,7 @@ export function openDatabase(dataDir: string) {
     PRIMARY KEY(session_id,report_id)
   );
   CREATE INDEX IF NOT EXISTS capture_reports_case ON capture_reports(case_id);`);
-  db.pragma('user_version = 13');
+  db.pragma('user_version = 14');
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

@@ -160,7 +160,11 @@
           const seconds = settings.countdownSeconds;
           for (countdown = seconds; countdown > 0; countdown--) { beep(); await pause(1000, current.signal); }
         }
-        current.signal.throwIfAborted(); phase = 'camera'; diagnostics?.stopPreview('shutter'); pausePreview();
+        current.signal.throwIfAborted();
+        const wasPreviewing = previewRun && !previewRun.signal.aborted;
+        phase = 'camera'; diagnostics?.stopPreview('shutter'); pausePreview();
+        // Give digiCamControl time to finish serving Live View before reading the file list.
+        if (wasPreviewing) await pause(200, current.signal);
         const target = pose.index;
         const blob = await camera.capture(receipt.sessionId, target, liveView, lifecycle.signal, automatic, retry);
         retry = false;

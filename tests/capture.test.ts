@@ -174,7 +174,7 @@ test('session snapshots preserve replaced settings and bytes across restart; P2V
   async function checkSaved() {
     assert.deepEqual(snapshot(f, a.sessionId), old); assert.deepEqual(snapshot(f, b.sessionId), fresh);
     for (const [saved, bytes] of [[a, s.image], [b, newImage]] as const) {
-      const story = { description: saved === a ? s.recast.description : p2v.description, thumbnailId: saved === a ? s.thumbnail.id : newThumbnail.id };
+      const story = { slotId, description: saved === a ? s.recast.description : p2v.description, thumbnailId: saved === a ? s.thumbnail.id : newThumbnail.id };
       assert.deepEqual(saved.story, story);
       const current = await f.app.inject({ url: `/api/capture/sessions/${saved.sessionId}`, headers: installation });
       assert.deepEqual(current.json().story, story);

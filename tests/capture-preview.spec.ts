@@ -26,14 +26,14 @@ const test = base.extend<{ camera: {
           const url = new URL(request.url!, 'http://fixture');
           const hold = (set: Set<ServerResponse>) => { set.add(response); response.once('close', () => set.delete(response)); };
           if (url.pathname === '/preview-fixture') {
-            const receipt = { sessionId: 'preview-fixture', date: '2026-11-17', posePlan: [0, 1, 2].map(index => ({ index, participant: 1, key: 'front', instruction: 'Смотрите в объектив', ...(url.searchParams.has('guides') ? { guideNumber: index + 1, guideMediaId: `guide-${index + 1}` } : {}) })) };
+            const receipt = { sessionId: 'preview-fixture', date: '2026-11-17', posePlan: (url.searchParams.has('fourPoses') ? [0, 1, 2, 3] : [0, 1, 2]).map(index => ({ index, participant: 1, key: 'front', instruction: 'Смотрите в объектив', ...(url.searchParams.has('guides') ? { guideNumber: index + 1, guideMediaId: `guide-${index + 1}` } : {}) })) };
             response.setHeader('Content-Type', 'text/html');
             response.end(`<div id="app"></div><script type="module">import { mount, unmount } from '/node_modules/.vite/deps/svelte.js'; import Capture from '/src/client/capture/Capture.svelte'; const app = mount(Capture, { target: document.querySelector('#app'), props: { receipt: ${JSON.stringify(receipt)}, installationKey: 'fixture', oncomplete: () => unmount(app), onscenario: () => unmount(app) } });</script>`);
-          } else if (/\/guides\/\d$/.test(url.pathname)) {
+          } else if (/\/guides\/guide-\d$/.test(url.pathname)) {
             response.setHeader('Content-Type', 'image/jpeg');
             response.setHeader('Cache-Control', 'private, no-cache');
             response.setHeader('Vary', 'Authorization');
-            const number = Number(url.pathname.split('/').at(-1)); state.guides.set(number, response);
+            const number = Number(url.pathname.split('-').at(-1)); state.guides.set(number, response);
             response.once('close', () => { if (state.guides.get(number) === response) state.guides.delete(number); });
           } else if (url.pathname === '/liveview.html') response.end('ok');
           else if (url.pathname === '/liveview.jpg') {
@@ -56,13 +56,16 @@ const test = base.extend<{ camera: {
 });
 
 async function open(page: Page, origin: string, query = '') {
-  await page.clock.install(); await page.clock.pauseAt(new Date(Date.now() + 100));
+  await page.clock.install({ time: new Date('2026-11-17T12:00:00Z') });
+  await page.clock.pauseAt(new Date('2026-11-17T12:01:00Z'));
   await page.addInitScript(() => {
     const fetcher = window.fetch;
     const events: string[] = []; (window as any).captureEvents = events;
     window.fetch = (input, init) => {
       const path = String(input);
       if (path === '/liveview.jpg') init?.signal?.addEventListener('abort', () => events.push('preview-abort'), { once: true });
+      if (path === '/filelist.json') events.push('list');
+      if (path.startsWith('/image/')) events.push('download');
       if (path.includes('CMD=LiveView_Capture')) events.push('shutter');
       return fetcher(input, init);
     };
@@ -77,7 +80,14 @@ test('preview stops before shutter, photo holds one second, countdowns are five 
   await expect(page.locator('.countdown strong')).toHaveText(['5', '5']);
   camera.holdPreview = true;
   await page.clock.runFor(200); await expect.poll(() => camera.previewWaiters.size).toBe(1);
-  await page.clock.runFor(4800); await expect.poll(() => camera.shutters).toBe(1);
+  await page.clock.runFor(4800);
+  await expect.poll(() => camera.previewWaiters.size).toBe(0);
+  await page.clock.runFor(199);
+  const beforeCapture = await page.evaluate(() => (window as any).captureEvents as string[]);
+  expect(beforeCapture).toContain('preview-abort');
+  expect(beforeCapture).not.toContain('list');
+  expect(camera.shutters).toBe(0);
+  await page.clock.runFor(1); await expect.poll(() => camera.shutters).toBe(1);
   await expect(page.locator('.capture-white')).toBeVisible();
   expect(await page.locator('.capture-white').evaluate(node => getComputedStyle(node).backgroundColor)).toBe('rgb(255, 255, 255)');
   const events = await page.evaluate(() => (window as any).captureEvents as string[]);
@@ -95,11 +105,11 @@ test('preview stops before shutter, photo holds one second, countdowns are five 
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
   await expect(page.locator('.countdown strong')).toHaveText(['5', '5']);
   await page.clock.runFor(4999); expect(camera.shutters).toBe(1);
-  await page.clock.runFor(1); await expect(page.locator('.captured-frame')).toBeVisible();
+  await page.clock.runFor(201); await expect(page.locator('.captured-frame')).toBeVisible();
   expect(camera.shutters).toBe(2);
   await page.clock.runFor(1000); await expect(page.locator('.countdown strong')).toHaveText(['5', '5']);
   await page.clock.runFor(4999); expect(camera.shutters).toBe(2);
-  await page.clock.runFor(1); await expect(page.locator('.captured-frame')).toBeVisible();
+  await page.clock.runFor(201); await expect(page.locator('.captured-frame')).toBeVisible();
   await page.clock.runFor(1000); await expect(page.getByRole('button', { name: 'Завершить фотосессию' })).toBeVisible();
   await expect(page.locator('.live-preview')).toBeVisible();
   await expect(page.locator('.thumb-image')).toHaveCount(3);
@@ -130,14 +140,20 @@ test('camera timeout removes white screen and retry retrieves the same pending p
     };
   });
   await page.getByRole('button', { name: 'Начать съёмку', exact: true }).click();
-  await page.clock.runFor(5000); await expect(page.locator('.capture-white')).toBeVisible();
+  await page.clock.runFor(5200); await expect(page.locator('.capture-white')).toBeVisible();
   await expect.poll(() => camera.photoWaiters.size).toBe(1);
   await page.clock.runFor(300);
   await expect(page.getByRole('alert')).toContainText('Снимок пока не получен');
   await expect(page.locator('.capture-white')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Повторить', exact: true })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Переснять предыдущий кадр' })).toBeDisabled();
+  await expect(page.locator('.live-preview')).toBeVisible();
   camera.releasePhoto(); await page.getByRole('button', { name: 'Повторить', exact: true }).click();
+  await page.clock.runFor(199);
+  const downloads = () => page.evaluate(() => ((window as any).captureEvents as string[]).filter(event => event === 'download').length);
+  expect(await downloads()).toBe(1);
+  await page.clock.runFor(1);
+  await expect.poll(downloads).toBe(2);
   await expect(page.locator('.captured-frame')).toBeVisible(); expect(camera.shutters).toBe(1);
   await page.clock.runFor(1000); await expect(page.locator('.countdown strong')).toHaveText(['5', '5']);
 });
@@ -145,7 +161,7 @@ test('camera timeout removes white screen and retry retrieves the same pending p
 test('pause during shutter keeps the photo hold and resumes with the configured countdown', async ({ page, camera }) => {
   await open(page, camera.origin);
   await page.getByRole('button', { name: 'Начать съёмку', exact: true }).click();
-  await page.clock.runFor(5000); await expect.poll(() => camera.photoWaiters.size).toBe(1);
+  await page.clock.runFor(5200); await expect.poll(() => camera.photoWaiters.size).toBe(1);
   await page.getByRole('button', { name: 'Пауза', exact: true }).click();
   camera.releasePhoto(); await expect(page.locator('.captured-frame')).toBeVisible();
   await page.clock.runFor(999); await expect(page.locator('.captured-frame')).toBeVisible();
@@ -154,7 +170,7 @@ test('pause during shutter keeps the photo hold and resumes with the configured 
   await page.clock.runFor(5000); expect(camera.shutters).toBe(1);
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
   await expect(page.locator('.countdown strong')).toHaveText(['5', '5']);
-  await page.clock.runFor(5000); await expect(page.locator('.captured-frame')).toBeVisible();
+  await page.clock.runFor(5200); await expect(page.locator('.captured-frame')).toBeVisible();
   expect(camera.shutters).toBe(2);
   await page.clock.runFor(1000); await expect(page.locator('.countdown strong')).toHaveText(['5', '5']);
 });
@@ -163,7 +179,7 @@ test('quick Pause→Play during confirmation waits only the remaining photo hold
   await open(page, camera.origin);
   camera.holdPhoto = false;
   await page.getByRole('button', { name: 'Начать съёмку', exact: true }).click();
-  await page.clock.runFor(5000); await expect(page.locator('.captured-frame')).toBeVisible();
+  await page.clock.runFor(5200); await expect(page.locator('.captured-frame')).toBeVisible();
   const reads = camera.previews;
   await page.clock.runFor(100); await page.getByRole('button', { name: 'Пауза', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Снять один кадр' })).toBeVisible();
@@ -182,7 +198,7 @@ test('immediate and repeated pose guides always fade for one second without a de
     // Return the same cached bytes immediately, with real native image decoding.
     const blob = new Blob([Uint8Array.from(atob(base64), value => value.charCodeAt(0))], { type: 'image/jpeg' });
     const fetcher = window.fetch;
-    window.fetch = (input, init) => /\/guides\/\d$/.test(String(input))
+    window.fetch = (input, init) => /\/guides\/guide-\d$/.test(String(input))
       ? Promise.resolve(new Response(blob)) : fetcher(input, init);
   }, jpeg.toString('base64'));
   await open(page, camera.origin, '?guides'); camera.holdPhoto = false;
@@ -205,7 +221,7 @@ test('immediate and repeated pose guides always fade for one second without a de
   await verifyFade();
   const first = await image.getAttribute('src');
   await page.getByRole('button', { name: 'Начать съёмку', exact: true }).click();
-  await page.clock.runFor(5000); await expect(page.locator('.captured-frame')).toBeVisible();
+  await page.clock.runFor(5200); await expect(page.locator('.captured-frame')).toBeVisible();
   await page.clock.runFor(1000); await expect(image).not.toHaveAttribute('src', first!);
   await verifyFade();
   const second = await image.getAttribute('src');
@@ -213,6 +229,27 @@ test('immediate and repeated pose guides always fade for one second without a de
   await expect(page.locator('.pose-guide')).toHaveAttribute('aria-label', 'Образец позы 1');
   await expect(image).not.toHaveAttribute('src', second!);
   await verifyFade();
+});
+
+test('the current pose appears first and all remaining session guides warm one at a time', async ({ page, camera }) => {
+  const requests: string[] = [];
+  page.on('request', req => {
+    if (req.url().includes('/api/capture/guides/')) requests.push(new URL(req.url()).pathname.split('/').pop()!);
+  });
+  await open(page, camera.origin, '?guides&fourPoses');
+  for (const number of [1, 2, 3, 4]) {
+    await expect.poll(() => [...camera.guides.keys()]).toEqual([number]);
+    expect(requests).toEqual(Array.from({ length: number }, (_, i) => `guide-${i + 1}`));
+    if (number > 1) await expect(page.locator('.pose-guide img')).toHaveJSProperty('naturalWidth', 640);
+    camera.releaseGuide(number);
+  }
+  await expect(page.locator('.progress strong')).toHaveText('1 из 4');
+  camera.holdPhoto = false;
+  await page.getByRole('button', { name: 'Начать съёмку', exact: true }).click();
+  await page.clock.runFor(5200); await expect(page.locator('.captured-frame')).toBeVisible();
+  await page.clock.runFor(1000);
+  await expect(page.locator('.pose-guide[aria-label="Образец позы 2"] img')).toHaveJSProperty('naturalWidth', 640);
+  expect(camera.guides.size).toBe(0); // A network miss would stay held on the fixture.
 });
 
 test('pose guide keeps a transparent frame, reveals after decode and ignores an old decode', async ({ page, camera }) => {
@@ -251,12 +288,12 @@ test('pose guide keeps a transparent frame, reveals after decode and ignores an 
   expect(transition.start).toBe('0'); expect(Number(transition.middle)).toBeGreaterThan(0);
   expect(Number(transition.middle)).toBeLessThan(1); expect(transition.duration).toBe(1000); expect(transition.end).toBe('1');
   expect(await frame.boundingBox()).toEqual(geometry);
-  await page.clock.runFor(4000); await expect(page.locator('.captured-frame')).toBeVisible();
+  await page.clock.runFor(4200); await expect(page.locator('.captured-frame')).toBeVisible();
   await page.clock.runFor(1000); await expect.poll(() => camera.guides.has(2)).toBe(true);
   await expect(image).toHaveCount(0); expect(await frame.boundingBox()).toEqual(geometry);
   camera.releaseGuide(2);
   await expect.poll(() => page.evaluate(() => (window as any).guideDecodes.length)).toBe(2);
-  await page.clock.runFor(5000); await expect(page.locator('.captured-frame')).toBeVisible();
+  await page.clock.runFor(5200); await expect(page.locator('.captured-frame')).toBeVisible();
   await page.clock.runFor(1000); await expect.poll(() => camera.guides.has(3)).toBe(true);
   camera.releaseGuide(3);
   await expect.poll(() => page.evaluate(() => (window as any).guideDecodes.length)).toBe(3);
@@ -270,7 +307,7 @@ test('pose guide keeps a transparent frame, reveals after decode and ignores an 
   await page.evaluate(() => (window as any).guideDecodes[0].resolve());
   await expect(image).toHaveCount(1);
   expect(await image.evaluate(node => ({ opacity: getComputedStyle(node).opacity, transitions: node.getAnimations().length }))).toEqual({ opacity: '1', transitions: 0 });
-  await page.route('**/guides/1', route => route.fulfill({ status: 500 })); await page.reload();
+  await page.route('**/guides/guide-1', route => route.fulfill({ status: 500 })); await page.reload();
   await expect(frame.getByText('Изображение не загрузилось.')).toBeVisible();
   await expect(frame.getByRole('button', { name: 'Повторить загрузку' })).toBeEnabled();
   expect(await frame.boundingBox()).toEqual(geometry);
@@ -280,6 +317,8 @@ test('manual Live View takes one shot per tap and Play continues the series', as
   camera.holdPhoto = false;
   await open(page, camera.origin);
   const shutter = page.getByRole('button', { name: 'Снять один кадр' });
+  await page.getByRole('button', { name: 'Продолжить без превью' }).click();
+  await expect(page.getByText('Съёмка без превью')).toBeVisible();
   await shutter.dblclick();
   await page.clock.runFor(5000);
   await expect(page.locator('.captured-frame')).toBeVisible();

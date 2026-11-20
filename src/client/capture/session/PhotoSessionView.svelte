@@ -10,6 +10,8 @@
    * persistence, demo images or JPEG ownership here. Source: FT-002-AC-006. */
   import { tick } from 'svelte';
   import type { CaptureSettings, StartReceipt } from '../../../shared/capture';
+  import { warmPoseGuides } from './artwork';
+  import { storyMediaPath } from '../story/media';
   import PoseGuide from '../PoseGuide.svelte';
   import ProtectedMedia from '../ProtectedMedia.svelte';
   import { ribbonLight } from '../story/motion';
@@ -30,10 +32,19 @@
   const pose = $derived(receipt.posePlan[position]!);
   const count = $derived(receipt.posePlan.length);
   const story = $derived(receipt.story);
+  const sessionThumbnailPath = $derived(`/api/capture/sessions/${encodeURIComponent(receipt.sessionId)}/thumbnail`);
   const title = $derived(story?.description.trim().split(/\s+/).slice(0,3).join(' ') || 'Выбранный сюжет');
   const active = $derived(phase === 'countdown' || ((phase === 'confirmation' || phase === 'camera') && !pauseAfterCapture));
   const playLabel = $derived(automatic ? 'Пауза' : phase === 'ready' && thumbnails.length === 0 ? 'Начать съёмку' : 'Продолжить');
   const date = $derived(new Date(`${receipt.date}T12:00:00`).toLocaleDateString('ru-RU', {day:'numeric',month:'long',year:'numeric'}));
+  let coverSettled = $state(false);
+  let guideSettled = $state(false);
+  $effect(() => {
+    if ((story?.thumbnailId && !coverSettled) || (receipt.posePlan[0]?.guideMediaId && !guideSettled)) return;
+    const controller = new AbortController();
+    void warmPoseGuides(receipt, installationKey, controller.signal);
+    return () => controller.abort();
+  });
   let dialog = $state<HTMLDialogElement>();
   let dialogMode = $state<'restart'|'scenario'>('restart');
   let dialogOpen = $state(false);
@@ -84,12 +95,15 @@
   <header><div class="brand"><img src={brand} alt=""/><span>REELME</span></div><div class="event">{@render icon('people')}<span>Фотосессия · {date}</span></div></header>
   <div class="composition" use:rimWave={{pageVersion:0,gain:1,previewVersion:0}}>
     <article class="story framed">
-      <div class="story-media">{#if story?.thumbnailId}<ProtectedMedia mediaId={story.thumbnailId} path={`/api/capture/sessions/${encodeURIComponent(receipt.sessionId)}/thumbnail`} {installationKey} alt={title}/>{:else}<div class="story-missing">Сюжет этой фотосессии</div>{/if}</div>
+      <div class="story-media">{#if story?.thumbnailId}<ProtectedMedia mediaId={story.thumbnailId} path={story.slotId ? storyMediaPath(story.slotId, story.thumbnailId) : sessionThumbnailPath} sessionPath={story.slotId ? sessionThumbnailPath : undefined} {installationKey} onsettled={() => coverSettled = true} alt={title}/>{:else}<div class="story-missing">Сюжет этой фотосессии</div>{/if}</div>
       <div class="story-shade"></div><h1>{title}</h1><button class="story-trigger" disabled={cameraLocked || phase==='complete'} onclick={e=>open('scenario',e)} aria-label="Выбрать другой сценарий" title={story?.description || title}></button>{@render rim()}
     </article>
-    <section class="pose framed pose-panel" aria-label={`Образец позы ${pose.guideNumber ?? pose.index+1}`}>
-      <div class="pose-picture"><PoseGuide {pose} sessionId={receipt.sessionId} {installationKey}/></div><div class="pose-shade"></div>{@render corners()}
-      <div class="pose-copy">{@render icon('person')}<p>Встаньте<br/>в такую позу</p><h2 class="pose-instruction">{pose.instruction}</h2>{#if pose.participant}<small class="participant-label">{pose.participant==='group'?'Группа':`Человек ${pose.participant}`}</small>{/if}</div>
+    <section class="pose framed pose-panel" class:captioned={!!pose.caption} aria-label={`Образец позы ${pose.guideNumber ?? pose.index+1}`}>
+      <div class="pose-picture"><PoseGuide {pose} sessionId={receipt.sessionId} {installationKey} onsettled={() => guideSettled = true}/></div><div class="pose-shade"></div>{@render corners()}
+      <div class="pose-copy">
+        {#if pose.caption}<p class="guide-caption">{pose.caption}</p>
+        {:else}{@render icon('person')}<p>Встаньте<br/>в такую позу</p>{/if}
+        <h2 class="pose-instruction">{pose.instruction}</h2>{#if pose.participant}<small class="participant-label">{pose.participant==='group'?'Группа':`Человек ${pose.participant}`}</small>{/if}</div>
       {@render counter()}{@render rim()}
     </section>
     <section class="live framed viewfinder" aria-label="Предпросмотр камеры" aria-busy={phase==='camera'}>

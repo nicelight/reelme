@@ -79,7 +79,7 @@ export function registerMedia(app: FastifyInstance, db: DB, dataDir: string, acc
   app.get<{ Params: { id: string } }>('/api/admin/slot-media/:id/info', { preHandler: access.requireAdmin }, request => mediaInfo(readMedia(db, request.params.id)));
   app.get<{ Params: { id: string } }>('/api/admin/slot-media/:id', { preHandler: access.requireAdmin }, async (request, reply) => {
     const media = readMedia(db, request.params.id);
-    return sendMedia(dataDir, media, request, reply);
+    return sendMedia(dataDir, media, request, reply, 'inline', media.kind === 'image' ? 'Cookie' : undefined);
   });
 }
 

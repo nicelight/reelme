@@ -9,6 +9,7 @@ export class CameraError extends Error {
   constructor(message: string, readonly status?: number, options?: ErrorOptions) { super(message, options); this.name = 'CameraError'; }
 }
 const originalJpeg = /^\/image\/[^/\\?#]+\.jpe?g$/i;
+const pendingFrameMessage = 'Снимок пока не получен. Нажмите «Повторить», чтобы дождаться этого кадра. Если камера не сняла, позовите сотрудника.';
 interface CameraFile { FileName: string; Original: string }
 interface Pending { key: string; before: Set<string>; original?: string; rawBefore?: Set<string> }
 export class DigiCamControl {
@@ -33,14 +34,16 @@ export class DigiCamControl {
   private async files(signal: AbortSignal, step: 'poll' | 'baseline', trace?: AttemptTrace) {
     const stats = trace?.request(step);
     const response = await this.get('/filelist.json', signal, stats);
-    let files: unknown;
+    if (stats) stats.phase = 'body';
+    const bytes = await response.arrayBuffer();
     if (stats) {
-      stats.phase = 'body';
-      const bytes = await response.arrayBuffer();
       trace!.bodyRead(stats, bytes.byteLength);
       stats.phase = 'parse';
-      files = JSON.parse(new TextDecoder().decode(bytes));
-    } else files = await response.json();
+    }
+    if (step === 'poll' && response.status === 200 && bytes.byteLength === 0) {
+      return { jpeg: [], emptyBody: true };
+    }
+    const files: unknown = JSON.parse(new TextDecoder().decode(bytes));
     if (!Array.isArray(files) || files.some(file => typeof file?.FileName !== 'string' || typeof file?.Original !== 'string')) {
       throw new CameraError('Не удалось прочитать список снимков. Нажмите «Повторить».');
     }
@@ -48,7 +51,7 @@ export class DigiCamControl {
     const jpeg = all.filter(file => originalJpeg.test(file.Original));
     if (stats) trace!.finishRequest(stats);
     const paths = trace?.list(step, all, jpeg, this.pending?.rawBefore, this.pending?.before);
-    return { jpeg, paths };
+    return { jpeg, paths, emptyBody: false };
   }
   async startLiveView(signal: AbortSignal) {
     const started = performance.now();
@@ -109,14 +112,23 @@ export class DigiCamControl {
         await this.get('/?CMD=' + command, timeout, stats);
         if (trace && stats) trace.finishRequest(stats);
       }
+      let recoveryDelays: number[] | undefined;
       while (!this.pending.original) {
-        const fresh = (await this.files(timeout, 'poll', trace)).jpeg.filter(file => !this.pending!.before.has(file.Original));
+        const list = await this.files(timeout, 'poll', trace);
+        const fresh = list.jpeg.filter(file => !this.pending!.before.has(file.Original));
         if (fresh.length > 1) throw new CameraError('Камера вернула несколько новых снимков. Позовите сотрудника для проверки камеры.');
         if (fresh[0]) {
           this.pending.original = fresh[0].Original;
           this.diagnostics?.found();
           if (trace) { trace.report.foundMs = trace.ms(); trace.report.remainingMs = Math.max(0, this.waitMs - trace.ms()); }
-        } else { trace?.enter('wait'); await pause(this.pollMs, timeout); }
+        } else {
+          // DCC can briefly serve a zero-byte HTTP 200 while publishing the new JPEG.
+          if (list.emptyBody) recoveryDelays ??= [300, 1000];
+          const delay = recoveryDelays ? recoveryDelays.shift() : this.pollMs;
+          if (delay === undefined) throw new CameraError(pendingFrameMessage);
+          trace?.enter('wait');
+          await pause(delay, timeout);
+        }
       }
       if (trace) trace.report.fileTag = this.diagnostics!.fileTag(this.pending.original);
       const blob = await this.jpeg(this.pending.original, timeout, trace);
@@ -131,7 +143,7 @@ export class DigiCamControl {
       if (signal.aborted) throw error;
       if (error instanceof CameraError) throw error;
       throw new CameraError(this.pending
-        ? 'Снимок пока не получен. Нажмите «Повторить», чтобы дождаться этого кадра. Если камера не сняла, позовите сотрудника.'
+        ? pendingFrameMessage
         : 'Нет связи с камерой. Проверьте подключение и нажмите «Повторить».');
     } finally { this.busy = false; }
   }

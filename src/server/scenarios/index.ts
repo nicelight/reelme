@@ -20,7 +20,7 @@ export function registerScenarios(app: FastifyInstance, db: DB, dataDir: string,
   registerMedia(app, db, dataDir, access);
   registerCatalog(app, db, dataDir, access);
   registerTemplateVideos(app, db, dataDir, access, templateVideosDir);
-  registerCaptureGuides(app, db, access);
+  registerCaptureGuides(app, db, dataDir, access);
   function validate(body: unknown, slotId: string, previous?: Slot): SlotInput {
     const slot = slotSchema.parse(body);
     const image = (id: string) => { if (readMedia(db, id).kind !== 'image') throw new HttpError(400, 'INVALID_MEDIA', 'Выберите изображение'); };

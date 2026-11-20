@@ -51,7 +51,7 @@ function receipt(row: SessionRow): StartReceipt {
   return { sessionId: row.id, date: row.event_date, number: row.number, state: row.state, captureSettings: { ...defaultCaptureSettings, ...snapshot.captureSettings }, posePlan: snapshotPosePlan(snapshot), story: sessionStory(snapshot) };
 }
 function sessionStory(snapshot: SlotSnapshot): NonNullable<StartReceipt['story']> {
-  return { description: snapshot.description, thumbnailId: snapshot.thumbnailId };
+  return { slotId: snapshot.slotId, description: snapshot.description, thumbnailId: snapshot.thumbnailId };
 }
 export function readSession(db: DB, sessionId: string) {
   const row = db.prepare('SELECT s.* FROM capture_sessions s JOIN events e ON e.date=s.event_date WHERE s.id=? AND e.deleting=0').get(sessionId) as SessionRow | undefined;

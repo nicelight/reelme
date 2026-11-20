@@ -15,7 +15,8 @@ export interface SlotSetup {
 export type Orientation = 'landscape' | 'portrait';
 export type GuideNumber = 1 | 2 | 3 | 4 | 5;
 export const unequalPhotoMessage = 'выберите меньшее количество фотографий во время фотосессии.';
-export interface CaptureGuide { number: GuideNumber; instruction: string; mediaId?: string }
+export const maxGuideCaptionLength = 120;
+export interface CaptureGuide { number: GuideNumber; instruction: string; mediaId?: string; caption?: string }
 
 export const captureGuides: readonly CaptureGuide[] = [
   { number: 1, instruction: 'Смотрите прямо в объектив' },
@@ -53,6 +54,7 @@ export function buildPosePlan(input: SlotSetup, guides: readonly CaptureGuide[] 
     const guide = guides.find(item => item.number === guideNumber) ?? captureGuides[guideNumber - 1];
     return { index: (participant === 2 ? variant.photosPerParticipant : 0) + offset, participant,
       guideNumber, key: guideKeys[guideNumber - 1], instruction: guide.instruction,
+      ...(guide.caption ? { caption: guide.caption } : {}),
       ...(guide.mediaId ? { guideMediaId: guide.mediaId } : {}) };
   }));
 }

@@ -26,6 +26,7 @@ test('offline capture reports survive reload, correlate JPEG retry, and respect 
   const reports = (): CaptureReport[] => (db.prepare('SELECT report FROM capture_reports ORDER BY received_at').all() as {report:string}[]).map(row => JSON.parse(row.report));
   let shutters = 0;
   let malformedPoll = true;
+  const emptyPollAfterShot = new Set([1, 2]);
   let waitForFile = true;
   let failPhoto = true;
   let offline = true;
@@ -54,6 +55,9 @@ test('offline capture reports survive reload, correlate JPEG retry, and respect 
       if (malformedPoll && shutters > 0) {
         malformedPoll = false;
         return route.fulfill({body:'PRIVATE damaged file list'});
+      }
+      if (emptyPollAfterShot.delete(shutters)) {
+        return route.fulfill({contentType:'text/html', body:''});
       }
       if (waitForFile && shutters > 0) {
         waitForFile = false;
@@ -106,7 +110,8 @@ test('offline capture reports survive reload, correlate JPEG retry, and respect 
     expect(first.retryDelayMs).toBeUndefined();
     expect(first.shutterToFoundMs).toBeUndefined();
     expect(second.retryDelayMs).toBeGreaterThan(0);
-    expect(second.stageMs!.wait).toBeGreaterThanOrEqual(480);
+    expect(second.stageMs!.wait).toBeGreaterThanOrEqual(1280);
+    expect(second.requests.poll).toMatchObject({count:3, completed:2});
     expect(second.shutterToFoundMs).toBeGreaterThanOrEqual(second.stageMs!.wait!);
     expect(second.shutterAt).toBe(first.shutterAt);
     expect(recovered.shutterAt).toBe(first.shutterAt);
@@ -137,6 +142,8 @@ test('offline capture reports survive reload, correlate JPEG retry, and respect 
     const readsBefore = reads;
     await page.getByRole('button',{name:'Снять один кадр'}).click();
     await expect(page.getByText('Кадр снят ✓',{exact:true})).toBeVisible();
+    expect(shutters).toBe(2);
+    expect(emptyPollAfterShot.size).toBe(0);
     expect(reads).toBe(readsBefore);
     expect(reports()).toHaveLength(6);
   } finally { db.close(); }

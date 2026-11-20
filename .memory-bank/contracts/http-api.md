@@ -22,14 +22,14 @@ status: active
 | GET /catalog/:id/media/:mediaId | Установка | Только миниатюра или пример видео текущего видимого сюжета; байты с Range |
 | GET /admin/slots, /admin/slots/:id | Администратор | Список и полная конфигурация слота |
 | POST /admin/slot-media | Администратор | Multipart `file` → метаданные с `id` материала |
-| GET /admin/slot-media/:id, /admin/slot-media/:id/info | Администратор | Байты (с Range) / метаданные материала |
+| GET /admin/slot-media/:id, /admin/slot-media/:id/info | Администратор | Байты (с Range) / метаданные материала. Для изображений браузер проверяет приватный кеш по ETag после авторизации |
 | POST /admin/slots, PUT /admin/slots/:id | Администратор | Сохранение конфигурации; POST допускает UUID `id` черновика |
 | PATCH /admin/slots/:id/visibility | Администратор + разрешённый Origin | `{visible: boolean}` → 204. Меняет видимость в сохранённой конфигурации, в том числе у старых сюжетов |
 | POST /admin/slots/:id/template-video | Admin + разрешённый Origin | `{orientation,model}` → импортированный immutable `Media`, 201 |
-| GET /admin/capture-guides | Администратор | Пять `{number,instruction,mediaId?}` |
+| GET /admin/capture-guides | Администратор | Пять `{number,instruction,mediaId?,caption?}` |
 | GET /admin/capture-settings | Admin | Настройки новых фотосессий |
 | PUT /admin/capture-settings | Admin + разрешённый Origin | `startMode` (manual/automatic), `countdownSeconds`, `reviewSeconds`, `receiptSeconds` (целые 1–60), `sendCaptureLogs` (boolean, по умолчанию false), `photoMaxEdge` (0, 1024 или 2048 пикселей по длинной стороне, по умолчанию 0 — исходный JPEG) → сохранённые значения |
-| PUT /admin/capture-guides/:number | Admin + разрешённый Origin | `{mediaId: UUID|null}` → назначение образца |
+| PUT /admin/capture-guides/:number | Admin + разрешённый Origin | Обновляет переданные поля `mediaId` (UUID или null) и `caption` (до 120 символов, пустая строка очищает подпись) |
 
 Каталог возвращает `CatalogPage` (`items`, `page`, `pageSize=12`, `total`, `totalPages`),
 карточка — `CatalogItem` из [capture.ts](../../src/shared/capture.ts). `previewId`
@@ -83,7 +83,8 @@ H3 Reference использует `promptExpansionMode: disabled`. Ограни�
 Образцы загружаются обычным media API как изображения и назначаются номерам 1..5.
 PUT с null удаляет текущее назначение. Уже начатые сессии сохраняют прежние IDs;
 при отсутствии образца новый snapshot сохраняет его отсутствие. Установка читает
-только сохранённый образец по маршруту сессии, не получает admin-доступ.
+образец по ID из плана через `GET /capture/guides/:mediaId` с ключом установки.
+Маршрут выдаёт только назначенные образцы. После замены старый образец доступен по маршруту начатой сессии.
 
 ## Тестирование слота
 
@@ -156,9 +157,10 @@ TEST_PHOTO_REQUIRED, неверный файл — INVALID_PHOTO, без зап�
 видимости выполняется перед первым стартом. Номер в ответе API ещё не показывается
 посетителю; клиент хранит результат и план поз для съёмки/передачи.
 Дата, номер и план сохраняются; `state` в повторном ответе отражает актуальное состояние.
-StartReceipt и CaptureStatus содержат `story: {description, thumbnailId}` из snapshot;
+StartReceipt и CaptureStatus содержат `story: {slotId, description, thumbnailId}` из snapshot;
 клиент допускает отсутствие поля в ранее сохранённых receipts и обновляет его через статус.
-Картинка берётся из session thumbnail endpoint, а не из изменяемого каталога.
+Обложка использует адрес каталога с закреплённым thumbnailId. При 404 или отсутствии slotId клиент берёт изображение по маршруту сессии.
+Браузер повторно использует файлы по тем же адресам между сессиями. После загрузки обложки и текущей позы клиент по очереди подгружает остальные уникальные образцы плана с низким приоритетом.
 
 `CaptureStatus` из [capture.ts](../../src/shared/capture.ts) содержит sessionId,
 дату, номер, исходный план и state, а также `acceptedPoseIndices` (индексы с нуля).
