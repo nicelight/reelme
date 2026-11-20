@@ -20,7 +20,8 @@ test('admin workspace: responsive editor, themes and shared sections', async ({ 
   await expect(page.locator('.guide-card')).toHaveCount(5);
   await page.screenshot({ path: `${output}/guides-desktop.png`, fullPage: true });
   await expect(page.getByRole('heading', { name: 'Параметры', exact: true })).toBeVisible();
-  await expect(page.getByLabel('Длительность показа страницы')).toBeEnabled();
+  await expect(page.getByRole('group', { name: 'Режим фотосесси', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Длительность отображения каждой страницы')).toBeEnabled();
   const logging = page.getByRole('switch', { name: 'Отправлять на сервер логи захвата кадра' });
   await expect(logging).not.toBeChecked();
   const photoSize = page.getByLabel('Ужимать фото перед отправкой на сервер');

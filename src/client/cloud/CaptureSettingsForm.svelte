@@ -39,7 +39,7 @@
   <h2>Фотосессия</h2>
   <form onsubmit={save} oninput={() => notice = ''}>
     <fieldset disabled={!saved || busy}>
-      <legend>Режим при запуске</legend>
+      <legend>Режим фотосесси</legend>
       <label class="mode-switch">
         <span class:chosen={draft.startMode==='manual'}>Ручной</span>
         <input type="checkbox" role="switch" aria-label="Автоматический запуск фотосессии" checked={draft.startMode==='automatic'} onchange={e => draft.startMode = e.currentTarget.checked ? 'automatic' : 'manual'} />

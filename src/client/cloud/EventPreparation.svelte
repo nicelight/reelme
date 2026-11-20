@@ -58,7 +58,10 @@
 
 <section>
   <h2>Архив мероприятий</h2>
-  <button disabled={busy || operation?.running} onclick={prepare}>Подготовка к мероприятию</button>
+  <div class="preparation-action">
+    <button aria-describedby="preparation-hint" disabled={busy || operation?.running} onclick={prepare}>Подготовка к мероприятию</button>
+    <p id="preparation-hint" class="hint">После подтверждения из архива навсегда удалятся мероприятия по указанную дату включительно вместе с их фото и видео. Очистка идёт в фоне и может занять от нескольких секунд до нескольких минут, а при большом количестве файлов — дольше.</p>
+  </div>
   <div role="status">
     {#if notice}<p>{notice}</p>
     {:else if operation}
@@ -75,6 +78,7 @@
 </section>
 
 <style>
-  button { margin-top: 16px; }
+  .preparation-action { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 16px; }
+  .preparation-action .hint { flex: 1 1 32ch; margin: 0; }
   p { margin-top: 12px; }
 </style>

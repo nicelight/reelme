@@ -34,7 +34,7 @@
 <section class="display-settings">
   <h2>Экран результатов</h2>
   <form onsubmit={save}>
-    <label for="page-duration">Длительность показа страницы</label>
+    <label for="page-duration">Длительность отображения каждой страницы</label>
     <select id="page-duration" bind:value disabled={!loaded || busy} onchange={() => notice = ''}>
       {#each pageDurationOptions as seconds}<option value={seconds}>{seconds} секунд</option>{/each}
     </select>
