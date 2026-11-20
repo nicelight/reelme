@@ -9,19 +9,20 @@
    * restart or leave; camera/transfer locks are never bypassed. No camera, API writes,
    * persistence, demo images or JPEG ownership here. Source: FT-002-AC-006. */
   import { tick } from 'svelte';
-  import type { StartReceipt } from '../../../shared/capture';
+  import type { CaptureSettings, StartReceipt } from '../../../shared/capture';
   import PoseGuide from '../PoseGuide.svelte';
   import ProtectedMedia from '../ProtectedMedia.svelte';
   import { ribbonLight } from '../story/motion';
   import { rimWave } from '../../cloud/results/motion';
-  import brand from '../story/assets/reelme-mark.png';
+  import brand from '../story/assets/reelme-mark.webp';
   import '../story/assets/fonts.css';
   import './session.css';
   let { receipt, installationKey, position, phase, countdown, preview, previewEnabled, confirmed, confirming, thumbnails,
-    error, pendingCapture, cameraLocked, pauseAfterCapture, onrun, onpause, onretake, onrestart, onfinish, onscenario, onstoppreview }: {
+    error, caseCode, pendingCapture, cameraLocked, pauseAfterCapture, automatic, settings, ontoggle, onrun, onpause, onretake, onrestart, onfinish, onscenario, onstoppreview }: {
     receipt: StartReceipt; installationKey: string; position: number; phase: CapturePhase;
     countdown: number; preview: string; previewEnabled: boolean; confirmed: string; confirming: boolean; thumbnails: PhotoThumbnail[];
-    error: string; pendingCapture: boolean; cameraLocked: boolean; pauseAfterCapture: boolean;
+    error: string; caseCode?: string; pendingCapture: boolean; cameraLocked: boolean; pauseAfterCapture: boolean;
+    automatic: boolean; settings: CaptureSettings; ontoggle: () => void;
     onrun: () => void; onpause: () => void; onretake: () => void; onrestart: () => void; onfinish: () => void;
     onscenario: () => void; onstoppreview: () => void;
   } = $props();
@@ -31,30 +32,37 @@
   const story = $derived(receipt.story);
   const title = $derived(story?.description.trim().split(/\s+/).slice(0,3).join(' ') || 'Выбранный сюжет');
   const active = $derived(phase === 'countdown' || ((phase === 'confirmation' || phase === 'camera') && !pauseAfterCapture));
-  const playLabel = $derived(active ? 'Пауза' : phase === 'ready' && thumbnails.length === 0 ? 'Начать съёмку' : 'Продолжить');
+  const playLabel = $derived(automatic ? 'Пауза' : phase === 'ready' && thumbnails.length === 0 ? 'Начать съёмку' : 'Продолжить');
   const date = $derived(new Date(`${receipt.date}T12:00:00`).toLocaleDateString('ru-RU', {day:'numeric',month:'long',year:'numeric'}));
   let dialog = $state<HTMLDialogElement>();
   let dialogMode = $state<'restart'|'scenario'>('restart');
+  let dialogOpen = $state(false);
+  $effect(() => {
+    if (phase !== 'review' || dialogOpen) return;
+    const timer = setTimeout(onfinish, settings.reviewSeconds * 1000);
+    return () => clearTimeout(timer);
+  });
   let resumeOnCancel = false;
   let trigger: HTMLElement | null = null;
   async function open(mode:'restart'|'scenario', event:MouseEvent) {
     if(cameraLocked || phase === 'complete')return;
-    trigger=event.currentTarget as HTMLElement;resumeOnCancel=active;dialogMode=mode;
+    dialogOpen=true;trigger=event.currentTarget as HTMLElement;dialogMode=mode;
+    // A completed manual shot must not start the next pose when a dialog closes.
+    resumeOnCancel=phase==='countdown'||(automatic&&(active||phase==='paused'||phase==='ready'));
     const participantBeforePause=pose.participant;
-    if(active)onpause();
+    onpause();
     await tick();
     // Cancelling must not skip the explicit readiness boundary for another person.
     if(pose.participant!==participantBeforePause)resumeOnCancel=false;
     dialog?.showModal();
   }
-  function close(resume=true) { dialog?.close();trigger?.focus();if(resume&&resumeOnCancel)onrun(); }
+  function close(resume=true) { dialogOpen=false;dialog?.close();trigger?.focus();if(resume&&resumeOnCancel)onrun(); }
   function confirm() {
     if(cameraLocked)return;
     close(false);
     if(dialogMode==='restart')onrestart();else onscenario();
   }
 </script>
-<svelte:document onvisibilitychange={()=>{if(document.hidden&&active)onpause();}}/>
 {#snippet icon(name:string)}
 <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 {#if name==='back'}<path d="M25 16H7m9-9-9 9 9 9"/>{:else if name==='restart'}<path d="M26 12a11 11 0 0 0-19-4L4 12m0-7v7h7M6 20a11 11 0 0 0 19 4l3-4m0 7v-7h-7"/>{:else if name==='person'}<circle cx="16" cy="9" r="6"/><path d="M5 29c0-12 22-12 22 0"/>{:else if name==='frames'}<rect x="5" y="9" width="19" height="18" rx="2"/><rect x="10" y="4" width="18" height="19" rx="2" transform="rotate(8 19 14)"/>{:else if name==='plus'}<path d="M16 6v20M6 16h20"/>{:else if name==='play'}<path d="m12 7 14 9-14 9Z" fill="currentColor" stroke="none"/>{:else if name==='pause'}<path d="M11 8v16M21 8v16" stroke-width="5"/>{:else if name==='check'}<path d="m7 16 6 6L26 9"/>{:else}<circle cx="16" cy="10" r="4"/><circle cx="6" cy="12" r="3"/><circle cx="26" cy="12" r="3"/><path d="M9 27v-3c0-9 14-9 14 0v3H9M2 25v-3c0-5 4-6 7-5m14 0c4-1 7 1 7 5v3"/>{/if}
@@ -91,9 +99,10 @@
         {:else if preview}<img class="live-preview" src={preview} alt="Зеркальное превью камеры" onerror={onstoppreview}/>
         {:else}<div class="fallback preview-fallback">{@render icon('person')}<h2>{previewEnabled?'Подключаем превью…':'Съёмка без превью'}</h2><p>Повторите образец позы и смотрите в камеру</p></div>{/if}
         {@render corners()}
-        {#if phase==='ready' || phase==='paused'}<div class="live-note" role="status">{phase==='paused'?'Съёмка на паузе':pose.participant===2?'Подготовьте второго человека и продолжите съёмку.':'Когда будете готовы, нажмите Play'}</div>{/if}
-        {#if phase==='error'}<div class="notice error" role="alert"><h2>Не удалось получить кадр</h2><p>{error}</p>{#if pendingCapture}<p>Ожидается текущий JPEG. Новый спуск и пересъёмки пока недоступны.</p>{/if}<button onclick={onrun}>Повторить</button></div>{/if}
-        {#if phase==='review'}<div class="notice complete">{@render icon('check')}<h2>Отлично! Все кадры готовы</h2><p>Можно переснять последний кадр или завершить серию</p><button onclick={onfinish}>Завершить фотосессию</button></div>{/if}
+        {#if phase==='ready' || phase==='paused'}<div class="live-note" role="status">{pose.participant===2?'Подготовьте второго человека. ':''}Коснитесь экрана для одного кадра или нажмите Play для автоматической серии.</div>{/if}
+        {#if !automatic && (phase==='ready' || phase==='paused')}<button class="manual-shutter" aria-label="Снять один кадр" onclick={onrun}></button>{/if}
+        {#if phase==='error'}<div class="notice error" role="alert"><h2>Не удалось получить кадр</h2><p>{error}</p>{#if caseCode}<p>Код случая <strong>{caseCode}</strong></p>{/if}{#if pendingCapture}<p>Ожидается текущий JPEG. Новый спуск и пересъёмки пока недоступны.</p>{/if}<button onclick={onrun}>Повторить</button></div>{/if}
+        {#if phase==='review'}<div class="notice complete">{@render icon('check')}<h2>Отлично! Все кадры готовы</h2><p>Передача начнётся через {settings.reviewSeconds} с.</p><button onclick={onfinish}>Завершить фотосессию</button></div>{/if}
         {@render counter(true)}
         {#if phase==='camera'}<div class="capture-status" role="status">{pauseAfterCapture?'Получаем снимок… Затем — пауза.':'Получаем снимок…'}</div>{:else if phase==='confirmation'}<div class="capture-status" role="status">Кадр снят ✓</div>{/if}
         {#if previewEnabled && phase!=='camera' && !['error','review','complete'].includes(phase)}<button class="preview-toggle" onclick={onstoppreview}>Продолжить без превью</button>{/if}
@@ -102,7 +111,7 @@
   </div>
   <footer>
     <div class="thumbnails" class:many={count>4} aria-label="Сделанные фотографии">{#each receipt.posePlan as item}{@const thumb=thumbnails.find(photo=>photo.poseIndex===item.index)}<div class="thumbnail" class:filled={!!thumb} class:current={item.index===position&&phase!=='review'} aria-label={`Кадр ${item.index+1}: ${thumb?'снят':'ожидается'}`}>{#if thumb}<img class="thumb-image" src={thumb.url} alt={`Снятый кадр ${item.index+1}`}/><span>{item.index+1}</span>{:else}{@render icon('plus')}{/if}</div>{/each}</div>
-    <div class="controls"><button class="round" disabled={!thumbnails.length||cameraLocked||phase==='complete'} onclick={onretake} aria-label="Переснять предыдущий кадр" title="Переснять предыдущий кадр">{@render icon('back')}</button><button class="round" disabled={cameraLocked||phase==='complete'} onclick={e=>open('restart',e)} aria-label="Начать заново" title="Начать заново">{@render icon('restart')}</button><div class="progress" aria-live="polite">{@render icon('frames')}<div><span>{phase==='review'?'Снято':'Кадр'}</span><strong>{phase==='review'?count:position+1} из {count}</strong></div><div class="dots">{#each receipt.posePlan as item}<i class:done={thumbnails.some(photo=>photo.poseIndex===item.index)} class:active={item.index===position&&phase!=='review'}></i>{/each}</div><span class="capture-progress sr-only">Снято: {thumbnails.length} из {count}</span></div><button class="play" disabled={['review','complete','error'].includes(phase)} onclick={()=>active?onpause():onrun()} aria-label={playLabel} title={playLabel}>{@render icon(active?'pause':'play')}</button></div>
+    <div class="controls"><button class="round" disabled={!thumbnails.length||cameraLocked||phase==='complete'} onclick={onretake} aria-label="Переснять предыдущий кадр" title="Переснять предыдущий кадр">{@render icon('back')}</button><button class="round" disabled={cameraLocked||phase==='complete'} onclick={e=>open('restart',e)} aria-label="Начать заново" title="Начать заново">{@render icon('restart')}</button><div class="progress" aria-live="polite">{@render icon('frames')}<div><span>{phase==='review'?'Снято':'Кадр'}</span><strong>{phase==='review'?count:position+1} из {count}</strong></div><div class="dots">{#each receipt.posePlan as item}<i class:done={thumbnails.some(photo=>photo.poseIndex===item.index)} class:active={item.index===position&&phase!=='review'}></i>{/each}</div><span class="capture-progress sr-only">Снято: {thumbnails.length} из {count}</span></div><button class="play" disabled={['review','complete','error'].includes(phase)} onclick={ontoggle} aria-pressed={automatic} aria-label={playLabel} title={automatic?'Перейти в ручной режим':'Включить автоматическую съёмку'}>{@render icon(automatic?'pause':'play')}</button></div>
   </footer>
 </div></main>
 <dialog bind:this={dialog} oncancel={e=>{e.preventDefault();close();}} aria-labelledby="session-dialog-title"><h2 id="session-dialog-title">{dialogMode==='restart'?'Начать фотосессию заново?':'Выбрать другой сценарий?'}</h2><p>{thumbnails.length?'Сделанные кадры этой серии будут сброшены.':'Текущая серия начнётся заново.'}</p><div class="dialog-actions"><button class="cancel" onclick={()=>close()}>Отмена</button><button class="confirm" onclick={confirm}>{dialogMode==='restart'?'Начать заново':'Выбрать сценарий'}</button></div></dialog>

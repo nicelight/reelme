@@ -116,7 +116,7 @@ def main():
                     data = json.loads(docker('inspect', '--format',
                         '{"Id":{{json .Id}},"State":{{json .State}},"RestartCount":{{.RestartCount}}}', cid))
                     record['containers'].append(sample(data, previous))
-                    active_keys.add((cid, data['State']['StartedAt']))
+                    active_keys.add((data['Id'], data['State']['StartedAt']))
                 except Exception as error:
                     record['containers'].append({'container_id': cid, 'error': type(error).__name__})
             previous = {key: value for key, value in previous.items() if key in active_keys}

@@ -32,6 +32,15 @@ test('operator display: six stages, explicit errors, stable order, private media
     for (const token of [row().receive_token, row().download_token]) assert.equal((await f.app.inject({ url, headers: { authorization: `Bearer ${token}` } })).statusCode, 401, url);
     assert.equal((await get(url)).statusCode, 200, url);
   }
+  for (const url of Object.values(card)) {
+    const original = await get(url);
+    assert.equal(original.headers['cache-control'], 'private, no-cache');
+    const headers = { 'if-none-match': String(original.headers.etag) };
+    const cached = await f.app.inject({ url, headers: { ...headers, cookie } });
+    assert.equal(cached.statusCode, 304);
+    assert.equal(cached.rawPayload.length, 0);
+    assert.equal((await f.app.inject({ url, headers })).statusCode, 401);
+  }
   assert.deepEqual((await get(card.photoUrl)).rawPayload, first.photo);
   assert.deepEqual((await get(card.frameUrl)).rawPayload, await readFile(join(f.config.dataDir, 'media', first.frame_path)));
   const png = await sharp((await get(card.qrUrl)).rawPayload).ensureAlpha().raw().toBuffer({ resolveWithObject: true });

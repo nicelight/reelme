@@ -1,4 +1,5 @@
-/** Module contract: one in-process Sessions worker advances durable fal work.
+/** Module contract: independent in-process loops advance fal jobs and prepare
+ * one local result at a time. Persisting result_url and preparing hands off the job.
  * Submit inputs use the saved snapshot/photos only. Simulation uses the same
  * preparation. Input-only simulation ends before transport/issuance; test-video
  * uses a local transport chosen from the immutable snapshot, never the fal client.
@@ -21,22 +22,12 @@ import { buildModelInput } from './model-input.js';
 import { photoProviderUrl, slotProviderUrl } from './provider-media.js';
 import type { FalTransport } from './fal.js';
 import { InvalidVideo, prepareVideo } from './video.js';
+import { GenerationFailure, generationMessages } from './generation-errors.js';
 import { isTestVideo } from '../../shared/scenarios.js';
 import { testVideoTransport } from './test-video.js';
 
 interface Job { request_id: string | null; result_url: string | null; video_path: string | null; frame_path: string | null; submitted_at: number | null }
-export interface GenerationOptions { deleteOutput?: CleanupOptions['deleteOutput']; client?: FalTransport; download?: typeof fetch; testVideoDir?: string; intervalMs?: number; now?: () => number; secret?: string; publishReady?: (id: string) => Promise<void> }
-class GenerationFailure extends Error {
-  constructor(readonly code: string, message: string, options?: ErrorOptions) { super(message, options); }
-}
-const messages: Record<string, string> = {
-  INPUT_PREPARATION_FAILED: 'Не удалось подготовить фотографии или материалы сюжета. Обратитесь к сотруднику.',
-  FAL_NOT_CONFIGURED: 'Сервис генерации не настроен. Обратитесь к сотруднику.',
-  FAL_REJECTED: 'Сервис отклонил запрос генерации. Обратитесь к сотруднику.',
-  FAL_FAILED: 'Не удалось создать видео. Обратитесь к сотруднику.',
-  INVALID_RESULT: 'Сервис вернул непригодное видео. Обратитесь к сотруднику.',
-  GENERATION_RETRY: 'Обработка временно недоступна. Сервер повторит текущий шаг.',
-};
+export interface GenerationOptions { deleteOutput?: CleanupOptions['deleteOutput']; client?: FalTransport; download?: typeof fetch; testVideoDir?: string; intervalMs?: number; now?: () => number; secret?: string; publishReady?: (id: string, freshlyPrepared: boolean) => Promise<void> }
 function httpStatus(error: unknown): number | undefined {
   const status = (error as { status?: unknown })?.status;
   return typeof status === 'number' ? status : undefined;
@@ -57,12 +48,12 @@ function safeDetail(error: unknown, secret?: string): unknown {
   return clean(error);
 }
 export function createGenerationWorker(db: DB, dataDir: string, origin: string, log: FastifyBaseLogger, options: GenerationOptions) {
-  let stopped = false; let active: Promise<void> | undefined; let timer: ReturnType<typeof setTimeout> | undefined;
+  let stopped = false;
   const clearError = (id: string) => db.prepare('UPDATE generation_jobs SET error_code=NULL,error_message=NULL WHERE session_id=?').run(id);
-  function failure(id: string, error: unknown, terminal: boolean, code: string) {
+  function failure(id: string, error: unknown, terminal: boolean, code: keyof typeof generationMessages) {
     if (!sessionAvailable(db, id)) return;
     db.transaction(() => {
-      db.prepare('UPDATE generation_jobs SET error_code=?,error_message=? WHERE session_id=?').run(code, messages[code], id);
+      db.prepare('UPDATE generation_jobs SET error_code=?,error_message=? WHERE session_id=?').run(code, generationMessages[code], id);
       if (terminal) db.prepare("UPDATE capture_sessions SET state='failed' WHERE id=?").run(id);
     })();
     log.error({ sessionId: id, code, detail: safeDetail(error, options.secret) }, 'Ошибка обработки видео');
@@ -163,27 +154,50 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
         }
         db.prepare(`UPDATE generation_jobs SET video_path=@video_path,frame_path=@frame_path,video_size=@video_size,frame_size=@frame_size,width=@width,height=@height,duration=@duration,error_code=NULL,error_message=NULL WHERE session_id=@id`).run({ ...prepared, id });
       }
-      if (session.state === 'preparing') await options.publishReady?.(id);
+      if (session.state === 'preparing') await options.publishReady?.(id, !job.video_path);
     } catch (error) {
       const code = error instanceof GenerationFailure ? error.code : error instanceof InvalidVideo ? 'INVALID_RESULT' : 'GENERATION_RETRY';
       const rejectedStatus = session.state === 'observing' && (httpStatus(error) ?? 0) >= 400 && (httpStatus(error) ?? 0) < 500 && ![408,429].includes(httpStatus(error)!);
       failure(id, error, code !== 'GENERATION_RETRY' || rejectedStatus, rejectedStatus ? 'FAL_FAILED' : code);
     }
   }
-  async function pass() {
-    const rows = db.prepare(`SELECT s.id FROM capture_sessions s LEFT JOIN generation_jobs g ON g.session_id=s.id
-      WHERE EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.deleting=0) AND (s.state IN ('submit_pending','observing') OR (s.state='preparing' AND (g.video_path IS NULL OR ?))) ORDER BY s.created_at,s.id`).all(options.publishReady ? 1 : 0) as { id: string }[];
-    for (const row of rows) { if (stopped) break; await advance(row.id); }
+  function createLoop(condition: string) {
+    const select = db.prepare<[], { id: string }>(`SELECT s.id FROM capture_sessions s
+      JOIN events e ON e.date=s.event_date LEFT JOIN generation_jobs g ON g.session_id=s.id
+      WHERE e.deleting=0 AND ${condition} ORDER BY s.created_at,s.id`);
+    let active: Promise<void> | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    async function pass() {
+      for (const { id } of select.all()) {
+        if (stopped) break;
+        await advance(id);
+      }
+    }
+    function runOnce() {
+      if (stopped) return Promise.resolve();
+      active ??= pass().finally(() => { active = undefined; });
+      return active;
+    }
+    async function loop() {
+      try { await runOnce(); }
+      catch (error) { log.error({ detail: safeDetail(error, options.secret) }, 'Сбой фонового обработчика'); }
+      if (!stopped) timer = setTimeout(loop, options.intervalMs ?? 3000).unref();
+    }
+    return {
+      runOnce,
+      start() { if (!timer && !stopped) timer = setTimeout(loop, 0).unref(); },
+      stop() { clearTimeout(timer); return active; },
+    };
   }
-  function runOnce(): Promise<void> {
-    if (stopped) return Promise.resolve();
-    if (!active) active = pass().finally(() => { active = undefined; });
-    return active;
-  }
-  async function loop() {
-    try { await runOnce(); }
-    catch (error) { log.error({ detail: safeDetail(error, options.secret) }, 'Сбой фонового обработчика'); }
-    if (!stopped) { timer = setTimeout(loop, options.intervalMs ?? 3000); timer.unref(); }
-  }
-  return { runOnce, start() { if (!timer && !stopped) { timer = setTimeout(loop, 0); timer.unref(); } }, async stop() { stopped = true; clearTimeout(timer); await active; } };
+  const provider = createLoop("s.state IN ('submit_pending','observing')");
+  const preparation = createLoop(options.publishReady ? "s.state='preparing'" : "s.state='preparing' AND g.video_path IS NULL");
+  return {
+    async runOnce() { await Promise.all([preparation.runOnce(), provider.runOnce()]); },
+    start() { provider.start(); preparation.start(); },
+    async stop() {
+      stopped = true;
+      await Promise.allSettled([provider.stop(), preparation.stop()]);
+    },
+  };
 }

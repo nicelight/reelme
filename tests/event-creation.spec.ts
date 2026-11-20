@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import sharp from 'sharp';
 import { request as apiRequest } from '@playwright/test';
 import { test, expect } from './browser-fixture';
 
@@ -25,9 +26,14 @@ for (const action of ['save', 'skip'] as const) {
       mode: 'V2V', model: 'minimax/h3-max/recast', participants: 1, photosPerParticipant: 1, orientation: 'landscape',
       videoId: (await imported.json()).id, referenceIds: [], resolution: '768P', recastShotsConfirmed: true,
     } })).status()).toBe(201);
-    await admin.dispose();
-
-    const jpeg = await readFile(app.jpeg); let shots = 0;
+    const photoMaxEdge = action === 'skip' ? 1024 : 2048;
+    const timing = action === 'skip'
+      ? { startMode: 'automatic', countdownSeconds: 2, reviewSeconds: 1, receiptSeconds: 3 }
+      : { startMode: 'manual', countdownSeconds: 5, reviewSeconds: 3, receiptSeconds: 5 };
+    expect((await admin.put('/api/admin/capture-settings', { data: { ...timing, photoMaxEdge } })).status()).toBe(200);
+    const jpeg = await sharp(app.jpeg).resize(3200, 1600, { fit: 'fill' })
+      .withMetadata({ orientation: action === 'skip' ? 6 : 1 }).jpeg().toBuffer();
+    let shots = 0;
     await page.route(app.captureOrigin + '/**', async route => {
       const url = new URL(route.request().url());
       if (url.pathname === '/reelme.html') return route.continue();
@@ -75,13 +81,25 @@ for (const action of ['save', 'skip'] as const) {
       await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
     } else await page.getByRole('button', { name: 'Пропустить', exact: true }).click();
 
-    await page.getByRole('button', { name: 'Начать съёмку', exact: true }).click();
-    await page.getByRole('button', { name: 'Завершить фотосессию', exact: true }).click({ timeout: 20_000 });
-    await expect(page.getByRole('heading', { name: 'Ищи свое видео под номером 001 на промо экране', exact: true })).toBeVisible();
+    if (action === 'skip') {
+      await expect(page.locator('.live .countdown strong')).toHaveText('2');
+      // The active session keeps its timers. The next visitor uses manual mode.
+      expect((await admin.put('/api/admin/capture-settings', { data: { startMode: 'manual', countdownSeconds: 4, reviewSeconds: 3, receiptSeconds: 5 } })).status()).toBe(200);
+      await expect(page.getByText('Отлично! Все кадры готовы')).toBeVisible({ timeout: 10_000 });
+    } else {
+      await page.getByRole('button', { name: 'Снять один кадр', exact: true }).click();
+      await page.getByRole('button', { name: 'Завершить фотосессию', exact: true }).click({ timeout: 20_000 });
+    }
+    await admin.dispose();
+    await expect(page.getByRole('heading', { name: 'Ищите видео под номером 001 на промоэкране', exact: true })).toBeVisible();
     expect(app.sessionCount()).toBe(1); expect(shots).toBe(1);
     const receipt = await page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!).receipt);
-    expect((await app.photos(receipt.sessionId))[0].bytes).toEqual(jpeg);
-    await page.getByRole('button', { name: 'Следующий посетитель', exact: true }).click();
+    const uploadedPhoto = (await app.photos(receipt.sessionId))[0].bytes;
+    const expectedSize = action === 'skip' ? { width: 512, height: 1024 } : { width: 2048, height: 1024 };
+    expect(await sharp(uploadedPhoto).metadata()).toMatchObject({ format: 'jpeg', ...expectedSize });
+    await expect(page.getByRole('button', { name: 'Еще фотосессия сюжета', exact: true })).toBeVisible();
+    if (action === 'save') await page.getByRole('button', { name: 'Следующий посетитель', exact: true }).click();
+    else await expect(page.getByRole('heading', { name: 'Выберите историю' })).toBeVisible({ timeout: 4500 });
     await page.getByRole('button', { name: /Сюжет 1:/ }).click();
     await page.getByRole('button', { name: 'Выбрать этот сюжет', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Начать съёмку', exact: true })).toBeVisible();

@@ -1,16 +1,18 @@
 <script lang="ts">
-  /** Module contract: owns one local, ordered JPEG series until explicit Finish.
+  /** Module contract: owns one local, ordered JPEG series until manual or timed Finish.
    * Pause/restart/retake cancel only local sequence waits, never an outstanding
    * shutter. Pending-camera retry gets the same JPEG. No upload before oncomplete;
    * preview is aborted before shutter and stays stopped through photo confirmation.
-   * Automatic countdowns take five seconds after the one-second confirmation;
-   * Pause→Play shortens only the next new countdown to three seconds.
+   * The session snapshot sets initial mode and timers. A manual tap takes one
+   * photo. Switching modes never issues a second shutter for a pending JPEG.
    * Pause/Play preserves the photo's original confirmation deadline.
    * Hidden/unmounted views cannot publish a late preview frame.
    * Unmount cancels waits and releases URLs/audio. Source: docs/slot-setup/matrix.md. */
-  import { onMount } from 'svelte';
-  import type { StartReceipt } from '../../shared/capture';
-  import { DigiCamControl, pause } from './camera';
+  import { onMount, untrack } from 'svelte';
+  import { defaultCaptureSettings, type StartReceipt } from '../../shared/capture';
+  import { CaptureDiagnostics } from './capture-diagnostics';
+  import { enqueueReport } from './report-queue';
+  import { CameraError, DigiCamControl, pause } from './camera';
   import PhotoSessionView, { type CapturePhase, type PhotoThumbnail } from './session/PhotoSessionView.svelte';
   import type { CapturedPhoto } from './photos';
   let { receipt, installationKey, oncomplete, onscenario }: { receipt: StartReceipt; installationKey: string; oncomplete: (photos: CapturedPhoto[]) => void; onscenario: () => void } = $props();
@@ -33,8 +35,14 @@
   let audio: AudioContext | undefined;
   let sequence: AbortController | undefined;
   let running = false;
-  let resumeCountdown = false;
-  const camera = new DigiCamControl();
+  const settings = $derived(receipt.captureSettings ?? defaultCaptureSettings);
+  let automatic = $state(untrack(() => settings.startMode === 'automatic'));
+  let caseCode = $state('');
+  const diagnostics = untrack(() => settings.sendCaptureLogs ? new CaptureDiagnostics(report => {
+    if (report.kind === 'attempt' && report.outcome === 'error') caseCode = report.caseId.slice(0,8);
+    enqueueReport(receipt.sessionId, report);
+  }) : undefined);
+  const camera = new DigiCamControl(undefined, undefined, undefined, diagnostics);
   const lifecycle = new AbortController();
   let previewRun: AbortController | undefined;
   const pose = $derived(receipt.posePlan[position]);
@@ -49,7 +57,7 @@
     if (preview) URL.revokeObjectURL(preview);
     preview = '';
   }
-  function stopPreview() { previewEnabled = false; pausePreview(); }
+  function stopPreview() { diagnostics?.stopPreview('operator'); previewEnabled = false; pausePreview(); }
   function cancelSequence() { sequence?.abort(); sequence = undefined; running = false; pauseAfterCapture = false; }
   function clearThumbnails() { thumbnails.forEach(photo => URL.revokeObjectURL(photo.url)); thumbnails = []; }
   $effect(() => {
@@ -60,21 +68,32 @@
         while (!controller.signal.aborted) {
           const frame = await camera.preview(controller.signal);
           controller.signal.throwIfAborted();
+          diagnostics?.frame();
           const url = URL.createObjectURL(frame);
           if (preview) URL.revokeObjectURL(preview);
           preview = url;
           await pause(200, controller.signal);
         }
-      } catch { if (!controller.signal.aborted) stopPreview(); }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          diagnostics?.stopPreview('error', error, error instanceof CameraError ? error.status : undefined);
+          stopPreview();
+        }
+      }
     })();
     return () => { controller.abort(); if (previewRun === controller) { pausePreview(); previewRun = undefined; } };
   });
   onMount(() => {
+    diagnostics?.start();
+    if (automatic && !document.hidden) void run();
+    else if (document.hidden) automatic = false;
     void camera.startLiveView(lifecycle.signal).then(() => { if (!lifecycle.signal.aborted) liveView = true; })
       .catch(() => { if (!lifecycle.signal.aborted) stopPreview(); });
-    const visibility = () => { hidden = document.hidden; if (hidden) pausePreview(); };
+    const visibility = () => { hidden = document.hidden; diagnostics?.visibilityChanged(); if (hidden) { diagnostics?.stopPreview('hidden'); automatic = false; pauseCapture(); pausePreview(); } };
+    const pageHide = () => diagnostics?.pageHidden(camera.hasPendingCapture);
+    window.addEventListener('pagehide', pageHide);
     document.addEventListener('visibilitychange', visibility);
-    return () => { document.removeEventListener('visibilitychange', visibility); cancelSequence(); lifecycle.abort(); stopPreview(); clearConfirmed(); clearThumbnails(); void audio?.close(); };
+    return () => { window.removeEventListener('pagehide', pageHide); diagnostics?.stopProbe(); document.removeEventListener('visibilitychange', visibility); cancelSequence(); lifecycle.abort(); stopPreview(); clearConfirmed(); clearThumbnails(); void audio?.close(); };
   });
   function beep() {
     if (!audio || audio.state !== 'running') return;
@@ -89,38 +108,46 @@
     if (position + 1 === receipt.posePlan.length) { phase = 'review'; return false; }
     const person = pose.participant;
     position++;
-    if (paused || pose.participant !== person) { phase = paused ? 'paused' : 'ready'; return false; }
+    if (pose.participant !== person) { automatic = false; phase = 'ready'; return false; }
+    if (paused || !automatic) { phase = 'paused'; return false; }
     return true;
   }
   function pauseCapture() {
     // Pausing an exposure stops only the next step; the pending JPEG must survive.
-    if (phase === 'camera') { resumeCountdown = true; pauseAfterCapture = true; return; }
+    if (phase === 'camera') { pauseAfterCapture = true; return; }
+    if (running && (phase === 'paused' || phase === 'ready')) { cancelSequence(); return; }
     if (cameraLocked || !['countdown', 'confirmation'].includes(phase)) return;
-    resumeCountdown = true;
     const completed = phase === 'confirmation';
     cancelSequence();
     if (completed) advance(true); else phase = 'paused';
   }
   function restart() {
     if (cameraLocked || camera.hasPendingCapture || phase === 'complete') return;
-    cancelSequence(); resumeCountdown = false; clearConfirmed(); clearThumbnails(); photos = []; position = 0; error = ''; phase = 'ready';
-    void run();
+    cancelSequence(); clearConfirmed(); clearThumbnails(); photos = []; position = 0; error = ''; phase = 'ready';
+    if (automatic) void run();
   }
   function retake() {
     if (cameraLocked || camera.hasPendingCapture || !photos.length || phase === 'complete') return;
-    cancelSequence(); resumeCountdown = false; clearConfirmed(); position = photos.at(-1)!.poseIndex;
+    cancelSequence(); clearConfirmed(); position = photos.at(-1)!.poseIndex;
     photos = photos.filter(photo => photo.poseIndex !== position);
     thumbnails.filter(photo => photo.poseIndex === position).forEach(photo => URL.revokeObjectURL(photo.url));
     thumbnails = thumbnails.filter(photo => photo.poseIndex !== position);
-    error = ''; phase = 'paused';
+    automatic = false; error = ''; phase = 'paused';
+  }
+  function toggleMode() {
+    automatic = !automatic;
+    if (automatic) { pauseAfterCapture = false; void run(); }
+    else pauseCapture();
   }
   async function run() {
     if ((phase === 'camera' || phase === 'confirmation') && pauseAfterCapture) { pauseAfterCapture = false; return; }
     if (running || !['ready', 'paused', 'error'].includes(phase)) return;
-    running = true; error = '';
+    let retry = phase === 'error';
+    if (retry) diagnostics?.retryRequested();
+    running = true; error = ''; caseCode = '';
     const current = sequence = new AbortController();
     try {
-      try { audio ??= new AudioContext(); await audio.resume(); } catch {}
+      try { audio ??= new AudioContext(); void audio.resume().catch(() => {}); } catch {}
       current.signal.throwIfAborted();
       const remaining = confirmationUntil - performance.now();
       if (remaining > 0) await pause(remaining, current.signal);
@@ -128,13 +155,15 @@
       while (!current.signal.aborted) {
         clearConfirmed();
         if (!camera.hasPendingCapture) {
+          diagnostics?.countdown();
           phase = 'countdown';
-          const seconds = resumeCountdown ? 3 : 5; resumeCountdown = false;
+          const seconds = settings.countdownSeconds;
           for (countdown = seconds; countdown > 0; countdown--) { beep(); await pause(1000, current.signal); }
         }
-        current.signal.throwIfAborted(); phase = 'camera'; pausePreview();
+        current.signal.throwIfAborted(); phase = 'camera'; diagnostics?.stopPreview('shutter'); pausePreview();
         const target = pose.index;
-        const blob = await camera.capture(receipt.sessionId, target, liveView, lifecycle.signal);
+        const blob = await camera.capture(receipt.sessionId, target, liveView, lifecycle.signal, automatic, retry);
+        retry = false;
         lifecycle.signal.throwIfAborted(); current.signal.throwIfAborted(); pendingCapture = false;
         photos = [...photos.filter(photo => photo.poseIndex !== target), { sessionId: receipt.sessionId, poseIndex: target, blob }].sort((a, b) => a.poseIndex - b.poseIndex);
         confirmed = URL.createObjectURL(blob);
@@ -160,5 +189,5 @@
   }
 </script>
 <PhotoSessionView {receipt} {installationKey} {position} {phase} {countdown} {preview} {previewEnabled} {confirmed} {confirming} {thumbnails}
-  {error} {pendingCapture} {cameraLocked} {pauseAfterCapture} onrun={() => void run()} onpause={pauseCapture}
+  {error} {caseCode} {pendingCapture} {cameraLocked} {pauseAfterCapture} {automatic} {settings} ontoggle={toggleMode} onrun={() => void run()} onpause={pauseCapture}
   onretake={retake} onrestart={restart} onfinish={finish} {onscenario} onstoppreview={stopPreview}/>

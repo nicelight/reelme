@@ -23,17 +23,18 @@ export function decodeImage(url: string, signal?: AbortSignal): Promise<HTMLImag
 export class CardLoadError extends Error {
   constructor(public reason: 'timeout' | 'image') { super('Card images unavailable'); }
 }
-export async function loadCardImages(card: { frameUrl: string; qrUrl: string }, signal: AbortSignal) {
+export async function loadCardImages(card: { frameUrl: string; qrUrl: string }, signal: AbortSignal, retry: boolean) {
   let reason: 'timeout' | 'image' = 'image';
   for (let attempt = 0; attempt < 2; attempt++) {
     signal.throwIfAborted();
     const controller = new AbortController();
     const deadline = AbortSignal.timeout(3000);
     const attemptSignal = AbortSignal.any([signal, deadline, controller.signal]);
-    const fresh = (source: string) => {
+    const resourceUrl = (source: string) => {
+      if (!retry && attempt === 0) return source;
       const url = new URL(source, location.href); url.searchParams.set('load', crypto.randomUUID()); return url.href;
     };
-    const frameUrl = fresh(card.frameUrl); const qrUrl = fresh(card.qrUrl);
+    const frameUrl = resourceUrl(card.frameUrl); const qrUrl = resourceUrl(card.qrUrl);
     try {
       const [frame, qr] = await Promise.all([decodeImage(frameUrl, attemptSignal), decodeImage(qrUrl, attemptSignal)]);
       attemptSignal.throwIfAborted();

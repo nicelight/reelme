@@ -2,6 +2,8 @@
  * installation and the public promo page. Public routes never start capture.
  * Media access is restricted to that visible slot's thumbnail and preview;
  * editor references/settings and hidden or replaced media are not catalog data.
+ * Immutable files may be stored by the browser. Authorization and current slot
+ * membership are checked before an HTTP revalidation can return 304.
  * V2V drafts without a source cannot be started. Source: docs/slot-setup/matrix.md. */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -32,7 +34,8 @@ export function registerCatalog(app: FastifyInstance, db: DB, dataDir: string, a
   async function media(request: FastifyRequest<{ Params: { id: string; mediaId: string } }>, reply: FastifyReply) {
     const item = catalogItem(db, visibleSlot(db, request.params.id));
     if (request.params.mediaId !== item.thumbnailId && request.params.mediaId !== item.previewId) throw new HttpError(404, 'NOT_FOUND', 'Материал не найден');
-    return sendMedia(dataDir, readMedia(db, request.params.mediaId), request, reply);
+    const stored = readMedia(db, request.params.mediaId);
+    return sendMedia(dataDir, stored, request, reply, 'inline', 'Authorization');
   }
   app.get<{ Params: { id: string; mediaId: string } }>('/api/catalog/:id/media/:mediaId', { preHandler: access.requireInstallation }, media);
   app.get<{ Params: { id: string; mediaId: string } }>('/api/public/catalog/:id/media/:mediaId', media);

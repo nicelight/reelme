@@ -36,7 +36,21 @@ export const photoPoses: readonly Pose[] = [
   { index: 2, key: 'down-right', instruction: 'Наклоните голову немного вниз и вправо' },
   { index: 3, key: 'profile-left', instruction: 'Поверните голову влево, в профиль' },
 ];
+export interface CaptureSettings {
+  photoMaxEdge: 0 | 1024 | 2048;
+  sendCaptureLogs: boolean;
+  startMode: 'manual' | 'automatic';
+  countdownSeconds: number;
+  reviewSeconds: number;
+  receiptSeconds: number;
+}
+export const defaultCaptureSettings: CaptureSettings = {
+  photoMaxEdge: 0,
+  sendCaptureLogs: false, startMode: 'manual', countdownSeconds: 5, reviewSeconds: 3, receiptSeconds: 5,
+};
+
 export interface StartReceipt {
+  captureSettings?: CaptureSettings;
   sessionId: string;
   date: string;
   number: number;
@@ -58,6 +72,7 @@ export interface CaptureStatus extends StartReceipt {
  * contains future model inputs; a P2V demo is never a generation input. */
 export const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
 export interface SlotSnapshot {
+  captureSettings?: CaptureSettings;
   /** Only manual tests retain their immutable source for retry; never a model input. */
   testPhotoId?: string;
   /** New manual tests keep one source per saved pose, in the same order. */

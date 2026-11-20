@@ -3,19 +3,22 @@
   import type { CatalogItem, CatalogPage, StartReceipt } from '../../shared/capture';
   import type { EventSetup as EventSetupAction } from '../../shared/events';
   import { ApiError, installationKeyStorage, request, startStorage } from './api';
+  import { flushReports } from './report-queue';
   import StoryCatalog from './story/StoryCatalog.svelte';
   import PhotoSession from './PhotoSession.svelte';
   import EventSetup from './EventSetup.svelte';
   import './story/assets/fonts.css';
-  import mark from './story/assets/reelme-mark.png';
+  import mark from './story/assets/reelme-mark.webp';
   import './style.css';
   /** Module contract: visitor catalog → durable start → PhotoSession owns capture
    * and transfer. sessionStorage recovers the server receipt; only confirmed
    * completion or confirmed abandonment (including lost local JPEGs) permits returning to
-   * the catalog. Start timeout retains the same request ID for manual recovery.
+   * the catalog. Repeating a completed story saves a fresh start key for the same slot
+   * before requesting a new receipt. Start timeout retains that key for manual recovery.
    * The server requests event setup before the first visitor; setup action and
    * receipt share the durable start key. Source: docs/slot-setup/matrix.md.
    * Last browsed/chosen story persists in localStorage for catalog return/reload.
+   * Catalog refresh keeps the current cards mounted until a new list is ready.
    * Server photos are never erased here. */
   type StartState = { startRequestId: string; slotId: string; receipt?: StartReceipt; eventSetupRequired?: boolean; eventSetup?: EventSetupAction };
   let key = $state('');
@@ -23,6 +26,7 @@
   let enteredKey = $state('');
   let setupMessage = $state('');
   let storageReady = $state(true);
+  const emptyItems: CatalogItem[] = [];
   let catalog = $state<CatalogPage>();
   let selected = $state<CatalogItem>();
   let start = $state<StartState>();
@@ -47,6 +51,7 @@
     return 'Не удалось связаться с сервером. Проверьте соединение и повторите.';
   }
   async function loadCatalog(preferredId = selected?.id) {
+    const selectionAtStart = selected?.id;
     const version = ++loadVersion;
     catalogAbort?.abort();
     const controller = new AbortController(); catalogAbort = controller;
@@ -58,15 +63,19 @@
       if (version !== loadVersion) return;
       // API pages are transport only: the visitor browses every currently eligible slot.
       const items = Array.from(new Map([first, ...rest].flatMap(result => result.items).map(item => [item.id, item])).values());
-      catalog = { ...first, items };
-      selected = items.find(item => item.id === (preferredId ?? lastStory()));
-      if (preferredId && !selected) {
+      if (!catalog || JSON.stringify(items) !== JSON.stringify(catalog.items)) catalog = { ...first, items };
+      const preferred = selected?.id === selectionAtStart ? preferredId : selected?.id;
+      selected = catalog.items.find(item => item.id === (preferred ?? lastStory()));
+      if (preferred && !selected) {
         history.replaceState(null, '', '#catalog');
         if (items.length) error = 'Этот сюжет больше недоступен. Выберите другой в каталоге.';
       }
     } catch (cause) {
       if (version === loadVersion && !controller.signal.aborted) {
-        catalog = undefined; selected = undefined; error = message(cause);
+        if (cause instanceof ApiError && [401, 403].includes(cause.status)) {
+          catalog = undefined; selected = undefined;
+        }
+        error = message(cause);
       }
     } finally { if (version === loadVersion) loading = false; }
   }
@@ -95,10 +104,11 @@
         start = saved;
       }
     } catch { storageReady = false; error = 'Не удалось прочитать данные установки. Попросите сотрудника проверить профиль браузера.'; }
-    if (storageReady) route();
+    if (storageReady) { route(); void flushReports(); }
+    window.addEventListener('online', flushReports);
     window.addEventListener('hashchange', route);
     window.addEventListener('focus', refresh);
-    return () => { lifecycle.abort(); catalogAbort?.abort(); loadVersion++; window.removeEventListener('hashchange', route); window.removeEventListener('focus', refresh); };
+    return () => { window.removeEventListener('online', flushReports); lifecycle.abort(); catalogAbort?.abort(); loadVersion++; window.removeEventListener('hashchange', route); window.removeEventListener('focus', refresh); };
   });
   async function saveKey(event: SubmitEvent) {
     event.preventDefault(); busy = true; error = ''; setupMessage = '';
@@ -106,20 +116,21 @@
     try {
       await request('/api/catalog?page=1', candidate);
       localStorage.setItem(installationKeyStorage, candidate);
-      key = candidate; enteredKey = ''; setupMessage = 'Ключ проверен и сохранён. Установка готова.';
+      if (candidate !== key) { catalog = undefined; selected = undefined; }
+      key = candidate; void flushReports(); enteredKey = ''; setupMessage = 'Ключ проверен и сохранён. Установка готова.';
     } catch (cause) { error = cause instanceof ApiError ? message(cause) : 'Не удалось проверить или сохранить ключ. Проверьте соединение и доступ к хранилищу браузера.'; }
     finally { busy = false; }
   }
-  async function begin() {
-    if (busy || start?.receipt || !storageReady) return;
-    if (!start && !selected) return;
+  async function begin(slotId?: string) {
+    if (busy || !storageReady) return;
+    if (slotId) {
+      const pending = { startRequestId: crypto.randomUUID(), slotId };
+      try { sessionStorage.setItem(startStorage, JSON.stringify(pending)); start = pending; }
+      catch { error = 'Не удалось сохранить начало съёмки. Попросите сотрудника проверить хранилище браузера.'; return; }
+    }
+    if (!start || start.receipt) return;
     busy = true; error = '';
     try {
-      if (!start) {
-        const pending = { startRequestId: crypto.randomUUID(), slotId: selected!.id };
-        sessionStorage.setItem(startStorage, JSON.stringify(pending));
-        start = pending;
-      }
       const receipt: StartReceipt = await (await request('/api/capture/sessions', key, {
         method:'POST', headers:{ 'Content-Type':'application/json' },
         signal: AbortSignal.any([lifecycle.signal, AbortSignal.timeout(15_000)]),
@@ -137,7 +148,13 @@
       } else if (start?.eventSetupRequired && cause instanceof ApiError && cause.status === 400) {
         error = 'Проверьте название, количество участников и локацию, затем сохраните ещё раз.';
       } else if (cause instanceof ApiError && [400, 404, 422].includes(cause.status)) {
-        try { sessionStorage.removeItem(startStorage); start = undefined; error = message(cause); }
+        try {
+          const rejectedSlotId = start?.slotId;
+          sessionStorage.removeItem(startStorage);
+          start = undefined;
+          if (cause.status === 404 || !catalog) void loadCatalog(rejectedSlotId);
+          error = message(cause);
+        }
         catch { error = 'Не удалось обновить данные сессии. Обратитесь к сотруднику.'; }
       } else {
         error = start?.receipt ? 'Сессия создана. Данные не удалось сохранить в браузере; обратитесь к сотруднику.'
@@ -147,6 +164,7 @@
       }
     } finally { busy = false; }
   }
+  function repeatScenario() { if (start?.receipt) void begin(start.slotId); }
   function setUpEvent(eventSetup: EventSetupAction) {
     if (!start || busy) return;
     const pending = { ...start, eventSetup };
@@ -157,7 +175,7 @@
   function nextVisitor() {
     try { sessionStorage.removeItem(startStorage); }
     catch { error = 'Не удалось завершить сессию в браузере. Обратитесь к сотруднику.'; return; }
-    start = undefined; selected = undefined; catalog = undefined;
+    start = undefined; selected = catalog?.items.find(item => item.id === lastStory());
     history.replaceState(null, '', '#catalog');
     void loadCatalog();
   }
@@ -166,9 +184,9 @@
 {#if !setup && storageReady && key && start?.eventSetupRequired && !start.receipt}
   <EventSetup {busy} {error} initial={start.eventSetup?.action === 'save' ? start.eventSetup : undefined} onsave={setUpEvent} onskip={() => setUpEvent({ action: 'skip' })} />
 {:else if !setup && storageReady && key && !start}
-  <StoryCatalog items={catalog?.items ?? []} activeId={selected?.id} installationKey={key} {loading} {error} {busy} onbrowse={browse} onbegin={(item) => { rememberStory(item); void begin(); }} onback={back} onrefresh={() => loadCatalog()}/>
+  <StoryCatalog items={catalog?.items ?? emptyItems} activeId={selected?.id} installationKey={key} loading={loading && !catalog} {error} {busy} onbrowse={browse} onbegin={(item) => { rememberStory(item); void begin(item.id); }} onback={back} onrefresh={() => loadCatalog()}/>
 {:else if !setup && storageReady && key && start?.receipt}
-  {#key start.receipt.sessionId}<PhotoSession receipt={start.receipt} installationKey={key} onnext={nextVisitor} />{/key}
+  {#key start.receipt.sessionId}<PhotoSession receipt={start.receipt} installationKey={key} onnext={nextVisitor} onrepeat={repeatScenario} />{/key}
   {#if error}<div class="session-storage-error error" role="alert"><p>{error}</p></div>{/if}
 {:else}
 <div class="installation-page">
@@ -183,11 +201,7 @@
   {:else if !storageReady || !key}
     <section class="narrow"><h1>Нужна настройка установки</h1><p class="intro">Пожалуйста, позовите сотрудника — он подготовит всё для съёмки.</p></section>
   {:else if start}
-    {#if start.receipt}
-      {#key start.receipt.sessionId}<PhotoSession receipt={start.receipt} installationKey={key} onnext={nextVisitor} />{/key}
-    {:else}
-      <section class="narrow handoff" aria-live="polite"><h1>Готовимся к съёмке</h1><p class="intro">{busy ? 'Создаём сессию…' : 'Нужно подтвердить начало вашей сессии.'}</p><button class="primary" onclick={begin} disabled={busy}>{busy ? 'Подождите…' : 'Повторить старт'}</button></section>
-    {/if}
+    <section class="narrow handoff" aria-live="polite"><h1>Готовимся к съёмке</h1><p class="intro">{busy ? 'Создаём сессию…' : 'Нужно подтвердить начало вашей сессии.'}</p><button class="primary" onclick={() => begin()} disabled={busy}>{busy ? 'Подождите…' : 'Повторить старт'}</button></section>
   {/if}
   {#if error}<div class="error" role="alert"><p>{error}</p>{#if key && !setup && !start && storageReady}<button onclick={() => { location.hash = ''; void loadCatalog(); }}>Вернуться к каталогу</button>{/if}</div>{/if}
 </main>

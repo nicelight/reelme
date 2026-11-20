@@ -2,7 +2,9 @@
  * Serves the QR saved before ready; older results without a file render it on demand.
  * Polling/media reads never confirm email or open a receive form. Authenticated
  * card-load failures produce one warning per request, without changing session state. */
+import { createHash } from 'node:crypto';
 import QRCode from 'qrcode';
+import { generationMessages } from './generation-errors.js';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -12,7 +14,7 @@ import type { Access } from '../access/index.js';
 import { HttpError } from '../errors.js';
 import { eventDate } from './index.js';
 import { readyCard } from './receive.js';
-import { sendMedia } from '../scenarios/media.js';
+import { matchesPrivateCache, sendMedia } from '../scenarios/media.js';
 import { pageDurationOptions, stageLabels, type DisplaySettings, type DisplaySession, type TodayDisplay } from '../../shared/display.js';
 import { isTestVideo } from '../../shared/scenarios.js';
 
@@ -33,9 +35,8 @@ function projection(row: Row): DisplaySession {
   const stage = row.state === 'ready' ? (row.email_state === 'sent' ? 6 : row.opened_at !== null ? 5 : 4)
     : ({ submit_pending: 1, observing: 2, preparing: 3 }[row.state] ?? 0);
   const failure = row.error_code === 'TEST_PREPARATION_FAILED' ? 'Не удалось подготовить тестовую фотографию. Сохраните JPEG и запустите новый тест.'
-    : row.error_code === 'INPUT_PREPARATION_FAILED' ? 'Не удалось подготовить фотографии или материалы сюжета. Обратитесь к сотруднику.'
-    : row.error_code === 'FAL_NOT_CONFIGURED' ? 'Сервис генерации не настроен. Обратитесь к сотруднику.'
-    : 'Не удалось создать видео. Обратитесь к сотруднику.';
+    : row.error_code === 'INPUT_PREPARATION_FAILED' || row.error_code === 'FAL_NOT_CONFIGURED' || row.error_code === 'RESULT_GONE'
+      ? generationMessages[row.error_code] : generationMessages.FAL_FAILED;
   const generation = JSON.parse(row.snapshot).generation ?? {};
   const testVideo = isTestVideo(generation);
   const simulation: DisplaySession['simulation'] = generation.simulateGeneration === true && row.state !== 'capturing'
@@ -84,17 +85,23 @@ export function registerDisplay(app: FastifyInstance, db: DB, dataDir: string, o
       const row = db.prepare(`${selection} AND s.id=? AND s.state='ready'`).get(eventDate(time), time, request.params.id) as Row | undefined;
       if (!row) throw new HttpError(404, 'NOT_FOUND', 'Результат недоступен на общем экране');
       if (kind === 'qr') {
-        try { return reply.type('image/png').send(await readFile(join(dataDir, 'media', 'sessions', row.id, 'qr.png'))); }
-        catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-        // Legacy ready sessions predate saved QR files; their capabilities stay valid.
-        const card = readyCard(db, origin, row.id);
-        if (!card) throw new HttpError(404, 'NOT_FOUND', 'Результат недоступен');
-        return reply.type('image/png').send(await QRCode.toBuffer(card.receiveUrl, { errorCorrectionLevel: 'M', margin: 4, scale: 6 }));
+        let png: Buffer;
+        try { png = await readFile(join(dataDir, 'media', 'sessions', row.id, 'qr.png')); }
+        catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+          // Older ready sessions predate stored QR files.
+          const card = readyCard(db, origin, row.id);
+          if (!card) throw new HttpError(404, 'NOT_FOUND', 'Результат недоступен');
+          png = await QRCode.toBuffer(card.receiveUrl, { errorCorrectionLevel: 'M', margin: 4, scale: 6 });
+        }
+        const etag = `"${createHash('sha256').update(png).digest('base64url')}"`;
+        if (matchesPrivateCache(request, reply, etag, 'Cookie')) return reply.code(304).send();
+        return reply.type('image/png').send(png);
       }
       const file = (kind === 'photo' ? db.prepare('SELECT path,size,width,height FROM capture_photos WHERE session_id=? AND pose_index=0')
         : db.prepare('SELECT frame_path AS path,frame_size AS size,width,height FROM generation_jobs WHERE session_id=?')).get(row.id) as { path: string; size: number; width: number; height: number } | undefined;
       if (!file) throw new HttpError(404, 'NOT_FOUND', 'Изображение недоступно');
-      return sendMedia(dataDir, { ...file, id: row.id, kind: 'image', mime: 'image/jpeg' }, request, reply);
+      return sendMedia(dataDir, { ...file, id: row.id, kind: 'image', mime: 'image/jpeg' }, request, reply, 'inline', 'Cookie');
     });
   }
 }

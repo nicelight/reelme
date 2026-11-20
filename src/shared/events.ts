@@ -12,3 +12,9 @@ export interface ArchiveSession {
   testVideo?: true;
 }
 export interface EventGallery extends EventDetails { sessions: ArchiveSession[] }
+export interface PreparationProgress {
+  running: boolean; total: number; deleted: number; failed: number; remoteErrors: number;
+}
+export interface EventPreparation {
+  through: string; eligibleCount: number; operation: PreparationProgress | null;
+}

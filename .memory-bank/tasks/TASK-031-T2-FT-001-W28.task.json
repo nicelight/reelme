@@ -1,0 +1,32 @@
+{
+  "id": "TASK-031-T2-FT-001-W28",
+  "title": "Готовая композиция каталога и повторное использование его медиа",
+  "status": "done",
+  "wave": "W28",
+  "feature": "FT-001",
+  "tier": "T2",
+  "reqs": ["REQ-003"],
+  "depends_on": ["TASK-002-T2-FT-001-W2", "TASK-028-T2-FT-001-W25"],
+  "touched_files": ["src/client/capture/App.svelte", "src/client/capture/story/StoryCatalog.svelte", "src/client/capture/story/media.ts", "src/client/capture/ProtectedMedia.svelte", "src/server/scenarios/catalog.ts", "src/server/scenarios/media.ts", "src/server/app.ts", "tests/capture.spec.ts", "tests/capture.test.ts"],
+  "gates": [
+    { "name": "typecheck", "command": "npm run check", "required": true },
+    { "name": "build", "command": "npm run build", "required": true },
+    { "name": "browser", "command": "npm run test:ui -- tests/capture.spec.ts tests/promo.spec.ts tests/transfer.spec.ts", "required": true }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-20",
+      "result": "PASS",
+      "summary": "Check, build, npm test 120/120. В Chromium задержанный стартовый файл удержал экран загрузки, плеер был готов к воспроизведению при первом показе. CDP зарегистрировал 0 сетевых байтов медиа при повторной загрузке и 0 загрузок при неизменном фокусе. Замена соседней обложки загрузила один файл, сохранив центральный плеер. Сервер возвращал 304 только после проверки доступа и видимости. Регрессии публичной галереи и перехода к следующей фотосессии прошли.",
+      "evidence": ["tests/capture.spec.ts", "tests/capture.test.ts", "tests/promo.spec.ts", "tests/transfer.spec.ts"],
+      "limitations": ["Локальный Chromium с тестовыми роликами и управляемой камерой. Кэш подчиняется настройкам браузера и может быть очищен."]
+    }
+  ],
+  "docs": [".memory-bank/prd.md"],
+  "source_artifacts": [".memory-bank/features/FT-001-scenarios.md#ft-001-ac-003"],
+  "normative_inputs": [".memory-bank/prd.md#слоты-и-каталог"],
+  "constraints": ["Перед показом готовится видимая композиция каталога фотобудки. Обновление списка на фокусе проходит в фоне."],
+  "invariants": ["Файлы имеют неизменяемые идентификаторы. При каждом новом открытии список подтверждается сервером. Условный ответ на запрос медиа проверяет доступ к действующему сюжету."],
+  "verification_targets": ["Удержание загрузки до готовности, отсутствие повторной передачи медиа при reload, плавная замена одного файла при обновлении, скрытие сцены и права доступа."],
+  "evidence_required": ["CDP-счётчики передачи и управляемые задержки в Chromium, серверные проверки 304 и отказов доступа."]
+}

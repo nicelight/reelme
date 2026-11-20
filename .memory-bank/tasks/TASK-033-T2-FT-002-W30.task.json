@@ -1,0 +1,91 @@
+{
+  "id": "TASK-033-T2-FT-002-W30",
+  "title": "Диагностика получения JPEG на съёмочной установке",
+  "status": "done",
+  "tier": "T2",
+  "wave": "W30",
+  "feature": "FT-002",
+  "reqs": [
+    "REQ-004",
+    "REQ-005"
+  ],
+  "depends_on": [
+    "TASK-032-T2-FT-002-W29"
+  ],
+  "touched_files": [
+    "src/client/capture/camera.ts",
+    "src/client/capture/capture-diagnostics.ts",
+    "src/client/capture/report-queue.ts",
+    "src/shared/capture-report.ts",
+    "src/server/sessions/index.ts",
+    "src/server/db.ts",
+    "src/client/cloud/CaptureSettingsForm.svelte",
+    "src/client/cloud/Photobooth.svelte"
+  ],
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "unit",
+      "command": "npm test",
+      "required": true
+    },
+    {
+      "name": "browser",
+      "command": "npm run test:ui -- tests/admin-appearance.spec.ts tests/capture-preview.spec.ts tests/capture-reports.spec.ts",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-20",
+      "result": "PASS",
+      "summary": "check и build прошли. npm test 120/120. Chromium 9/9: настройки, превью, таймаут, ошибка JSON и HTTP 503 на одном кадре, восстановление без нового спуска, отправка из очереди после reload, идемпотентность и выключенный сбор.",
+      "evidence": [
+        "tests/capture-reports.spec.ts",
+        "tests/capture-preview.spec.ts",
+        "tests/admin-appearance.spec.ts",
+        "tests/capture.test.ts"
+      ],
+      "limitations": [
+        "Имитатор HTTP камеры. Реальный Windows/Canon и выкладка на VPS вне этой проверки."
+      ]
+    },
+    {
+      "date": "2026-11-20",
+      "result": "PASS",
+      "summary": "Тайминги этапов попытки и исходной команды через два повтора проверены в серверной SQLite: задержанный HTTP-ответ, ожидание следующего опроса, чтение JPEG, декодирование и пауза оператора. check, build, 4 теста адаптера и сценарий capture-reports.spec.ts прошли на имитаторе."
+    }
+  ],
+  "docs": [
+    "docs/MANUAL.md#диагностика-захвата-кадра",
+    ".memory-bank/contracts/http-api.md",
+    ".memory-bank/contracts/integrations.md"
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-002-photo-session.md#ft-002-ac-001"
+  ],
+  "normative_inputs": [
+    ".memory-bank/contracts/integrations.md"
+  ],
+  "constraints": [
+    "Сбор выключен по умолчанию и закреплён за сессией. Фрагмент app.log передаёт сотрудник."
+  ],
+  "invariants": [
+    "Доставка отчёта независима от съёмки. Повтор сохраняет код случая. Дубликат отчёта занимает одну запись."
+  ],
+  "verification_targets": [
+    "Успех, ошибка списка, ошибка JPEG, повтор без спуска, доставка после перезагрузки, выключенная настройка."
+  ],
+  "evidence_required": [
+    "Проверка пути от переключателя и браузерной установки до SQLite."
+  ]
+}

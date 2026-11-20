@@ -26,9 +26,11 @@
     capturing: 'Подготовка тестовых фотографий', submit_pending: 'Ожидает обработки', observing: 'Генерация видео',
     preparing: 'Подготовка видео', ready: 'Видео готово', failed: 'Тест не завершён', simulated: 'Проверка входных данных пройдена',
   };
-  function remember() {
-    if (!slotId) return;
-    sessionStorage.setItem(`reelme.slotTest.${slotId}`, JSON.stringify({ requestId, sessionId }));
+  function remember(nextRequestId: string | null, nextSessionId: string | null) {
+    try {
+      sessionStorage.setItem(`reelme.slotTest.${slotId}`, JSON.stringify({ requestId: nextRequestId, sessionId: nextSessionId }));
+      return true;
+    } catch { return false; }
   }
   onMount(() => {
     if (!slotId) return;
@@ -70,15 +72,19 @@
   });
   async function send() {
     if (!slotId || disabled || dirty || !hasPhotos || posting) return;
-    posting = true; error = '';
-    requestId ??= crypto.randomUUID(); remember();
+    const id = requestId ?? crypto.randomUUID();
+    if (!remember(id, sessionId)) {
+      error = 'Запрос не отправлен. Не удалось сохранить его номер в хранилище браузера. Разрешите запись и повторите попытку.';
+      return;
+    }
+    requestId = id; posting = true; error = '';
     try {
       const value = await api<CaptureStatus>(`/admin/slots/${slotId}/test-generations`, { method: 'POST', body: JSON.stringify({ startRequestId: requestId }) });
-      status = value; sessionId = value.sessionId; requestId = null; remember();
+      status = value; sessionId = value.sessionId; requestId = null; remember(null, sessionId);
     } catch (value) {
       error = value instanceof ApiError ? value.message : 'Ответ не получен. Повторите запрос.';
       // An uncertain HTTP outcome keeps its ID. A retry must not charge again.
-      if (value instanceof ApiError && value.status === 400) { requestId = null; remember(); }
+      if (value instanceof ApiError && value.status === 400) { requestId = null; remember(null, sessionId); }
       if (value instanceof ApiError && value.status === 401) onError(value);
     } finally { posting = false; }
   }

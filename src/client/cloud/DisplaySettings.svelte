@@ -31,8 +31,8 @@
   }
 </script>
 
-<main class="display-settings">
-  <h1>Экран результатов</h1>
+<section class="display-settings">
+  <h2>Экран результатов</h2>
   <form onsubmit={save}>
     <label for="page-duration">Длительность показа страницы</label>
     <select id="page-duration" bind:value disabled={!loaded || busy} onchange={() => notice = ''}>
@@ -44,7 +44,7 @@
     {#if error}<p class="error" role="alert">{error}</p>{/if}
     {#if notice}<p class="success" role="status">{notice}</p>{/if}
   </form>
-</main>
+</section>
 <style>
   .display-settings { max-width:720px; margin:40px auto; padding:0 24px; }
   form { margin-top:32px; }

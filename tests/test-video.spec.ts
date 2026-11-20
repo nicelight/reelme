@@ -61,13 +61,17 @@ test('saved test-video mode: camera → ordinary worker → visible QR → playa
   await page.getByRole('button', { name: 'Выбрать этот сюжет', exact: true }).click();
   await page.getByRole('button', { name: 'Начать съёмку', exact: true }).click();
   await page.getByRole('button', { name: 'Завершить фотосессию', exact: true }).click({ timeout: 20_000 });
-  await expect(page.getByRole('heading', { name: 'Ищи свое видео под номером 001 на промо экране', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Ищите видео под номером 001 на промоэкране', exact: true })).toBeVisible();
   expect(shots).toBe(1); expect(app.sessionCount()).toBe(1);
   const receipt = await page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!).receipt);
   const photos = await app.photos(receipt.sessionId); expect(photos).toHaveLength(1); expect(photos[0].bytes).toEqual(jpeg);
 
   const operatorContext = await browser.newContext({ reducedMotion: 'reduce' });
   const operator = await operatorContext.newPage(); operator.on('pageerror', error => errors.push(error.message));
+  const visitor = await browser.newPage({ reducedMotion: 'reduce' });
+  visitor.on('pageerror', error => errors.push(error.message));
+  const guestAssets = new Set<string>();
+  visitor.on('request', request => guestAssets.add(new URL(request.url()).pathname));
   try {
     await operator.goto(app.origin + '/operator');
     await operator.getByLabel('Логин').fill('operator'); await operator.getByLabel('Пароль', { exact: true }).fill(app.password);
@@ -78,9 +82,14 @@ test('saved test-video mode: camera → ordinary worker → visible QR → playa
     const pixels = await sharp(await qrImage.body()).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     const decoded = jsQR(new Uint8ClampedArray(pixels.data), pixels.info.width, pixels.info.height);
     expect(decoded?.data).toMatch(new RegExp('^' + app.origin + '/receive/'));
-    const visitor = await operatorContext.newPage(); visitor.on('pageerror', error => errors.push(error.message));
     await visitor.goto(decoded!.data);
     await expect(visitor.getByRole('heading', { name: 'История № 1', exact: true })).toBeVisible();
+    const manifest = JSON.parse(await readFile('dist/client/.vite/manifest.json', 'utf8'));
+    const admin = manifest['src/client/cloud/App.svelte'];
+    expect(guestAssets.has('/' + manifest['src/client/cloud/Receive.svelte'].file)).toBe(true);
+    for (const file of [admin.file, ...admin.css, manifest['src/client/cloud/style.css'].file]) {
+      expect(guestAssets.has('/' + file), file).toBe(false);
+    }
     const player = visitor.locator('video');
     await expect.poll(() => player.evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
     await player.evaluate(node => (node as HTMLVideoElement).play());
@@ -98,5 +107,5 @@ test('saved test-video mode: camera → ordinary worker → visible QR → playa
     await app.restart(); await visitor.reload();
     await expect(visitor.locator('.receive-status')).toContainText('Письмо отправлено.'); expect(smtp.messages).toHaveLength(1);
     expect(errors).toEqual([]);
-  } finally { await operatorContext.close(); }
+  } finally { await visitor.close(); await operatorContext.close(); }
 });

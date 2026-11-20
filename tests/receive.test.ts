@@ -1,5 +1,7 @@
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
+import { subscribe, unsubscribe } from 'node:diagnostics_channel';
+import type { ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -10,17 +12,31 @@ import { publishReady, readyCard } from '../src/server/sessions/receive.js';
 import { createApp } from '../src/server/app.js';
 import type { ReceiveStatus } from '../src/shared/receive.js';
 import QRCode from 'qrcode';
+import jsQR from 'jsqr';
+import sharp from 'sharp';
 import { jpegFixtures } from './jpeg-fixture.js';
 
 type Row = { receive_token: string; download_token: string; opened_at: number | null; email_confirmed_at: number | null; email: string | null; email_state: string };
-test('ready capabilities survive restart, isolate two sessions and serve the original photo/verified video', async t => {
+function observeFfmpeg(t: TestContext) {
+  const calls: string[][] = [];
+  const onChild = (message: unknown) => {
+    const { process: child } = message as { process: ChildProcess };
+    child.once('spawn', () => { if (child.spawnfile === 'ffmpeg') calls.push(child.spawnargs); });
+  };
+  subscribe('child_process', onChild);
+  t.after(() => { unsubscribe('child_process', onChild); });
+  return calls;
+}
+test('restart publishes saved media without FFmpeg and preserves scoped guest links', async t => {
   const f = await fixture(); t.after(() => f.close());
   const bytes = await videoBytes(f.root, 2);
   const first = await preparedSession(f.config.dataDir, bytes);
   const second = await preparedSession(f.config.dataDir, await videoBytes(f.root, 3), 2);
+  const ffmpegCalls = observeFfmpeg(t);
   await f.restart();
   const db = openDatabase(f.config.dataDir); t.after(() => db.close());
   await f.app.ready();
+  assert.deepEqual(ffmpegCalls, [], 'restart publishes the persisted card frame without running FFmpeg');
   const a = db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(first.id) as Row;
   const b = db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(second.id) as Row;
   assert.notEqual(a.receive_token, a.download_token); assert.notEqual(a.receive_token, b.receive_token);
@@ -184,18 +200,30 @@ test('late JPEG body damage in saved frame or photo prevents publication despite
   }
 });
 
-test('application generation callback publishes newly prepared results without email or another submit', async t => {
+test('fresh result uses FFmpeg only for the card frame and the issued QR leads to the original video', async t => {
   const f = await fixture(); t.after(() => f.close());
   const bytes = await videoBytes(f.root, 1); const session = await preparedSession(f.config.dataDir, bytes);
   const db = openDatabase(f.config.dataDir); t.after(() => db.close());
   db.prepare('UPDATE generation_jobs SET video_path=NULL,frame_path=NULL WHERE session_id=?').run(session.id);
+  const ffmpegCalls = observeFfmpeg(t);
   let downloads = 0;
-  const app = await createApp(f.config, { generation: { intervalMs: 20, client: {
+  const app = await createApp(f.config, { now: () => Date.UTC(2026, 10, 14), generation: { intervalMs: 20, client: {
     async submit() { throw new Error('Unexpected submit'); }, async status() { throw new Error('Unexpected status'); }, async result() { throw new Error('Unexpected result'); },
   }, download: async () => { downloads++; return new Response(bytes); } } });
   t.after(() => app.close()); await app.ready();
   for (let i = 0; i < 150; i++) { if (db.prepare('SELECT session_id FROM session_delivery WHERE session_id=?').get(session.id)) break; await new Promise(resolve => setTimeout(resolve, 20)); }
   const row = db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(session.id) as Row;
   assert.ok(row); assert.equal(row.email_state, 'not_requested'); assert.equal(downloads, 1);
-  assert.equal((await app.inject(`/download/${row.download_token}`)).statusCode, 200);
+  assert.equal(ffmpegCalls.length, 1, 'only the card frame needs FFmpeg');
+  const [args] = ffmpegCalls;
+  assert.ok(args.includes('-frames:v') && args[args.indexOf('-frames:v') + 1] === '1');
+  const qr = await readFile(join(f.config.dataDir, 'media', 'sessions', session.id, 'qr.png'));
+  const { data, info } = await sharp(qr).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const receiveUrl = jsQR(new Uint8ClampedArray(data), info.width, info.height)?.data;
+  assert.equal(receiveUrl, `${f.config.origin}/receive/${row.receive_token}`);
+  const response = await app.inject(`/api${new URL(receiveUrl!).pathname}`);
+  const view = response.json<ReceiveStatus>();
+  assert.deepEqual((await app.inject(view.downloadUrl)).rawPayload, bytes);
+  const frame = await app.inject(`/api/receive/${row.receive_token}/frame`);
+  assert.equal((await sharp(frame.rawPayload).metadata()).format, 'jpeg');
 });

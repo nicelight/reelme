@@ -35,8 +35,9 @@ async function lock(page: Page) {
   await expect(page.getByRole('switch', { name: 'Фиксация параметров генерации' })).toBeChecked();
 }
 async function openTests(page: Page) {
-  const button = page.getByRole('button', { name: 'Открыть тесты', exact: true });
-  await expect(button).toBeVisible(); await button.click();
+  const toggle = page.getByRole('button', { name: /^(Открыть|Свернуть) тесты$/ });
+  await expect(toggle).toBeVisible();
+  if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
 }
 async function upload(page: Page, label: string, file: string) {
   await page.getByLabel(label, { exact: true }).setInputFiles(file);
@@ -47,6 +48,30 @@ async function save(page: Page) {
   await page.getByRole('button', { name: 'Сохранить сюжет', exact: true }).click();
   await expect(page.getByText('Сюжет сохранён.', { exact: true })).toBeVisible();
 }
+
+test('visibility from a stale tab preserves the prompt saved in another tab', async ({ page, app }) => {
+  await login(page, app.origin, app.password);
+  await setup(page, 'P2V', h3, '1', '4');
+  await lock(page);
+  await upload(page, 'Изображение сюжета', app.image);
+  await page.getByLabel('Описание', { exact: true }).fill('Портрет гостя');
+  await page.locator('.editor').getByLabel('Отображать клиенту').check();
+  await save(page);
+
+  const other = await page.context().newPage();
+  await other.goto(app.origin + '/admin');
+  await other.getByRole('button', { name: /Портрет гостя/ }).click();
+  const newPrompt = 'Show the guest in the mountains.';
+  await other.locator('#prompt').fill(newPrompt);
+  await save(other);
+
+  await page.locator('.slot-list').getByLabel('Отображать клиенту').uncheck();
+  await expect(page.getByText('Сюжет скрыт от клиента.')).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: /Портрет гостя/ }).click();
+  await expect(page.locator('.slot-list').getByLabel('Отображать клиенту')).not.toBeChecked();
+  await expect(page.locator('#prompt')).toHaveValue(newPrompt);
+});
 
 test('sequential setup exposes real capacities, locks fields, saves both modes and preserves the source on unlock', async ({ page, app }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message)); page.on('dialog', dialog => dialog.accept());
@@ -212,6 +237,19 @@ test.describe('manual test flow', () => {
       if (loseResponse) { loseResponse = false; const accepted = await route.fetch(); expect(accepted.status()).toBe(201); firstId = (await accepted.json()).sessionId; await route.abort('connectionreset'); }
       else await route.continue();
     });
+    await page.evaluate(() => {
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key.startsWith('reelme.slotTest.')) {
+          Storage.prototype.setItem = original;
+          throw new DOMException('Storage is full', 'QuotaExceededError');
+        }
+        original.call(this, key, value);
+      };
+    });
+    await send.click();
+    await expect(page.getByRole('alert')).toContainText('Не удалось сохранить его номер в хранилище браузера');
+    await expect(send).toBeEnabled(); expect(requestIds).toEqual([]); expect(app.sessionCount()).toBe(0);
     await send.click(); await expect(page.getByRole('alert')).toContainText('Ответ не получен'); expect(app.sessionCount()).toBe(1);
     await page.reload(); await page.getByRole('button', { name: /Скрытый тестовый сюжет/ }).click(); await openTests(page);
     await page.getByRole('button', { name: 'Повторить запрос тестовой генерации', exact: true }).click();
@@ -273,7 +311,7 @@ test('draft source binding and five-guide page show actual immutable media on de
   await app.prepareTemplate(id, 'portrait'); await connect.click(); await expect(page.getByRole('alert')).toContainText('Ориентация файла не соответствует');
   await save(page); // Save an honest not-ready draft, without the prior landscape source.
   expect((await (await page.request.get(`${app.origin}/api/admin/slots/${id}`)).json()).videoId).toBeUndefined();
-  await page.getByRole('button', { name: 'Образцы ракурсов', exact: true }).click();
+  await page.getByRole('button', { name: 'Параметры', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Образцы ракурсов', exact: true })).toBeVisible();
   await expect(page.locator('.guide-card')).toHaveCount(5);
   await expect(page.getByText('Образец не загружен.', { exact: false })).toHaveCount(5);
@@ -293,11 +331,11 @@ test('draft source binding and five-guide page show actual immutable media on de
   await page.setViewportSize({ width: 375, height: 812 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: join(artifacts, 'pose-guides-mobile.png'), fullPage: true });
-  await page.reload(); await page.getByRole('button', { name: 'Образцы ракурсов', exact: true }).click();
+  await page.reload(); await page.getByRole('button', { name: 'Параметры', exact: true }).click();
   await expect(page.locator('.guide-card img')).toHaveCount(4);
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await login(page, app.origin, app.password, 'operator');
-  await expect(page.getByRole('button', { name: 'Образцы ракурсов', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Параметры', exact: true })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

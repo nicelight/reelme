@@ -172,6 +172,17 @@ test('old capture CHECK migration preserves rows, FK, provider URL and raw legac
   const projected = (await f.app.inject({ url: `/api/admin/slots/${slotId}`, headers: admin })).json();
   assert.equal(projected.participants, 1); assert.equal(projected.photosPerParticipant, 4); assert.equal(projected.resolution, '4k');
   assert.deepEqual(JSON.parse((db.prepare('SELECT config FROM slots WHERE id=?').get(slotId) as any).config), legacy);
+  const visibilityUrl = `/api/admin/slots/${slotId}/visibility`;
+  const patch = { method: 'PATCH' as const, url: visibilityUrl, headers: admin, payload: { visible: false } };
+  assert.equal((await f.app.inject({ ...patch, headers: { ...admin, cookie: await f.login('operator') } })).statusCode, 403);
+  assert.equal((await f.app.inject({ ...patch, headers: { cookie } })).statusCode, 403);
+  assert.equal((await f.app.inject({ ...patch, payload: { visible: false, prompt: 'stale' } })).statusCode, 400);
+  const rawSlot = db.prepare<[string], { config: string }>('SELECT config FROM slots WHERE id=?');
+  for (const visible of [false, true]) {
+    assert.equal((await f.app.inject({ ...patch, payload: { visible } })).statusCode, 204);
+    assert.deepEqual(JSON.parse(rawSlot.get(slotId)!.config), { ...legacy, visible });
+    assert.equal((await f.app.inject({ url: `/api/catalog/${slotId}`, headers: installation })).statusCode, visible ? 200 : 404);
+  }
   const start = await f.app.inject({ method: 'POST', url: '/api/capture/sessions', headers: installation, payload: { slotId, startRequestId: randomUUID() } });
   assert.equal(start.statusCode, 201, start.body); const old = start.json<StartReceipt>();
   assert.deepEqual(old.posePlan.map(pose => pose.key), ['front','up-left','down-right','profile-left']);

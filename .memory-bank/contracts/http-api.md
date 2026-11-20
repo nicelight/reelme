@@ -24,8 +24,11 @@ status: active
 | POST /admin/slot-media | Администратор | Multipart `file` → метаданные с `id` материала |
 | GET /admin/slot-media/:id, /admin/slot-media/:id/info | Администратор | Байты (с Range) / метаданные материала |
 | POST /admin/slots, PUT /admin/slots/:id | Администратор | Сохранение конфигурации; POST допускает UUID `id` черновика |
+| PATCH /admin/slots/:id/visibility | Администратор + разрешённый Origin | `{visible: boolean}` → 204. Меняет видимость в сохранённой конфигурации, в том числе у старых сюжетов |
 | POST /admin/slots/:id/template-video | Admin + разрешённый Origin | `{orientation,model}` → импортированный immutable `Media`, 201 |
 | GET /admin/capture-guides | Администратор | Пять `{number,instruction,mediaId?}` |
+| GET /admin/capture-settings | Admin | Настройки новых фотосессий |
+| PUT /admin/capture-settings | Admin + разрешённый Origin | `startMode` (manual/automatic), `countdownSeconds`, `reviewSeconds`, `receiptSeconds` (целые 1–60), `sendCaptureLogs` (boolean, по умолчанию false), `photoMaxEdge` (0, 1024 или 2048 пикселей по длинной стороне, по умолчанию 0 — исходный JPEG) → сохранённые значения |
 | PUT /admin/capture-guides/:number | Admin + разрешённый Origin | `{mediaId: UUID|null}` → назначение образца |
 
 Каталог возвращает `CatalogPage` (`items`, `page`, `pageSize=12`, `total`, `totalPages`),
@@ -129,11 +132,12 @@ TEST_PHOTO_REQUIRED, неверный файл — INVALID_PHOTO, без зап�
 
 | Операция | Данные и результат |
 |---|---|
-| POST /capture/sessions | startRequestId, slotId, eventSetup → sessionId, дата, номер, план поз, story из snapshot |
+| POST /capture/sessions | startRequestId, slotId, eventSetup → sessionId, дата, номер, план поз, story и captureSettings из snapshot |
 | GET /capture/sessions/:id/thumbnail | Закреплённая картинка сюжета из snapshot, независимо от правок/видимости текущего слота; ключ установки обязателен |
 | GET /capture/sessions/:id/guides/:number | Закреплённый образец из snapshot; 404 при отсутствии, ключ установки обязателен |
 | GET /capture/sessions/:id | `CaptureStatus`: состояние, принятые позиции, полный набор и подтверждение finalize |
 | PUT /capture/sessions/:id/photos/:poseIndex | Multipart `file` (JPEG) → `CaptureStatus` с принятой позицией |
+| POST /capture/sessions/:id/capture-reports | Отчёт попытки или настроек камеры для сессии с включённым сбором. 204 при сохранении и повторной доставке, 409 при выключенном сборе |
 | POST /capture/sessions/:id/finalize | Полный набор → `submit_pending`, `CaptureStatus.finalized=true` |
 
 Первый старт возвращает 201, повтор — 200 с тем же `StartReceipt` из
@@ -171,9 +175,11 @@ StartReceipt и CaptureStatus содержат `story: {description, thumbnailId
 реестр старых ключей не сохраняется. Загрузка адресует конкретную позицию; до finalize
 повтор записывает тот же кадр в неё, не затрагивая остальные. После finalize фото закрыты
 для изменений. Сервер проверяет JPEG и количество фото, но не ведёт протокол сравнения hash.
-Клиент начинает PUT/finalize только после явного Finish; пересъёмки до него локальны.
+Клиент начинает PUT/finalize после ручного завершения или по таймеру просмотра серии; пересъёмки до него локальны.
 Повтор finalize возвращает текущее состояние без нового перехода в обработку.
-После подтверждения finalize установка показывает номер и освобождается.
+После подтверждения finalize установка показывает номер. Повторные запросы
+обложки и образцов фотосессии и изображений доступных карточек /display
+поддерживают ETag и приватную проверку кэша после проверки прав.
 `submit_pending` в SQLite — граница FT-003; потребитель генерации реализуется отдельно. Ошибка камеры/загрузки допускает ручной повтор.
 
 ## Экран и архив
@@ -187,6 +193,8 @@ StartReceipt и CaptureStatus содержат `story: {description, thumbnailId
 | PUT /admin/display-settings | Администратор + разрешённый Origin | Строго `{pageDurationSeconds: 10\|20\|30\|40\|50\|60}` → сохранённое значение |
 | GET /events, /events/:date | Оператор/администратор | Прошедшие мероприятия: date, name, participantRange (nullable), location; размеры списка и сессии галереи |
 | DELETE /events/:date | Администратор | Удаление прошедшего мероприятия после подтверждения в UI |
+| GET /admin/event-preparation | Администратор | Последняя дата удаления включительно, количество подходящих мероприятий и состояние фоновой очистки |
+| POST /admin/event-preparation | Администратор + разрешённый Origin | `{through}` с датой из подтверждения. При смене границы сервер требует новый предпросмотр (409). Повторный запрос во время очистки возвращает текущую операцию |
 
 `TodayDisplay` содержит `date`, `serverNow`, `pageDurationSeconds` и `sessions`.
 Длительность хранится в singleton SQLite `display_settings`; существующий интервал

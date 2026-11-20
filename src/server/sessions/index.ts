@@ -11,6 +11,7 @@
  * capturing to submit_pending once, only for a complete set; later photo writes
  * are refused, including uploads that started before finalize or event deletion. No camera/fal calls; generation errors are a safe projection from Sessions.
  * Source: docs/slot-setup/matrix.md. New session plans are immutable snapshots. */
+import { captureReportSchema } from '../../shared/capture-report.js';
 import { randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
@@ -23,7 +24,7 @@ import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
 import { snapshotSlot } from '../scenarios/store.js';
 import { readMedia, readTestPhoto, sendMedia } from '../scenarios/media.js';
-import { MAX_PHOTO_BYTES, snapshotPosePlan, type StartReceipt, type SlotSnapshot, type SessionState, type CaptureStatus } from '../../shared/capture.js';
+import { defaultCaptureSettings, type CaptureSettings, MAX_PHOTO_BYTES, snapshotPosePlan, type StartReceipt, type SlotSnapshot, type SessionState, type CaptureStatus } from '../../shared/capture.js';
 import { HttpError } from '../errors.js';
 import { participantRanges, type EventSetup } from '../../shared/events.js';
 
@@ -47,7 +48,7 @@ export function eventDate(timestamp: number): string {
 }
 function receipt(row: SessionRow): StartReceipt {
   const snapshot = JSON.parse(row.snapshot) as SlotSnapshot;
-  return { sessionId: row.id, date: row.event_date, number: row.number, state: row.state, posePlan: snapshotPosePlan(snapshot), story: sessionStory(snapshot) };
+  return { sessionId: row.id, date: row.event_date, number: row.number, state: row.state, captureSettings: { ...defaultCaptureSettings, ...snapshot.captureSettings }, posePlan: snapshotPosePlan(snapshot), story: sessionStory(snapshot) };
 }
 function sessionStory(snapshot: SlotSnapshot): NonNullable<StartReceipt['story']> {
   return { description: snapshot.description, thumbnailId: snapshot.thumbnailId };
@@ -65,7 +66,7 @@ export function captureStatus(db: DB, sessionId: string): CaptureStatus {
   const posePlan = snapshotPosePlan(session.snapshot);
   const complete = acceptedPoseIndices.length === posePlan.length && posePlan.every(pose => acceptedPoseIndices.includes(pose.index));
   const error = db.prepare('SELECT error_code,error_message FROM generation_jobs WHERE session_id=?').get(sessionId) as { error_code: string | null; error_message: string | null } | undefined;
-  return { ...(error?.error_code ? { error: { code: error.error_code, message: error.error_message! } } : {}), sessionId, date: session.event_date, number: session.number, state: session.state, posePlan, story: sessionStory(session.snapshot), acceptedPoseIndices, complete, finalized: complete && session.state !== 'capturing' };
+  return { ...(error?.error_code ? { error: { code: error.error_code, message: error.error_message! } } : {}), sessionId, date: session.event_date, number: session.number, state: session.state, captureSettings: { ...defaultCaptureSettings, ...session.snapshot.captureSettings }, posePlan, story: sessionStory(session.snapshot), acceptedPoseIndices, complete, finalized: complete && session.state !== 'capturing' };
 }
 function requireCapturing(db: DB, sessionId: string, poseIndex: number) {
   const session = readSession(db, sessionId);
@@ -78,6 +79,25 @@ async function inspectPhoto(path: string) {
   } catch { throw new HttpError(400, 'INVALID_PHOTO', 'Нужен корректный JPEG до 40 мегапикселей'); }
 }
 export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, access: Access, now: () => number) {
+  const seconds = z.number().int().min(1).max(60);
+  const settingsSchema = z.object({
+    photoMaxEdge: z.union([z.literal(0), z.literal(1024), z.literal(2048)]).optional(),
+    sendCaptureLogs: z.boolean().optional(), startMode: z.enum(['manual', 'automatic']),
+    countdownSeconds: seconds, reviewSeconds: seconds, receiptSeconds: seconds,
+  }).strict();
+  function settings(): CaptureSettings {
+    const row = db.prepare('SELECT settings FROM capture_settings WHERE id=1').get() as { settings: string } | undefined;
+    if (!row) return defaultCaptureSettings;
+    const saved = settingsSchema.parse(JSON.parse(row.settings));
+    return { ...defaultCaptureSettings, ...saved };
+  }
+  app.get('/api/admin/capture-settings', { preHandler: access.requireAdmin }, settings);
+  app.put('/api/admin/capture-settings', { preHandler: [access.requireOrigin, access.requireAdmin] }, request => {
+    const update = settingsSchema.parse(request.body);
+    const value = { ...settings(), ...update };
+    db.prepare('INSERT INTO capture_settings(id,settings) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET settings=excluded.settings').run(JSON.stringify(value));
+    return value;
+  });
   const start = db.transaction((startRequestId: string, slotId: string, manualTest = false, eventSetup?: EventSetup) => {
     const previous = db.prepare('SELECT * FROM capture_sessions WHERE start_request_id=?').get(startRequestId) as SessionRow | undefined;
     if (previous) {
@@ -87,6 +107,7 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     }
     // Read the current visibility/config under the same write transaction as numbering.
     const snapshot = snapshotSlot(db, slotId, manualTest);
+    snapshot.captureSettings = settings();
     const createdAt = now(); const date = eventDate(createdAt);
     let event = db.prepare('SELECT setup_complete FROM events WHERE date=?').get(date) as { setup_complete: number } | undefined;
     if (!event?.setup_complete && eventSetup?.action === 'check') {
@@ -117,17 +138,27 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     const result = start.immediate(startRequestId, slotId, false, eventSetup);
     return reply.code(result.created ? 201 : 200).send(result.value);
   });
+  app.post('/api/capture/sessions/:id/capture-reports', { preHandler: access.requireInstallation, bodyLimit: 32 * 1024 }, (request, reply) => {
+    const { id } = sessionParams.parse(request.params);
+    const { snapshot } = readSession(db, id);
+    if (!snapshot.captureSettings?.sendCaptureLogs) throw new HttpError(409, 'LOGGING_DISABLED', 'Диагностика выключена для этой сессии');
+    const report = captureReportSchema.parse(request.body);
+    if (report.pose >= snapshot.expectedPhotos) throw new HttpError(400, 'INVALID_POSE', 'Позиция вне плана съёмки');
+    db.prepare('INSERT INTO capture_reports(session_id,report_id,case_id,received_at,report) VALUES(?,?,?,?,?) ON CONFLICT(session_id,report_id) DO NOTHING')
+      .run(id, report.id, report.caseId, now(), JSON.stringify(report));
+    return reply.code(204).send();
+  });
   app.get('/api/capture/sessions/:id/guides/:number', { preHandler: access.requireInstallation }, async (request, reply) => {
     const { id, number } = sessionParams.extend({ number: z.coerce.number().int().min(1).max(5) }).parse(request.params);
     const session = readSession(db, id);
     const guide = session.snapshot.posePlan?.find(pose => pose.guideNumber === number && pose.guideMediaId);
     if (!guide?.guideMediaId) throw new HttpError(404, 'NOT_FOUND', 'Образец ракурса не задан для этой сессии');
-    return sendMedia(dataDir, readMedia(db, guide.guideMediaId), request, reply);
+    return sendMedia(dataDir, readMedia(db, guide.guideMediaId), request, reply, 'inline', 'Authorization');
   });
   app.get('/api/capture/sessions/:id/thumbnail', { preHandler: access.requireInstallation }, async (request, reply) => {
     const { id } = sessionParams.parse(request.params);
     const session = readSession(db, id);
-    return sendMedia(dataDir, readMedia(db, session.snapshot.thumbnailId), request, reply);
+    return sendMedia(dataDir, readMedia(db, session.snapshot.thumbnailId), request, reply, 'inline', 'Authorization');
   });
   app.get('/api/capture/sessions/:id', { preHandler: access.requireInstallation }, request => {
     const { id } = sessionParams.parse(request.params);

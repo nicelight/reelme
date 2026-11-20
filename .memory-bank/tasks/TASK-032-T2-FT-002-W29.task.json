@@ -1,0 +1,97 @@
+{
+  "id": "TASK-032-T2-FT-002-W29",
+  "title": "Параметры фотосессии, ручной режим и таймеры завершения",
+  "status": "done",
+  "wave": "W29",
+  "tier": "T2",
+  "feature": "FT-002",
+  "reqs": [
+    "REQ-004",
+    "REQ-005",
+    "REQ-006"
+  ],
+  "depends_on": [
+    "TASK-030-T1-FT-002-W27"
+  ],
+  "touched_files": [
+    "src/shared/capture.ts",
+    "src/server/sessions/index.ts",
+    "src/server/db.ts",
+    "src/client/cloud/App.svelte",
+    "src/client/cloud/CaptureSettingsForm.svelte",
+    "src/client/capture/Capture.svelte",
+    "src/client/capture/session/PhotoSessionView.svelte",
+    "src/client/capture/PhotoSession.svelte",
+    "src/client/capture/ProtectedMedia.svelte",
+    "src/client/cloud/results/preload.ts",
+    "src/server/scenarios/media.ts",
+    "src/server/sessions/display.ts"
+  ],
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "server",
+      "command": "npm test",
+      "required": true
+    },
+    {
+      "name": "browser",
+      "command": "npm run test:ui -- tests/admin-appearance.spec.ts tests/capture-preview.spec.ts tests/capture-controls.spec.ts tests/event-creation.spec.ts tests/transfer.spec.ts",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-20",
+      "result": "PASS",
+      "summary": "Проверка типов и сборка прошли. Серверные тесты 120/120. Chromium проверил сохранение параметров, ручную и автоматическую серии, смену режима при отсчёте и получении JPEG, оба таймера и повтор того же сюжета. После перезагрузки образец декодирован без запроса камеры к серверу образцов, готовая галерея показана без повторной передачи кадров и QR.",
+      "evidence": [
+        "tests/admin-appearance.spec.ts",
+        "tests/capture.test.ts",
+        "tests/capture-preview.spec.ts",
+        "tests/capture-controls.spec.ts",
+        "tests/event-creation.spec.ts",
+        "tests/transfer.spec.ts",
+        "tests/display.test.ts",
+        "tests/results-screen.spec.ts"
+      ],
+      "limitations": [
+        "Использовались локальный сервер, Chromium и имитатор камеры. Аппаратная проверка и выкладка на рабочую установку не выполнялись."
+      ]
+    }
+  ],
+  "docs": [
+    "docs/MANUAL.md",
+    "DESIGN.md",
+    ".memory-bank/states/results-display.md"
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-002-photo-session.md#ft-002-ac-001"
+  ],
+  "normative_inputs": [
+    ".memory-bank/prd.md#автоматическая-фотосессия",
+    "docs/slot-setup/matrix.md#состояния-съёмки-и-пересъёмки"
+  ],
+  "constraints": [
+    "Общий раздел «Параметры» доступен администратору. Интервалы задаются целыми секундами."
+  ],
+  "invariants": [
+    "Настройки закреплены за сессией при создании. Один тап в ручном режиме даёт один снимок. Ручное и автоматическое завершение используют одну передачу."
+  ],
+  "verification_targets": [
+    "Переключение режима до и после спуска, пересъёмка, отсчёт из настроек, оба финальных таймера, повтор и возврат в каталог.",
+    "По повторному открытию обложка и образцы фотосессии, кадры результатов и QR доступны из кэша. Ошибочные загрузки допускают повтор."
+  ],
+  "evidence_required": [
+    "Проверки настроек API и браузерные сценарии с управляемой камерой."
+  ]
+}

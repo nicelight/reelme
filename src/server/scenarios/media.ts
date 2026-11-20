@@ -83,10 +83,25 @@ export function registerMedia(app: FastifyInstance, db: DB, dataDir: string, acc
   });
 }
 
-/** Authorization belongs to the route: admin editor or visible catalog material. */
-export async function sendMedia(dataDir: string, media: StoredMedia, request: FastifyRequest, reply: FastifyReply, disposition = 'inline') {
+/** Call only after the route has verified access and the resource still exists. */
+export function matchesPrivateCache(request: FastifyRequest, reply: FastifyReply, etag: string, varyBy: 'Authorization' | 'Cookie') {
+  reply.header('Cache-Control', 'private, no-cache').header('ETag', etag);
+  const vary = reply.getHeader('Vary');
+  reply.header('Vary', vary ? `${vary}, ${varyBy}` : varyBy);
+  return request.headers['if-none-match']?.split(',').some(value => {
+    const tag = value.trim().replace(/^W\//, '');
+    return tag === etag || tag === '*';
+  });
+}
+
+export async function sendMedia(dataDir: string, media: StoredMedia, request: FastifyRequest, reply: FastifyReply, disposition = 'inline', varyBy?: 'Authorization' | 'Cookie') {
   const path = join(dataDir, 'media', media.path);
-  const size = (await stat(path)).size;
+  const { size, mtimeMs } = await stat(path);
+  if (varyBy) {
+    // Installation media IDs identify immutable files. Display URLs identify a session.
+    const etag = varyBy === 'Authorization' ? `"${media.id}"` : `"${media.id}-${size}-${mtimeMs}"`;
+    if (matchesPrivateCache(request, reply, etag, varyBy)) return reply.code(304).send();
+  }
   reply.header('Content-Type', media.mime).header('Accept-Ranges', 'bytes').header('Content-Disposition', disposition);
   const range = request.headers.range;
   if (range) {

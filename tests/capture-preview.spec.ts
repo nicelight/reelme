@@ -28,9 +28,11 @@ const test = base.extend<{ camera: {
           if (url.pathname === '/preview-fixture') {
             const receipt = { sessionId: 'preview-fixture', date: '2026-11-17', posePlan: [0, 1, 2].map(index => ({ index, participant: 1, key: 'front', instruction: 'Смотрите в объектив', ...(url.searchParams.has('guides') ? { guideNumber: index + 1, guideMediaId: `guide-${index + 1}` } : {}) })) };
             response.setHeader('Content-Type', 'text/html');
-            response.end(`<div id="app"></div><script type="module">import { mount, unmount } from '/node_modules/.vite/deps/svelte.js'; import Capture from '/src/client/capture/Capture.svelte'; const app = mount(Capture, { target: document.querySelector('#app'), props: { receipt: ${JSON.stringify(receipt)}, installationKey: 'fixture', oncomplete: () => unmount(app), onscenario: () => unmount(app) } }); window.unmountCapture = () => unmount(app);</script>`);
+            response.end(`<div id="app"></div><script type="module">import { mount, unmount } from '/node_modules/.vite/deps/svelte.js'; import Capture from '/src/client/capture/Capture.svelte'; const app = mount(Capture, { target: document.querySelector('#app'), props: { receipt: ${JSON.stringify(receipt)}, installationKey: 'fixture', oncomplete: () => unmount(app), onscenario: () => unmount(app) } });</script>`);
           } else if (/\/guides\/\d$/.test(url.pathname)) {
             response.setHeader('Content-Type', 'image/jpeg');
+            response.setHeader('Cache-Control', 'private, no-cache');
+            response.setHeader('Vary', 'Authorization');
             const number = Number(url.pathname.split('/').at(-1)); state.guides.set(number, response);
             response.once('close', () => { if (state.guides.get(number) === response) state.guides.delete(number); });
           } else if (url.pathname === '/liveview.html') response.end('ok');
@@ -69,7 +71,7 @@ async function open(page: Page, origin: string, query = '') {
   await expect(page.locator('.live-preview')).toBeVisible();
 }
 
-test('preview stops before shutter, photo holds one second, countdowns are 5 → pause/play 3 → 5', async ({ page, camera }) => {
+test('preview stops before shutter, photo holds one second, countdowns are five seconds before and after a mode change', async ({ page, camera }) => {
   await open(page, camera.origin);
   await page.getByRole('button', { name: 'Начать съёмку', exact: true }).click();
   await expect(page.locator('.countdown strong')).toHaveText(['5', '5']);
@@ -91,8 +93,8 @@ test('preview stops before shutter, photo holds one second, countdowns are 5 →
   await expect(page.locator('.live-preview')).toBeVisible();
   await page.getByRole('button', { name: 'Пауза', exact: true }).click();
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
-  await expect(page.locator('.countdown strong')).toHaveText(['3', '3']);
-  await page.clock.runFor(2999); expect(camera.shutters).toBe(1);
+  await expect(page.locator('.countdown strong')).toHaveText(['5', '5']);
+  await page.clock.runFor(4999); expect(camera.shutters).toBe(1);
   await page.clock.runFor(1); await expect(page.locator('.captured-frame')).toBeVisible();
   expect(camera.shutters).toBe(2);
   await page.clock.runFor(1000); await expect(page.locator('.countdown strong')).toHaveText(['5', '5']);
@@ -107,7 +109,10 @@ test('preview stops before shutter, photo holds one second, countdowns are 5 →
   await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => false }); document.dispatchEvent(new Event('visibilitychange')); });
   await expect(page.locator('.live-preview')).toBeVisible();
   camera.holdPreview = true; await page.clock.runFor(200); await expect.poll(() => camera.previewWaiters.size).toBe(1);
-  await page.evaluate(() => (window as any).unmountCapture());
+  await page.clock.runFor(799);
+  await expect(page.getByRole('button', { name: 'Завершить фотосессию' })).toBeVisible();
+  await page.clock.runFor(1);
+  await expect(page.locator('.photo-session-view')).toHaveCount(0);
   await expect.poll(() => camera.previewWaiters.size).toBe(0);
   const finalReads = camera.previews; await page.clock.runFor(2000); expect(camera.previews).toBe(finalReads);
 });
@@ -137,7 +142,7 @@ test('camera timeout removes white screen and retry retrieves the same pending p
   await page.clock.runFor(1000); await expect(page.locator('.countdown strong')).toHaveText(['5', '5']);
 });
 
-test('pause during shutter keeps the photo hold and resumes with one three-second countdown', async ({ page, camera }) => {
+test('pause during shutter keeps the photo hold and resumes with the configured countdown', async ({ page, camera }) => {
   await open(page, camera.origin);
   await page.getByRole('button', { name: 'Начать съёмку', exact: true }).click();
   await page.clock.runFor(5000); await expect.poll(() => camera.photoWaiters.size).toBe(1);
@@ -145,11 +150,11 @@ test('pause during shutter keeps the photo hold and resumes with one three-secon
   camera.releasePhoto(); await expect(page.locator('.captured-frame')).toBeVisible();
   await page.clock.runFor(999); await expect(page.locator('.captured-frame')).toBeVisible();
   expect(camera.shutters).toBe(1); await expect(page.locator('.countdown')).toHaveCount(0);
-  await page.clock.runFor(1); await expect(page.getByText('Съёмка на паузе', { exact: true })).toBeVisible();
+  await page.clock.runFor(1); await expect(page.getByRole('button', { name: 'Снять один кадр' })).toBeVisible();
   await page.clock.runFor(5000); expect(camera.shutters).toBe(1);
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
-  await expect(page.locator('.countdown strong')).toHaveText(['3', '3']);
-  await page.clock.runFor(3000); await expect(page.locator('.captured-frame')).toBeVisible();
+  await expect(page.locator('.countdown strong')).toHaveText(['5', '5']);
+  await page.clock.runFor(5000); await expect(page.locator('.captured-frame')).toBeVisible();
   expect(camera.shutters).toBe(2);
   await page.clock.runFor(1000); await expect(page.locator('.countdown strong')).toHaveText(['5', '5']);
 });
@@ -161,13 +166,13 @@ test('quick Pause→Play during confirmation waits only the remaining photo hold
   await page.clock.runFor(5000); await expect(page.locator('.captured-frame')).toBeVisible();
   const reads = camera.previews;
   await page.clock.runFor(100); await page.getByRole('button', { name: 'Пауза', exact: true }).click();
-  await expect(page.getByText('Съёмка на паузе', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Снять один кадр' })).toBeVisible();
   await page.clock.runFor(100); await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
   await page.clock.runFor(799);
   await expect(page.locator('.captured-frame')).toBeVisible(); await expect(page.locator('.countdown')).toHaveCount(0);
   expect(camera.previews).toBe(reads); expect(camera.shutters).toBe(1);
   await page.clock.runFor(1);
-  await expect(page.locator('.countdown strong')).toHaveText(['3', '3']);
+  await expect(page.locator('.countdown strong')).toHaveText(['5', '5']);
   await expect(page.locator('.captured-frame')).toHaveCount(0);
 });
 
@@ -260,8 +265,8 @@ test('pose guide keeps a transparent frame, reveals after decode and ignores an 
   await page.evaluate(() => (window as any).guideDecodes[1].resolve());
   await expect(image).toHaveAttribute('src', latest!);
   await page.emulateMedia({ reducedMotion: 'reduce' }); await page.reload();
-  await expect.poll(() => camera.guides.has(1)).toBe(true); camera.releaseGuide(1);
   await expect.poll(() => page.evaluate(() => (window as any).guideDecodes.length)).toBe(1);
+  expect(camera.guides.has(1)).toBe(false);
   await page.evaluate(() => (window as any).guideDecodes[0].resolve());
   await expect(image).toHaveCount(1);
   expect(await image.evaluate(node => ({ opacity: getComputedStyle(node).opacity, transitions: node.getAnimations().length }))).toEqual({ opacity: '1', transitions: 0 });
@@ -269,4 +274,28 @@ test('pose guide keeps a transparent frame, reveals after decode and ignores an 
   await expect(frame.getByText('Изображение не загрузилось.')).toBeVisible();
   await expect(frame.getByRole('button', { name: 'Повторить загрузку' })).toBeEnabled();
   expect(await frame.boundingBox()).toEqual(geometry);
+});
+
+test('manual Live View takes one shot per tap and Play continues the series', async ({ page, camera }) => {
+  camera.holdPhoto = false;
+  await open(page, camera.origin);
+  const shutter = page.getByRole('button', { name: 'Снять один кадр' });
+  await shutter.dblclick();
+  await page.clock.runFor(5000);
+  await expect(page.locator('.captured-frame')).toBeVisible();
+  await page.getByRole('button', { name: 'Начать заново', exact: true }).click();
+  await page.getByRole('button', { name: 'Отмена', exact: true }).click();
+  await page.clock.runFor(7000);
+  expect(camera.shutters).toBe(1);
+  await shutter.click();
+  await page.clock.runFor(2000);
+  await page.locator('.controls .play').click();
+  await page.clock.runFor(3000);
+  await expect(page.locator('.captured-frame')).toBeVisible();
+  await page.clock.runFor(1000);
+  await expect(page.locator('.live .countdown strong')).toHaveText('5');
+  await page.getByRole('button', { name: 'Пауза', exact: true }).click();
+  await page.clock.runFor(6000);
+  expect(camera.shutters).toBe(2);
+  await expect(shutter).toBeEnabled();
 });

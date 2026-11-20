@@ -4,7 +4,7 @@
   import { participantRanges, type EventSetup, type ParticipantRange } from '../../shared/events';
   import { untrack } from 'svelte';
   import './story/assets/fonts.css';
-  import mark from './story/assets/reelme-mark.png';
+  import mark from './story/assets/reelme-mark.webp';
   let { busy, error, initial, onsave, onskip }: {
     busy: boolean; error: string;
     initial?: Extract<EventSetup, { action: 'save' }>;

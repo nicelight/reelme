@@ -119,7 +119,9 @@ test('five admin guides are pinned to sessions, protected from cleanup and absen
   assert.deepEqual(day1.posePlan.map(pose => pose.guideMediaId), [jpeg.id, thumbnail.id, thumbnail.id, thumbnail.id]);
   const sampleUrl = `/api/capture/sessions/${day2.sessionId}/guides/1`;
   for (const [headers, expected] of [[{}, 401], [{ cookie }, 403], [{ cookie: operator }, 403]] as const) assert.equal((await f.app.inject({ url: sampleUrl, headers })).statusCode, expected);
-  assert.deepEqual((await f.app.inject({ url: sampleUrl, headers: installation })).rawPayload, image);
+  const guide = await f.app.inject({ url: sampleUrl, headers: installation });
+  assert.deepEqual(guide.rawPayload, image);
+  assert.equal((await f.app.inject({ url: sampleUrl, headers: { ...installation, 'if-none-match': String(guide.headers.etag) } })).statusCode, 304);
   assert.equal((await f.app.inject({ url: `/api/capture/sessions/${day2.sessionId}/guides/5`, headers: installation })).statusCode, 404);
   const snap = readSession(db, day2.sessionId).snapshot;
   const payload = buildModelInput(snap, { photos: ['camera-0','camera-1','camera-2','camera-3'], references: [] });

@@ -30,9 +30,13 @@ async function cameraFixture() {
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const address = server.address() as { port: number };
-  const fetcher: typeof fetch = (url, init) => fetch(new URL(String(url), `http://127.0.0.1:${address.port}`), init);
+  const dispatched: string[] = [];
+  const fetcher: typeof fetch = (url, init) => {
+    dispatched.push(String(url));
+    return fetch(new URL(String(url), `http://127.0.0.1:${address.port}`), init);
+  };
   return {
-    camera: new DigiCamControl(fetcher, 1000, 5), fetcher, jpeg, other, requests,
+    camera: new DigiCamControl(fetcher, 1000, 5), fetcher, jpeg, other, requests, dispatched,
     get shutter() { return shutter; }, get polls() { return polls; },
     failList() { failList = true; }, failDownload() { failDownload = true; },
     invalid(value: boolean) { invalidJpeg = value; }, delay(value: number) { delay = value; },
@@ -100,6 +104,7 @@ test('invalid JPEG can be downloaded again without another exposure; abort stops
   const capture = f.camera.capture('a', 1, false, controller.signal);
   setTimeout(() => controller.abort(), 30);
   await assert.rejects(capture, { name: 'AbortError' });
-  const count = f.requests.length;
-  await new Promise(resolve => setTimeout(resolve, 40)); assert.equal(f.requests.length, count);
+  // An already dispatched request can reach the HTTP fixture after cancellation.
+  const count = f.dispatched.length;
+  await new Promise(resolve => setTimeout(resolve, 40)); assert.equal(f.dispatched.length, count);
 });

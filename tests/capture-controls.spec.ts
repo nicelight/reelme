@@ -56,7 +56,7 @@ test('pause 5/2/1, restart, last retakes, person boundary, pending JPEG and guid
   await expect(page.locator('.pose-guide img')).toHaveJSProperty('naturalWidth', 512);
   const receipt = await page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!).receipt);
   await page.getByRole('button', { name: 'Начать съёмку' }).click();
-  for (const [elapsed, digit] of [[0,'5'],[1000,'2'],[2000,'1']] as const) {
+  for (const [elapsed, digit] of [[0,'5'],[3000,'2'],[4000,'1']] as const) {
     if (elapsed) await page.clock.runFor(elapsed);
     await expect(page.locator('.live .countdown strong')).toHaveText(digit);
     await expect(page.locator('.pose .countdown strong')).toHaveText(digit);
@@ -64,7 +64,7 @@ test('pause 5/2/1, restart, last retakes, person boundary, pending JPEG and guid
     await page.getByRole('button', { name: 'Пауза', exact: true }).click();
     await page.clock.runFor(5000); expect(shutters).toBe(0);
     await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
-    await expect(page.locator('.live .countdown strong')).toHaveText('3');
+    await expect(page.locator('.live .countdown strong')).toHaveText('5');
   }
   await page.screenshot({ path: `${artifacts}/controls-countdown-wide.png`, fullPage: true });
   await page.setViewportSize({ width: 375, height: 812 });
@@ -74,7 +74,7 @@ test('pause 5/2/1, restart, last retakes, person boundary, pending JPEG and guid
   await page.setViewportSize({ width: 1280, height: 900 });
   const expose = async (seconds = 5) => { await page.clock.runFor(seconds * 1000); await expect(page.getByText('Кадр снят ✓', { exact: true })).toBeVisible(); };
   const advance = () => page.clock.runFor(1000);
-  await expose(3); await advance();
+  await expose(5); await advance();
   await page.getByRole('button', { name: 'Переснять предыдущий кадр' }).click();
   expect(shutters).toBe(1); await expect(page.locator('.progress strong')).toHaveText('1 из 4');
   await expect(page.locator('.thumbnail.filled')).toHaveCount(0);
@@ -89,11 +89,12 @@ test('pause 5/2/1, restart, last retakes, person boundary, pending JPEG and guid
   await expect(page.getByText('Подготовьте второго человека')).toBeVisible();
   await page.getByRole('button', { name: 'Начать заново', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Начать заново', exact: true }).click();
+  await page.getByRole('button', { name: 'Начать съёмку', exact: true }).click();
   await expect(page.locator('.live .countdown strong')).toHaveText('5');
   await page.getByRole('button', { name: 'Пауза', exact: true }).click();
   await expect(page.locator('.capture-progress')).toHaveText('Снято: 0 из 4');
   await page.clock.runFor(5000); expect(shutters).toBe(4);
-  hold = true; await page.getByRole('button', { name: 'Продолжить', exact: true }).click(); await page.clock.runFor(3000);
+  hold = true; await page.getByRole('button', { name: 'Продолжить', exact: true }).click(); await page.clock.runFor(5000);
   await expect(page.getByText('Получаем снимок…', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Начать заново' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Переснять предыдущий кадр' })).toBeDisabled();
@@ -237,18 +238,18 @@ test('production session view: pending pause, dialog person boundary, confirmed 
   await page.getByRole('button', { name: 'Начать заново', exact: true }).click();
   await page.clock.runFor(5000); expect(shutters).toBe(0);
   await page.getByRole('button', { name: 'Отмена', exact: true }).click();
-  await expect(page.locator('.live .countdown strong')).toHaveText('3');
-  hold = true; await page.clock.runFor(3000); await expect(page.getByText('Получаем снимок…', { exact: true })).toBeVisible();
+  await expect(page.locator('.live .countdown strong')).toHaveText('5');
+  hold = true; await page.clock.runFor(5000); await expect(page.getByText('Получаем снимок…', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Пауза', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Выбрать другой сценарий' })).toBeDisabled();
   await page.clock.runFor(1000); expect(shutters).toBe(1); await expect(page.locator('.thumbnail.filled')).toHaveCount(0);
   hold = false; await page.clock.runFor(500);
   await expect(page.locator('.thumbnail.filled')).toHaveCount(1);
   await expect(page.locator('.captured-frame')).toBeVisible(); await page.clock.runFor(1000);
-  await expect(page.getByText('Съёмка на паузе', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Снять один кадр' })).toBeVisible();
   await expect(page.locator('.live-preview')).toBeVisible(); await expect(page.locator('.captured-frame')).toHaveCount(0);
   await page.clock.runFor(5000); expect(shutters).toBe(1);
-  await page.getByRole('button', { name: 'Продолжить', exact: true }).click(); await page.clock.runFor(3000);
+  await page.getByRole('button', { name: 'Продолжить', exact: true }).click(); await page.clock.runFor(5000);
   await expect(page.getByText('Кадр снят ✓', { exact: true })).toBeVisible();
   // Dialog opens during the last confirmation for person 1; cancellation must not start person 2.
   await page.getByRole('button', { name: 'Выбрать другой сценарий', exact: true }).click();

@@ -15,6 +15,8 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
   await mkdir(artifacts, { recursive: true });
   const admin = await apiRequest.newContext({ baseURL: app.origin, extraHTTPHeaders: { Origin: app.origin } });
   expect((await admin.post('/api/auth/login', { data: { username: 'admin', password: app.password } })).status()).toBe(200);
+  const timing = { startMode: 'manual', countdownSeconds: 3, reviewSeconds: 3, receiptSeconds: 5 };
+  expect((await admin.put('/api/admin/capture-settings', { data: timing })).status()).toBe(200);
   const upload = async (path: string, mimeType: string) => {
     const response = await admin.post('/api/admin/slot-media', { multipart: { file: { name: path.split('/').pop()!, mimeType, buffer: await readFile(path) } } });
     expect(response.status()).toBe(201); return (await response.json()).id;
@@ -108,7 +110,7 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
   await expect(page.getByText('Кадр снят ✓')).toBeVisible();
   await page.screenshot({ path: `${artifacts}/camera-original.png`, fullPage: true });
   await page.getByRole('button', { name: 'Завершить фотосессию' }).click();
-  await expect(page.getByRole('heading', { name: /^Ищи свое видео под номером \d{3} на промо экране$/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Ищите видео под номером \d{3} на промоэкране$/ })).toBeVisible();
   const first = await page.evaluate(() => (window as typeof window & { cameraObservations: Observations }).cameraObservations);
   expect(first.beeps).toBe(3); expect(first.countdowns).toEqual(['3', '2', '1']);
   expect(first.frames).toHaveLength(1); expect(Buffer.from(first.frames[0].bytes)).toEqual(frames[1]);
@@ -137,7 +139,7 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
   await expect(page.locator('.capture-progress')).toHaveText('Снято: 2 из 4', { timeout: 10_000 });
   expect(commands).toHaveLength(3);
   await page.getByRole('button', { name: 'Завершить фотосессию' }).click({ timeout: 30_000 });
-  await expect(page.getByRole('heading', { name: /^Ищи свое видео под номером \d{3} на промо экране$/ })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('heading', { name: /^Ищите видео под номером \d{3} на промоэкране$/ })).toBeVisible({ timeout: 30_000 });
   const second = await page.evaluate(() => (window as typeof window & { cameraObservations: Observations }).cameraObservations);
   expect(second.poses).toEqual(secondReceipt.posePlan.map((pose: { instruction: string }) => pose.instruction));
   expect(second.frames).toHaveLength(4); expect(second.beeps).toBe(12);
@@ -146,7 +148,7 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
   expect(downloads).toEqual(['/image/visitor-1.jpg', '/image/visitor-2.jpg', '/image/visitor-3.jpg', '/image/visitor-3.jpg', '/image/visitor-4.jpg', '/image/visitor-5.jpg']);
   expect(commands).toEqual(['LiveView_Capture', 'Capture', 'Capture', 'Capture', 'Capture']);
   expect(localAuthorization).toEqual([]); expect(pageErrors).toEqual([]); expect(app.sessionCount()).toBe(2);
-  await expect(page.getByRole('heading', { name: 'Ищи свое видео под номером 002 на промо экране', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Ищите видео под номером 002 на промоэкране', exact: true })).toBeVisible();
   const summarize = (observation: Observations) => ({ ...observation, frames: observation.frames.map(frame => ({ size: frame.bytes.length, step: frame.step, transform: frame.transform })) });
   await writeFile(`${artifacts}/camera-observations.json`, JSON.stringify({ firstSessionId: firstReceipt.sessionId, secondSessionId: secondReceipt.sessionId, first: summarize(first), second: summarize(second), commands, downloads, byteEquality: true, previewFallback: ['preview 503 after successful LiveView_Show', 'initial LiveView_Show 503'], delayedFileList: 'two polls after each command', credentialLeak: false, pageErrors, nextVisitor: 'product button; cleared sessionStorage; fresh page observation log', audio: 'real WebAudio oscillator start events; physical sound not audited', hardware: 'controlled HTTP, no Canon/Windows' }, null, 2));
 });

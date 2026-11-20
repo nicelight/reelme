@@ -44,7 +44,7 @@ test('production results: admin timing, real preload/QR, first fill and stable p
     await settings.goto(origin + '/admin');
     await settings.getByLabel('Логин').fill('admin'); await settings.getByLabel('Пароль', { exact: true }).fill('test-password');
     await settings.getByRole('button', { name: 'Войти', exact: true }).click();
-    await settings.getByRole('button', { name: 'Экран результатов', exact: true }).click();
+    await settings.getByRole('button', { name: 'Параметры', exact: true }).click();
     const duration = settings.getByLabel('Длительность показа страницы');
     expect(await duration.locator('option').evaluateAll(nodes => nodes.map(node => (node as HTMLOptionElement).value))).toEqual(['10','20','30','40','50','60']);
     await duration.selectOption('20'); await settings.getByRole('button', { name: 'Сохранить настройку' }).click();
@@ -96,6 +96,23 @@ test('production results: admin timing, real preload/QR, first fill and stable p
     await expect(center).toHaveAttribute('data-session', '11');
     expect(await ids()).not.toContain(String(oldNumber));
     expect((await request.get(decoded!)).status()).toBe(200);
+    // A reload must decode the existing gallery again without downloading its images.
+    const network = await page.context().newCDPSession(page);
+    await network.send('Network.enable');
+    const images = new Set<string>();
+    const statuses = new Map<string, number>();
+    network.on('Network.requestWillBeSent', ({ requestId, request: resource }) => {
+      if (/\/api\/display\/[^/]+\/(frame|qr)$/.test(resource.url)) images.add(requestId);
+    });
+    network.on('Network.responseReceivedExtraInfo', ({ requestId, statusCode }) => statuses.set(requestId, statusCode));
+    await page.reload();
+    await expect(page.locator('.card')).toHaveCount(9, { timeout: 12_000 });
+    expect(images.size).toBeGreaterThanOrEqual(18);
+    for (const id of images) {
+      // Memory-cache hits need no HTTP response. Revalidation returns headers only.
+      if (statuses.has(id)) expect(statuses.get(id)).toBe(304);
+    }
+    await network.detach();
     expect(errors).toEqual([]);
     await writeFile(join(artifacts, 'production-results-observations.json'), JSON.stringify({ firstFill: 9, pageDurationSeconds: 20, qrDecoded: true, stableMidpageArrivals: true, oneHatchPerPage: true, expiresAtBoundary: true, errors }, null, 2));
   } finally {

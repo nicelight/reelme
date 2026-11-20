@@ -28,8 +28,8 @@
     catch (value) { fail(value); }
   });
 </script>
-<main class="guides-page">
-  <p class="eyebrow">ПОДГОТОВКА СЪЁМКИ</p><h1>Образцы ракурсов</h1>
+<section class="guides-page">
+  <h2>Образцы ракурсов</h2>
   <p class="hint">Изображения помогают гостям повторить позу. Замены применяются к новым фотосессиям; начатые сохраняют свои образцы.</p>
   <p class="hint">Во время съёмки образец показывается целиком, без обрезки; при других пропорциях останутся свободные поля.</p>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
@@ -43,10 +43,10 @@
       {/each}
     </div>
   </fieldset>
-</main>
+</section>
 <style>
   .guides-page { max-width:1100px; margin:0 auto; padding:40px 24px; }
-  .guides-page h1 { margin:8px 0 16px; }
+  .guides-page h2 { margin:8px 0 16px; }
   .guides-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; margin-top:24px; }
   .guide-card { padding:20px; border:1px solid var(--line); border-radius:6px; min-width:0; }
   @media(max-width:640px) { .guides-grid { grid-template-columns:1fr; } .guides-page { padding:24px 16px; } }

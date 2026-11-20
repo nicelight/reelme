@@ -32,7 +32,7 @@ export async function createApp(config: Config, options: { now?: () => number; l
   app.addHook('onClose', async () => { db.close(); });
   app.addHook('onSend', async (request, reply) => {
     reply.header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', /^\/(provider-media|receive|download|api\/receive)\//.test(request.url) ? 'no-referrer' : 'same-origin');
-    if (request.url.startsWith('/api/')) reply.header('Cache-Control', 'no-store');
+    if (request.url.startsWith('/api/') && !reply.hasHeader('Cache-Control')) reply.header('Cache-Control', 'no-store');
   });
   app.setErrorHandler((error: Error & { statusCode?: number; code?: string }, _request, reply) => {
     if (error instanceof ZodError) return reply.code(400).send({ code: 'INVALID_INPUT', message: error.issues.map(i => i.message).join('; ') });
@@ -53,11 +53,11 @@ export async function createApp(config: Config, options: { now?: () => number; l
   registerDisplay(app, db, config.dataDir, config.origin, access, options.now ?? Date.now);
   const deleteOutput = options.cleanup?.deleteOutput ?? (config.falKey ? createFalDelete(config.falKey) : undefined);
   const cleanup = createEventCleanup(db, config.dataDir, app.log, options.now ?? Date.now, { ...options.cleanup, deleteOutput });
-  registerEvents(app, db, config.dataDir, access, options.now ?? Date.now, cleanup.remove);
+  registerEvents(app, db, config.dataDir, access, options.now ?? Date.now, cleanup);
   app.addHook('onReady', async () => { await cleanup.runOnce(); cleanup.start(); });
   app.addHook('onClose', async () => { await cleanup.stop(); });
   registerReceive(app, db, config.dataDir, config.clientDir, options.now ?? Date.now);
-  const publish = (id: string) => publishReady(db, config.dataDir, id, config.origin, options.now);
+  const publish = (id: string, freshlyPrepared = false) => publishReady(db, config.dataDir, id, config.origin, options.now, freshlyPrepared);
   app.addHook('onReady', async () => {
     // A serving client entrypoint is part of ready, also when fal is disabled.
     await readFile(join(config.clientDir, 'index.html'));

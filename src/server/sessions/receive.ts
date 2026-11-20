@@ -7,18 +7,15 @@ import { sessionAvailable } from './availability.js';
 import { randomBytes } from 'node:crypto';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { inspectJpeg } from './jpeg.js';
 import QRCode from 'qrcode';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { DB } from '../db.js';
 import { HttpError } from '../errors.js';
-import { sendMedia } from '../scenarios/media.js';
+import { inspectMedia, sendMedia } from '../scenarios/media.js';
 import type { EmailState, ReadyCard, ReceiveStatus } from '../../shared/receive.js';
 
-const run = promisify(execFile);
 interface Delivery {
   session_id: string; number: number; receive_token: string; download_token: string;
   email_state: EmailState; opened_at: number | null; email_confirmed_at: number | null;
@@ -44,10 +41,9 @@ export function readyCard(db: DB, origin: string, sessionId: string): ReadyCard 
   return { number: row.number, photoUrl: `${base}/photo`, frameUrl: `${base}/frame`, receiveUrl: `${origin}/receive/${row.receive_token}` };
 }
 
-/** Rechecks persisted files before publication, including recovery after restart.
- * Ordinary generation already decoded them; the recheck closes the saved-file
- * boundary before issuing permanent capabilities. No remote access or SQL awaits. */
-export async function publishReady(db: DB, dataDir: string, sessionId: string, origin: string, now: () => number = Date.now) {
+/** Checks saved assets before issuing capabilities. A freshly prepared MP4 was
+ * probed during frame extraction; recovery reopens its container metadata. */
+export async function publishReady(db: DB, dataDir: string, sessionId: string, origin: string, now: () => number = Date.now, freshlyPrepared = false) {
   const row = db.prepare(`SELECT g.* FROM generation_jobs g JOIN capture_sessions s ON s.id=g.session_id WHERE s.id=? AND s.state='preparing' AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.deleting=0) AND g.video_path IS NOT NULL`).get(sessionId) as { video_path: string; frame_path: string; video_size: number; frame_size: number } | undefined;
   if (!row) return;
   try {
@@ -55,7 +51,7 @@ export async function publishReady(db: DB, dataDir: string, sessionId: string, o
     const frame = join(dataDir, 'media', row.frame_path);
     const photo = db.prepare('SELECT path FROM capture_photos WHERE session_id=? AND pose_index=0').get(sessionId) as { path: string } | undefined;
     if (!photo || !row.video_size || !row.frame_size || (await stat(video)).size !== row.video_size || (await stat(frame)).size !== row.frame_size) throw new Error('Missing files');
-    await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-xerror', '-protocol_whitelist', 'file,pipe', '-format_whitelist', 'mov', '-i', video, '-map', '0:v:0', '-f', 'null', '-'], { timeout: 120_000, maxBuffer: 2 * 1024 * 1024 });
+    if (!freshlyPrepared) await inspectMedia(video, 'video/mp4');
     await inspectJpeg(frame);
     await inspectJpeg(join(dataDir, 'media', photo.path));
     const tokens = db.prepare('SELECT receive_token,download_token FROM session_delivery WHERE session_id=?').get(sessionId) as Pick<Delivery, 'receive_token' | 'download_token'> | undefined;

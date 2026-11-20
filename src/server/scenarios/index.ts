@@ -45,6 +45,13 @@ export function registerScenarios(app: FastifyInstance, db: DB, dataDir: string,
     return rows.map(row => editorSlot(db, { simulateGeneration: false, ...JSON.parse(row.config), id: row.id }));
   });
   app.get<{ Params: { id: string } }>('/api/admin/slots/:id', { preHandler: access.requireAdmin }, request => editorSlot(db, readSlot(db, request.params.id)));
+  app.patch<{ Params: { id: string } }>('/api/admin/slots/:id/visibility', { preHandler: [access.requireAdmin, access.requireOrigin] }, (request, reply) => {
+    const { visible } = z.object({ visible: z.boolean() }).strict().parse(request.body);
+    const updated = db.prepare("UPDATE slots SET config=json_set(config, '$.visible', json(?)) WHERE id=?")
+      .run(JSON.stringify(visible), request.params.id);
+    if (!updated.changes) throw new HttpError(404, 'NOT_FOUND', 'Сюжет не найден');
+    return reply.code(204).send();
+  });
   app.post('/api/admin/slots', { preHandler: [access.requireAdmin, access.requireOrigin] }, (request, reply) => {
     const { id = randomUUID(), ...body } = z.object({ id: z.string().uuid().optional() }).passthrough().parse(request.body);
     if (db.prepare('SELECT 1 FROM slots WHERE id=?').get(id)) throw new HttpError(409, 'SLOT_EXISTS', 'Сюжет с этим ID уже существует');

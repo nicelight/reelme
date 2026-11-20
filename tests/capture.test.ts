@@ -75,6 +75,13 @@ test('installation catalog paginates 13 visible slots and protects current previ
   const mediaUrl = `/api/catalog/${ids[0]}/media/${s.clip.id}`;
   const full = await f.app.inject({ url: mediaUrl, headers: installation });
   assert.equal(full.statusCode, 200); assert.deepEqual(full.rawPayload, s.video);
+  assert.equal(full.headers['cache-control'], 'private, no-cache');
+  assert.match(String(full.headers.vary), /\bAuthorization\b/i);
+  const validate = { 'if-none-match': String(full.headers.etag) };
+  assert.equal(validate['if-none-match'], `"${s.clip.id}"`);
+  const cached = await f.app.inject({ url: mediaUrl, headers: { ...installation, ...validate } });
+  assert.equal(cached.statusCode, 304); assert.equal(cached.rawPayload.length, 0);
+  assert.equal((await f.app.inject({ url: mediaUrl, headers: validate })).statusCode, 401);
   const range = await f.app.inject({ url: mediaUrl, headers: { ...installation, range: 'bytes=0-31' } });
   assert.equal(range.statusCode, 206); assert.deepEqual(range.rawPayload, s.video.subarray(0, 32));
   assert.equal(range.headers['content-range'], `bytes 0-31/${s.video.length}`);
@@ -86,6 +93,8 @@ test('installation catalog paginates 13 visible slots and protects current previ
     for (const url of ['/api/catalog', `/api/catalog/${ids[0]}`, mediaUrl]) assert.equal((await f.app.inject({ url, headers })).statusCode, expected, url);
     assert.equal((await f.app.inject({ method: 'POST', url: '/api/capture/sessions', headers: { ...headers, origin: installation.origin }, payload: { startRequestId: randomUUID(), slotId: ids[0] } })).statusCode, expected);
   }
+  await s.save({ ...s.recast, visible: false }, ids[0]);
+  assert.equal((await f.app.inject({ url: mediaUrl, headers: { ...installation, ...validate } })).statusCode, 404);
 });
 
 test('starts are idempotent, numbered per Novosibirsk date, and reject unavailable or invalid requests', async t => {
@@ -127,7 +136,19 @@ test('session snapshots preserve replaced settings and bytes across restart; P2V
   const slotId = await s.save(s.recast);
   const a = await start(f, slotId);
   const old = snapshot(f, a.sessionId);
-  assert.deepEqual(old, { slotId, description: s.recast.description, thumbnailId: s.thumbnail.id, expectedPhotos: 1, posePlan: a.posePlan, generation: { participants: 1, photosPerParticipant: 1, orientation: 'landscape', simulateGeneration: false, mode: 'V2V', model: s.recast.model, referenceIds: [], videoId: s.clip.id, resolution: '768P', recastShotsConfirmed: true } });
+  const defaults = { photoMaxEdge: 0, sendCaptureLogs: false, startMode: 'manual', countdownSeconds: 5, reviewSeconds: 3, receiptSeconds: 5 };
+  const updated = { photoMaxEdge: 2048, sendCaptureLogs: true, startMode: 'automatic', countdownSeconds: 2, reviewSeconds: 1, receiptSeconds: 4 };
+  const settingsUrl = '/api/admin/capture-settings';
+  const headers = { cookie: s.cookie, origin: f.config.origin };
+  assert.deepEqual((await f.app.inject({ url: settingsUrl, headers })).json(), defaults);
+  assert.equal((await f.app.inject({ method: 'PUT', url: settingsUrl, headers: { ...headers, cookie: await f.login('operator') }, payload: updated })).statusCode, 403);
+  assert.equal((await f.app.inject({ method: 'PUT', url: settingsUrl, headers, payload: { ...updated, countdownSeconds: 0 } })).statusCode, 400);
+  assert.equal((await f.app.inject({ method: 'PUT', url: settingsUrl, headers, payload: updated })).statusCode, 200);
+  assert.equal((await f.app.inject({ method: 'PUT', url: settingsUrl, headers, payload: { ...updated, photoMaxEdge: 4096 } })).statusCode, 400);
+  const { sendCaptureLogs: _omit, photoMaxEdge: _omitEdge, ...legacyUpdate } = updated;
+  assert.deepEqual((await f.app.inject({ method: 'PUT', url: settingsUrl, headers, payload: legacyUpdate })).json(), updated);
+  assert.deepEqual(a.captureSettings, defaults);
+  assert.deepEqual(old, { captureSettings: defaults, slotId, description: s.recast.description, thumbnailId: s.thumbnail.id, expectedPhotos: 1, posePlan: a.posePlan, generation: { participants: 1, photosPerParticipant: 1, orientation: 'landscape', simulateGeneration: false, mode: 'V2V', model: s.recast.model, referenceIds: [], videoId: s.clip.id, resolution: '768P', recastShotsConfirmed: true } });
   const newImage = await sharp(s.image).negate().png().toBuffer();
   const newThumbnail = await f.upload(s.cookie, newImage);
   const reference = await f.upload(s.cookie, s.image);
@@ -140,7 +161,8 @@ test('session snapshots preserve replaced settings and bytes across restart; P2V
   assert.equal(new Set(b.posePlan.map(p => p.key)).size, 4);
   assert.ok(b.posePlan.every(p => p.instruction.length > 0));
   const fresh = snapshot(f, b.sessionId);
-  assert.deepEqual(fresh, { slotId, description: p2v.description, thumbnailId: newThumbnail.id, demoId: demo.id, expectedPhotos: 4, posePlan: b.posePlan, generation: { participants: 1, photosPerParticipant: 4, orientation: 'landscape', aspectRatio: '16:9', simulateGeneration: false, mode: p2v.mode, model: p2v.model, referenceIds: [reference.id], prompt: p2v.prompt, resolution: '1080p', duration: 7 } });
+  assert.deepEqual(b.captureSettings, updated);
+  assert.deepEqual(fresh, { captureSettings: updated, slotId, description: p2v.description, thumbnailId: newThumbnail.id, demoId: demo.id, expectedPhotos: 4, posePlan: b.posePlan, generation: { participants: 1, photosPerParticipant: 4, orientation: 'landscape', aspectRatio: '16:9', simulateGeneration: false, mode: p2v.mode, model: p2v.model, referenceIds: [reference.id], prompt: p2v.prompt, resolution: '1080p', duration: 7 } });
   const detail = await f.app.inject({ url: `/api/catalog/${slotId}`, headers: installation });
   assert.equal(detail.json().previewId, demo.id);
   for (const id of [reference.id, s.clip.id, s.thumbnail.id, randomUUID()]) assert.equal((await f.app.inject({ url: `/api/catalog/${slotId}/media/${id}`, headers: installation })).statusCode, 404);
@@ -156,9 +178,11 @@ test('session snapshots preserve replaced settings and bytes across restart; P2V
       assert.deepEqual(saved.story, story);
       const current = await f.app.inject({ url: `/api/capture/sessions/${saved.sessionId}`, headers: installation });
       assert.deepEqual(current.json().story, story);
+      assert.deepEqual(current.json().captureSettings, saved.captureSettings);
       const path = `/api/capture/sessions/${saved.sessionId}/thumbnail`;
       const image = await f.app.inject({ url: path, headers: installation });
       assert.equal(image.statusCode, 200); assert.deepEqual(image.rawPayload, bytes);
+      assert.equal((await f.app.inject({ url: path, headers: { ...installation, 'if-none-match': String(image.headers.etag) } })).statusCode, 304);
       assert.equal((await f.app.inject({ url: path })).statusCode, 401);
     }
     const db = openDatabase(f.config.dataDir);

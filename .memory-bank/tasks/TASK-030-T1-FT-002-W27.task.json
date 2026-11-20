@@ -1,0 +1,32 @@
+{
+  "id": "TASK-030-T1-FT-002-W27",
+  "title": "Повтор сценария с экрана номера посетителя",
+  "status": "done",
+  "wave": "W27",
+  "feature": "FT-002",
+  "tier": "T1",
+  "reqs": ["REQ-006"],
+  "depends_on": ["TASK-004-T2-FT-002-W3"],
+  "touched_files": ["src/client/capture/App.svelte", "src/client/capture/PhotoSession.svelte", "tests/transfer.spec.ts"],
+  "gates": [
+    { "name": "typecheck", "command": "npm run check", "required": true },
+    { "name": "build", "command": "npm run build", "required": true },
+    { "name": "capture-browser", "command": "npm run test:ui -- tests/transfer.spec.ts tests/capture.spec.ts tests/event-creation.spec.ts", "required": true }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-20",
+      "result": "PASS",
+      "summary": "Check и build прошли, серверные тесты 120/120, Chromium 4/4. Нажатие вне кнопки вернуло каталог. Повтор после перезагрузки создал новый запрос и номер для того же слота с пустой серией, прежние JPEG остались в прежней сессии. Проверен рендер 1280×720 и 375×812.",
+      "evidence": ["tests/transfer.spec.ts"],
+      "limitations": ["Локальные проверки с имитацией камеры и JPEG. Аппаратная проверка относится к TASK-005."]
+    }
+  ],
+  "docs": ["docs/MANUAL.md"],
+  "source_artifacts": [".memory-bank/features/FT-002-photo-session.md#ft-002-ac-003"],
+  "normative_inputs": [".memory-bank/prd.md#автоматическая-фотосессия", "DESIGN.md#завершение-съёмки-и-возврат-к-сюжетам"],
+  "constraints": ["Крупная кнопка внизу экрана номера, остальная область возвращает каталог."],
+  "invariants": ["Для повтора создаётся новая сессия того же слота через обычный запрос старта."],
+  "verification_targets": ["Возврат в каталог вне кнопки, повтор того же слота после перезагрузки, новый номер и пустая серия."],
+  "evidence_required": ["Браузерный сценарий с реальным backend и визуальная проверка кнопки на широком и узком экране."]
+}

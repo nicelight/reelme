@@ -32,7 +32,6 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
     const response = await admin.post('/api/admin/slots', { data });
     expect(response.status()).toBe(201); slots.push(await response.json());
   }
-  await admin.dispose();
   expect((await page.request.get(app.origin + '/api/catalog')).status()).toBe(401);
   expect((await page.request.get(`${app.origin}/api/catalog/${slots[0].id}/media/${thumbnailId}`)).status()).toBe(401);
   expect((await page.request.post(app.origin + '/api/capture/sessions', { data: {} })).status()).toBe(401);
@@ -49,11 +48,84 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   await page.getByRole('button', { name: 'Проверить и сохранить' }).click();
   await expect(page.getByRole('status')).toContainText('Ключ проверен и сохранён');
   await expect(page.locator('#installation-key')).toHaveValue('');
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Network.enable');
+  const mediaRequests = new Set<string>();
+  const transfers: number[] = [];
+  cdp.on('Network.requestWillBeSent', ({ requestId, request }) => {
+    if (request.method === 'GET' && /\/api\/catalog\/[^/]+\/media\//.test(request.url)) mediaRequests.add(requestId);
+  });
+  cdp.on('Network.loadingFinished', ({ requestId, encodedDataLength }) => {
+    if (mediaRequests.delete(requestId)) transfers.push(encodedDataLength);
+  });
   await page.getByRole('link', { name: 'Открыть каталог' }).click();
   await expect(page.locator('.story')).toHaveCount(13);
+  await expect(page.locator('.center video')).toBeVisible();
+  expect(await page.locator('.center video').evaluate((video: HTMLVideoElement) => video.readyState)).toBeGreaterThanOrEqual(3);
+  // Let the background video finish as well before measuring a warm reload.
+  await expect.poll(() => transfers.length).toBe(15); // 13 covers and 2 previews
+  expect(transfers.every(size => size > 0)).toBe(true);
+  transfers.length = 0;
   await page.reload();
   await expect(page.locator('.story')).toHaveCount(13);
   await expect(page.locator('.story h2').first()).toHaveText('История номер 1');
+  await expect(page.locator('.center video')).toBeVisible();
+  expect(await page.locator('.center video').evaluate((video: HTMLVideoElement) => video.readyState)).toBeGreaterThanOrEqual(3);
+  await expect.poll(() => transfers.length).toBe(15);
+  expect(transfers.every(size => size === 0)).toBe(true);
+  transfers.length = 0;
+  const source = await page.locator('.center video').getAttribute('src');
+  const refresh = page.waitForResponse(response => response.url().endsWith('/api/catalog?page=2'));
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await refresh;
+  await expect(page.locator('.center video')).toHaveAttribute('src', source!);
+  expect(transfers).toEqual([]);
+
+  const replacement = await upload(app.image, 'image/png');
+  const { id: _id, ...neighbor } = await (await admin.get(`/api/admin/slots/${slots[1].id}`)).json();
+  expect((await admin.put(`/api/admin/slots/${slots[1].id}`, { data: { ...neighbor, thumbnailId: replacement } })).status()).toBe(200);
+  await admin.dispose();
+  const replacementPath = `/api/catalog/${slots[1].id}/media/${replacement}`;
+  let releaseReplacement!: () => void;
+  const delayReplacement = new Promise<void>(resolve => { releaseReplacement = resolve; });
+  const heldRequest = page.waitForRequest(request => request.method() === 'GET' && request.url().endsWith(replacementPath));
+  await page.route('**' + replacementPath, async route => {
+    await delayReplacement;
+    await route.continue();
+  });
+  const neighborImage = page.locator('.story').nth(1).locator('.side-media img');
+  const previousCover = await neighborImage.getAttribute('src');
+  try {
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await heldRequest;
+    await expect(neighborImage).toHaveAttribute('src', previousCover!);
+    await expect(page.locator('.center video')).toHaveAttribute('src', source!);
+  } finally { releaseReplacement(); }
+  await expect(neighborImage).not.toHaveAttribute('src', previousCover!);
+  await expect(page.locator('.center video')).toHaveAttribute('src', source!);
+  expect(transfers).toHaveLength(1);
+  expect(transfers[0]).toBeGreaterThan(0);
+  await page.unroute('**' + replacementPath);
+  await cdp.detach();
+
+  const coldPage = await page.context().newPage();
+  const firstSlotMedia = `**/api/catalog/${slots[0].id}/media/**`;
+  let releaseColdMedia!: () => void;
+  const delayColdMedia = new Promise<void>(resolve => { releaseColdMedia = resolve; });
+  await coldPage.route(firstSlotMedia, async route => {
+    await delayColdMedia;
+    await route.continue();
+  });
+  const coldMedia = coldPage.waitForRequest(request => request.method() === 'GET' && request.url().includes(`/api/catalog/${slots[0].id}/media/`));
+  try {
+    await coldPage.goto(`${local}#slot=${slots[0].id}`);
+    await coldMedia;
+    await expect(coldPage.getByRole('progressbar', { name: 'Подгрузка обложек' })).toBeVisible();
+    await expect(coldPage.locator('.gallery')).toHaveCount(0);
+  } finally { releaseColdMedia(); }
+  await expect(coldPage.locator('.center video')).toBeVisible();
+  await coldPage.close();
+
   await expect(page.locator('.story img').first()).toHaveJSProperty('naturalWidth', 512);
   await expect(page.getByRole('link', { name: 'Выбрать сюжет: История номер 14', exact: true })).toHaveCount(0);
   await page.screenshot({ path: `${artifacts}/browser-catalog.png`, fullPage: true });
@@ -107,7 +179,7 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   const receipt = await response.json();
   expect(receipt.sessionId).toBeTruthy(); expect(receipt.posePlan).toHaveLength(1);
   await expect(page.locator('.progress strong')).toHaveText('1 из 1');
-  expect(await page.locator('main').innerText()).not.toMatch(/Ищи свое видео|Ваш номер|Фото отправлены/);
+  expect(await page.locator('main').innerText()).not.toMatch(/Ищите видео под номером|Ваш номер|Фото отправлены/);
   await page.reload();
   await expect(page.locator('.progress strong')).toHaveText('1 из 1');
   expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!).receipt.sessionId) === receipt.sessionId).toBe(true);
@@ -134,7 +206,7 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   const recovered = await page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!).receipt);
   expect(recovered.sessionId === lostReceipt!.sessionId && recovered.number === lostReceipt!.number).toBe(true);
   expect(app.sessionCount()).toBe(before + 1);
-  expect(await page.locator('main').innerText()).not.toMatch(/Ищи свое видео|Ваш номер|Фото отправлены/);
+  expect(await page.locator('main').innerText()).not.toMatch(/Ищите видео под номером|Ваш номер|Фото отправлены/);
   expect((await page.context().cookies()).length).toBe(0);
   expect(leakedKey).toBe(false); expect(errors).toEqual([]);
   // Only the deliberately lost acknowledgement and optional favicon are allowed.

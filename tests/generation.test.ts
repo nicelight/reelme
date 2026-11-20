@@ -5,7 +5,9 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import sharp from 'sharp';
+import jsQR from 'jsqr';
 import { fixture, imageBytes, videoBytes, multipart } from './helpers.js';
 import { openDatabase } from '../src/server/db.js';
 import { createGenerationWorker } from '../src/server/sessions/generation.js';
@@ -17,6 +19,14 @@ const installation = { authorization: `Bearer ${'a'.repeat(43)}` };
 const endpoint = 'minimax/h3-max/recast';
 const receipt = (id: string) => ({ request_id: id, status_url: `https://queue.fal.run/minimax/h3-max/requests/${id}/status`, response_url: `https://queue.fal.run/minimax/h3-max/requests/${id}`, cancel_url: `https://queue.fal.run/minimax/h3-max/requests/${id}/cancel` });
 type Fixture = Awaited<ReturnType<typeof fixture>>;
+async function eventually(check: () => void | Promise<void>) {
+  const deadline = performance.now() + 10_000;
+  for (;;) {
+    try { await check(); return; }
+    catch (error) { if (performance.now() >= deadline) throw error; }
+    await delay(20);
+  }
+}
 async function setup(t: TestContext) {
   const f = await fixture(); t.after(() => f.close());
   const cookie = await f.login();
@@ -28,7 +38,7 @@ async function setup(t: TestContext) {
   assert.equal(response.statusCode, 201, response.body);
   return { f, cookie, input, slotId: response.json().id as string, bytes };
 }
-async function captured(f: Fixture, slotId: string) {
+async function captured(f: Pick<Fixture, 'app'>, slotId: string) {
   const response = await f.app.inject({ method: 'POST', url: '/api/capture/sessions', headers: installation, payload: { slotId, startRequestId: randomUUID() } });
   assert.equal(response.statusCode, 201, response.body);
   const id = response.json().sessionId as string;
@@ -117,7 +127,7 @@ test('saved A/B snapshots, stable scoped provider URLs and verified files surviv
       submitCount: calls.submit.length, downloadCount: calls.download.length,
       stateAfterRestart: (await state(f, a)).state,
       videoSha256: createHash('sha256').update(bytes).digest('hex'),
-      verified: ['complete FFmpeg decode', 'ffprobe 320x240, 5 seconds', 'JPEG extracted', 'no ready before issuance'],
+      verified: ['ffprobe 320x240, 5 seconds', 'JPEG extracted', 'no ready before issuance'],
     }, null, 2) + '\n');
   }
 });
@@ -156,16 +166,49 @@ test('explicit submit refusals and terminal COMPLETED errors never resubmit or e
   }
 });
 
+test('HTTP 503 retries the saved result URL; HTTP 410 permanently stops downloads and explains the failure to the operator', async t => {
+  const { f, cookie, slotId } = await setup(t);
+  const id = await captured(f, slotId);
+  const { calls, client } = fake();
+  const download: typeof fetch = async url => {
+    calls.download.push(String(url));
+    return new Response(null, { status: calls.download.length === 1 ? 503 : 410 });
+  };
+  const w = worker(f, client, download);
+  t.after(() => w.close());
+  await w.runOnce(); await w.runOnce(); await w.runOnce();
+  assert.equal((await state(f, id)).state, 'preparing');
+  assert.equal((await state(f, id)).error?.code, 'GENERATION_RETRY');
+  await w.runOnce(); await w.runOnce();
+  const failed = await state(f, id);
+  assert.equal(failed.state, 'failed');
+  assert.equal(failed.error?.code, 'RESULT_GONE');
+  const display = await f.app.inject({ url: '/api/display/today', headers: { cookie } });
+  assert.equal(display.statusCode, 200);
+  assert.match(display.json().sessions.find((row: { id: string }) => row.id === id).error, /видео больше недоступно/);
+  assert.deepEqual(calls.download, Array(2).fill('https://cdn.fal.test/request-1.mp4'));
+  assert.equal(calls.submit.length, 1);
+  assert.deepEqual(calls.result, ['request-1']);
+});
+
 test('download retry and preparing restart reuse saved result; empty/corrupt video never becomes ready', async t => {
   const { f, slotId, bytes } = await setup(t); const id = await captured(f, slotId);
   const { calls, client } = fake(); let attempts = 0;
   const download: typeof fetch = async url => { calls.download.push(String(url)); if (++attempts === 1) throw new TypeError('temporary download loss'); return new Response(bytes); };
-  let w = worker(f, client, download); t.after(() => w.close());
-  await w.runOnce(); await w.runOnce(); await w.runOnce();
-  assert.equal((await state(f, id)).state, 'preparing'); assert.equal((await state(f, id)).error?.code, 'GENERATION_RETRY');
-  await w.close(); await f.restart(); w = worker(f, client, download);
-  await w.runOnce(); assert.equal((await state(f, id)).error, undefined);
-  assert.equal(calls.submit.length, 1); assert.equal(calls.result.length, 1); assert.equal(calls.download.length, 2); assert.equal(calls.download[0], calls.download[1]);
+  const w = worker(f, client, download);
+  try {
+    await w.runOnce(); await w.runOnce(); await w.runOnce();
+    assert.equal((await state(f, id)).state, 'preparing'); assert.equal((await state(f, id)).error?.code, 'GENERATION_RETRY');
+  } finally { await w.close(); }
+  await f.restart();
+  const restarted = await createApp(f.config, { now: () => Date.UTC(2026, 0, 1), generation: { client, download } });
+  try {
+    await restarted.ready();
+    await eventually(async () => assert.equal((await state(f, id)).state, 'ready'));
+    assert.equal((await state(f, id)).error, undefined);
+    assert.equal(calls.submit.length, 1); assert.deepEqual(calls.status, ['request-1']); assert.deepEqual(calls.result, ['request-1']);
+    assert.deepEqual(calls.download, Array(2).fill('https://cdn.fal.test/request-1.mp4'));
+  } finally { await restarted.close(); }
   for (const bytes of [Buffer.alloc(0), Buffer.from('corrupt video')]) {
     const bad = await captured(f, slotId); const fakeClient = fake();
     const broken = worker(f, fakeClient.client, async () => new Response(bytes));
@@ -208,6 +251,69 @@ test('background fal submission does not hold capture HTTP and startup consumes 
   const next = await app.inject({ method: 'POST', url: '/api/capture/sessions', headers: installation, payload: { slotId, startRequestId: randomUUID() } });
   assert.equal(next.statusCode, 201); assert.notEqual(next.json().sessionId, first);
   release();
+});
+
+test('fal accepts B while A is still downloading; preparation serves each guest their own MP4, QR and frame', async t => {
+  const { f, cookie, slotId, bytes: blue } = await setup(t);
+  const red = await videoBytes(f.root, 6, 'red');
+  const { client, calls } = fake();
+  const acceptedAt: number[] = [];
+  const submit = client.submit;
+  client.submit = async (...args) => {
+    acceptedAt.push(performance.now());
+    return submit(...args);
+  };
+  const releaseA = Promise.withResolvers<void>();
+  const firstUrl = 'https://cdn.fal.test/request-1.mp4';
+  const secondUrl = 'https://cdn.fal.test/request-2.mp4';
+  const app = await createApp(f.config, { now: () => Date.UTC(2026, 0, 1), generation: {
+    client, intervalMs: 20,
+    async download(url) {
+      calls.download.push(String(url));
+      if (String(url) === firstUrl) {
+        await releaseA.promise;
+        return new Response(blue);
+      }
+      assert.equal(String(url), secondUrl);
+      return new Response(red);
+    },
+  } });
+  try {
+    await app.ready();
+    const guestA = await captured({ app }, slotId);
+    await eventually(() => assert.deepEqual(calls.download, [firstUrl]));
+    const guestB = await captured({ app }, slotId);
+    const finalizedAt = performance.now();
+    // B has progressed all the way through fal, but only A may start local preparation.
+    await eventually(() => assert.deepEqual(calls.result, ['request-1', 'request-2']));
+    assert.equal(calls.submit.length, 2);
+    assert.deepEqual(calls.download, [firstUrl]);
+    t.diagnostic(`B finalize response → fal submit: ${(acceptedAt[1] - finalizedAt).toFixed(1)} ms (20 ms test polling interval); A's download was held throughout`);
+    releaseA.resolve();
+    await eventually(async () => {
+      assert.equal((await state(f, guestA)).state, 'ready');
+      assert.equal((await state(f, guestB)).state, 'ready');
+    });
+    assert.equal(calls.submit.length, 2);
+    assert.deepEqual(calls.download, [firstUrl, secondUrl]);
+    for (const [guest, expectedVideo, channel] of [[guestA, blue, 2], [guestB, red, 0]] as const) {
+      const qr = await app.inject({ url: `/api/display/${guest}/qr`, headers: { cookie } });
+      assert.equal(qr.statusCode, 200);
+      const { data, info } = await sharp(qr.rawPayload).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const link = jsQR(new Uint8ClampedArray(data), info.width, info.height)?.data;
+      assert.ok(link?.startsWith(f.config.origin + '/receive/'));
+      const page = new URL(link!).pathname;
+      assert.equal((await app.inject(page)).statusCode, 200);
+      const view = (await app.inject('/api' + page)).json();
+      assert.deepEqual((await app.inject(view.downloadUrl)).rawPayload, expectedVideo);
+      const frame = await app.inject({ url: `/api/display/${guest}/frame`, headers: { cookie } });
+      assert.equal(frame.headers['content-type'], 'image/jpeg');
+      assert.ok((await sharp(frame.rawPayload).stats()).channels[channel].mean > 200);
+    }
+  } finally {
+    releaseA.resolve();
+    await app.close();
+  }
 });
 
 test('provider failure details stay server-side with credentials and capability URLs redacted', async t => {

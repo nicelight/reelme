@@ -11,6 +11,7 @@ import type { ArchiveEvent, EventDetails, EventGallery } from '../../shared/even
 import { HttpError } from '../errors.js';
 import { readMedia, sendMedia } from '../scenarios/media.js';
 import { eventDate } from './index.js';
+import type { createEventCleanup } from './cleanup.js';
 import { isTestVideo } from '../../shared/scenarios.js';
 
 interface Row {
@@ -20,7 +21,7 @@ interface Row {
 const selection = `SELECT s.id,s.number,s.snapshot,s.state,g.video_path,g.video_size,g.width,g.height
   FROM capture_sessions s LEFT JOIN generation_jobs g ON g.session_id=s.id WHERE s.event_date=?`;
 const hasVideo = (row: Row) => row.state === 'ready' && !!row.video_path && (row.video_size ?? 0) > 0;
-export function registerEvents(app: FastifyInstance, db: DB, dataDir: string, access: Access, now: () => number, remove: (date: string) => Promise<void>) {
+export function registerEvents(app: FastifyInstance, db: DB, dataDir: string, access: Access, now: () => number, cleanup: ReturnType<typeof createEventCleanup>) {
   async function account(request: FastifyRequest, reply: FastifyReply) {
     const role = access.context(request, reply);
     if (role !== 'operator' && role !== 'admin') throw new HttpError(403, 'FORBIDDEN', 'Нужен аккаунт оператора или администратора');
@@ -32,8 +33,13 @@ export function registerEvents(app: FastifyInstance, db: DB, dataDir: string, ac
   }
   app.delete<{ Params: { date: string } }>('/api/events/:date', { preHandler: [access.requireAdmin, access.requireOrigin] }, async (request, reply) => {
     requirePast(request.params.date);
-    await remove(request.params.date);
+    await cleanup.remove(request.params.date);
     return reply.code(204).send();
+  });
+  app.get('/api/admin/event-preparation', { preHandler: access.requireAdmin }, async () => cleanup.preview());
+  app.post<{ Body: { through?: string } }>('/api/admin/event-preparation', { preHandler: [access.requireAdmin, access.requireOrigin] }, async (request, reply) => {
+    const view = cleanup.prepare(request.body?.through);
+    return reply.code(view.operation?.running ? 202 : 200).send(view);
   });
   app.get('/api/events', { preHandler: account }, (): ArchiveEvent[] => {
     // UNION groups by path before summing, so neither joins nor shared inputs multiply files.

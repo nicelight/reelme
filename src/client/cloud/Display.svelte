@@ -145,7 +145,7 @@
       const epoch = generation;
       const signal = AbortSignal.any([lifecycle.signal, resourceLifetime.signal]);
       try {
-        const images = await loadCardImages(item.card, signal);
+        const images = await loadCardImages(item.card, signal, retry);
         if (stopped || epoch !== generation || signal.aborted || loads.get(item.id) !== entry) return;
         entry.state = 'ready'; decoded.set(item.id, images);
         const current = projection?.sessions.find(value => value.id === item.id) ?? item;

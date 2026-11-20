@@ -19,6 +19,7 @@ const now = Date.parse('2026-11-14T17:00:00Z');
 const installation = { authorization: `Bearer ${'a'.repeat(43)}` };
 const quiet = { warn() {}, error() {} } as unknown as FastifyBaseLogger;
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(r => resolve = r); return { promise, resolve }; };
+const preparationTime = Date.parse('2026-11-19T17:00:00Z'); // November 20 in Novosibirsk
 async function seeded() {
   const f = await fixture(); f.advance(now - Date.UTC(2026, 0, 1));
   const admin = await f.login(); const operator = await f.login('operator');
@@ -89,6 +90,69 @@ test('retention: exactly 14 calendar days survive until Novosibirsk midnight; st
   assert.equal(db.prepare("SELECT 1 FROM events WHERE date='2026-11-12'").get(),undefined);
   await assert.rejects(readdir(join(f.config.dataDir,'media','sessions',id)),{code:'ENOENT'});
   assert.deepEqual(await readFile(join(f.config.dataDir,'media',seed.changedId)),seed.changed);
+});
+
+test('event preparation: admin preview follows Novosibirsk retention, requires same-origin confirmation and rejects a stale date', async t => {
+  const f = await fixture();
+  const db = openDatabase(f.config.dataDir);
+  t.after(async () => { db.close(); await f.close(); });
+  f.advance(preparationTime - Date.UTC(2026, 0, 1));
+  db.exec("INSERT INTO events(date,next_number) VALUES ('2026-11-05',1),('2026-11-06',1),('2026-11-08',1),('2026-11-09',1)");
+  await f.app.ready(); // Real startup retention deletes 5 November only.
+  const dates = () => db.prepare('SELECT date FROM events ORDER BY date').pluck().all();
+  assert.deepEqual(dates(), ['2026-11-06', '2026-11-08', '2026-11-09']);
+  const url = '/api/admin/event-preparation';
+  const admin = await f.login();
+  const operator = await f.login('operator');
+  for (const method of ['GET', 'POST'] as const) {
+    for (const [headers, status] of [[{}, 401], [{ cookie: operator }, 403], [installation, 403]] as const) {
+      assert.equal((await f.app.inject({ method, url, headers: { ...headers, origin: f.config.origin } })).statusCode, status);
+    }
+  }
+  const view = await f.app.inject({ url, headers: { cookie: admin } });
+  assert.deepEqual(view.json(), { through: '2026-11-08', eligibleCount: 2, operation: null });
+  const payload = { through: view.json().through };
+  assert.equal((await f.app.inject({ method: 'POST', url, headers: { cookie: admin }, payload })).statusCode, 403);
+  f.advance(86_400_000);
+  const stale = await f.app.inject({ method: 'POST', url, headers: { cookie: admin, origin: f.config.origin }, payload });
+  assert.equal(stale.statusCode, 409);
+  assert.deepEqual(dates(), ['2026-11-06', '2026-11-08', '2026-11-09']);
+});
+
+test('event preparation shares in-flight automatic deletion, reports local and remote errors, and continues through the confirmed day', async t => {
+  const { f, db, seed } = await seeded();
+  const entered = deferred(), release = deferred(), lastEntered = deferred(), finish = deferred();
+  const calls: string[] = [];
+  const cleanup = createEventCleanup(db, f.config.dataDir, quiet, () => preparationTime, {
+    deleteOutput: async url => {
+      calls.push(url);
+      if (url.endsWith('/5')) { entered.resolve(); await release.promise; }
+      else { lastEntered.resolve(); await finish.promise; throw new Error('CDN unavailable'); }
+    },
+  });
+  t.after(async () => { release.resolve(); finish.resolve(); await cleanup.stop(); db.close(); await f.close(); });
+  db.exec("INSERT INTO events(date,next_number) VALUES ('2026-11-05',2),('2026-11-06',1),('2026-11-08',2),('2026-11-09',2)");
+  db.prepare('UPDATE capture_sessions SET event_date=? WHERE id=?').run('2026-11-09', seed.partialId);
+  for (const [id, day] of [[seed.first.id, '05'], [seed.second.id, '08']]) {
+    db.prepare('UPDATE capture_sessions SET event_date=? WHERE id=?').run(`2026-11-${day}`, id);
+    db.prepare('UPDATE generation_jobs SET result_url=? WHERE session_id=?').run(`https://fixture.test/${Number(day)}`, id);
+  }
+  db.exec("CREATE TRIGGER fail_local BEFORE DELETE ON events WHEN OLD.date='2026-11-06' BEGIN SELECT RAISE(FAIL, 'test failure'); END");
+  const automatic = cleanup.runOnce();
+  await entered.promise;
+  const started = cleanup.prepare('2026-11-08');
+  assert.deepEqual(started.operation, { running: true, total: 3, deleted: 0, failed: 0, remoteErrors: 0 });
+  assert.deepEqual(cleanup.prepare(started.through), started);
+  assert.deepEqual(db.prepare("SELECT date FROM events WHERE deleting=1 ORDER BY date").pluck().all(), ['2026-11-05', '2026-11-06', '2026-11-08']);
+  release.resolve();
+  await lastEntered.promise;
+  assert.deepEqual(cleanup.preview().operation, { running: true, total: 3, deleted: 1, failed: 1, remoteErrors: 0 });
+  finish.resolve(); await automatic; await cleanup.stop();
+  assert.deepEqual(cleanup.preview().operation, { running: false, total: 3, deleted: 2, failed: 1, remoteErrors: 1 });
+  assert.deepEqual(calls, ['https://fixture.test/5', 'https://fixture.test/8']);
+  assert.deepEqual(db.prepare('SELECT date FROM events WHERE date<? ORDER BY date').pluck().all('2026-11-10'), ['2026-11-06', '2026-11-09']);
+  for (const id of [seed.first.id, seed.second.id]) await assert.rejects(readdir(join(f.config.dataDir, 'media', 'sessions', id)), { code: 'ENOENT' });
+  assert.ok((await readdir(join(f.config.dataDir, 'media', 'sessions', seed.partialId))).includes('partial.jpg'));
 });
 
 test('deleting marker immediately closes every new operation, late generation publication and email fallback', async t => {

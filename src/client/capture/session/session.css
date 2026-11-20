@@ -23,3 +23,8 @@
 
 /* Golden-section anchor in the Live View; the pose counter stays centered. */
 .photo-session-view .live .countdown strong{position:absolute;left:38.2%;top:38.2%;translate:-50% -50%}
+
+.photo-session-view .manual-shutter { position:absolute; inset:0; z-index:4; width:100%; height:100%; padding:0; border:0; border-radius:inherit; background:transparent; cursor:pointer; }
+.photo-session-view .manual-shutter:focus-visible { outline-offset:-5px; }
+.photo-session-view .live-note { white-space:normal; text-align:center; width:max-content; max-width:90%; }
+.photo-session-view .live-surface .preview-toggle { z-index:6; }

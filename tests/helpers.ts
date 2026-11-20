@@ -70,8 +70,8 @@ export function multipart(bytes: Buffer, mime: string, filename: string) {
   ]) };
 }
 export const imageBytes = () => sharp({ create: { width: 64, height: 64, channels: 3, background: '#c55b39' } }).png().toBuffer();
-export async function videoBytes(root: string, seconds = 10) {
+export async function videoBytes(root: string, seconds = 10, color = 'blue') {
   const path = join(root, `fixture-${seconds}.mp4`);
-  execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=320x240:r=10', '-t', String(seconds), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-y', path]);
+  execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', `color=c=${color}:s=320x240:r=10`, '-t', String(seconds), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-y', path]);
   return readFile(path);
 }

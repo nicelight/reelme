@@ -14,15 +14,16 @@
   import MediaField from './MediaField.svelte';
   import SlotEditor from './SlotEditor.svelte';
   import CaptureGuides from './CaptureGuides.svelte';
+  import CaptureSettingsForm from './CaptureSettingsForm.svelte';
+  import EventPreparation from './EventPreparation.svelte';
   import DisplaySettings from './DisplaySettings.svelte';
   import Photobooth from './Photobooth.svelte';
   import Login from './Login.svelte';
-  import brandMark from '../capture/story-prototype/assets/reelme-mark.png';
+  import brandMark from '../capture/story/assets/reelme-mark.webp';
   import './admin.css';
 
   let archive = $state(false);
-  let guides = $state(false);
-  let displaySettings = $state(false);
+  let parameters = $state(false);
   let photobooth = $state(false);
   const dedicatedScreen = location.pathname === '/results';
   let ready = $state(false);
@@ -84,7 +85,7 @@
     busy = true;
     try {
       await api('/auth/logout', { method: 'POST' });
-      role = null; archive = false; guides = false; displaySettings = false; photobooth = false; slots = []; selectedId = null; draftId = crypto.randomUUID(); slotSelection++; photoCaches.clear(); draft = blankSlot(); baseline = JSON.stringify(draft); notice = ''; error = ''; videoMedia = undefined;
+      role = null; archive = false; parameters = false; photobooth = false; slots = []; selectedId = null; draftId = crypto.randomUUID(); slotSelection++; photoCaches.clear(); draft = blankSlot(); baseline = JSON.stringify(draft); notice = ''; error = ''; videoMedia = undefined;
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
@@ -118,24 +119,25 @@
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
-  async function toggleVisibility(slot: Slot, visible: boolean) {
+  async function toggleVisibility(slot: Slot, input: HTMLInputElement) {
+    const visible = input.checked;
     busy = true; error = ''; notice = '';
     try {
-      const { id, ...config } = slot;
-      await api<Slot>(`/admin/slots/${id}`, { method: 'PUT', body: JSON.stringify({ ...config, visible }) });
-      if (selectedId === id) {
+      await api<void>(`/admin/slots/${slot.id}/visibility`, { method: 'PATCH', body: JSON.stringify({ visible }) });
+      slot.visible = visible;
+      if (selectedId === slot.id) {
         draft.visible = visible;
         const original = JSON.parse(baseline) as SlotInput; original.visible = visible; baseline = JSON.stringify(original);
       }
       await loadSlots(); notice = visible ? 'Сюжет будет отображаться клиенту.' : 'Сюжет скрыт от клиента.';
-    } catch (value) { fail(value); }
+    } catch (value) { input.checked = slot.visible; fail(value); }
     finally { busy = false; }
   }
   function beforeUnload(event: BeforeUnloadEvent) { if (adminWorkspace && dirty) event.preventDefault(); }
 </script>
 
 <svelte:window onbeforeunload={beforeUnload} />
-<svelte:head><title>ReelMe — {photobooth ? 'Фотобудка' : dedicatedScreen || displaySettings ? 'Экран результатов' : guides ? 'Образцы ракурсов' : archive ? 'Архив' : adminWorkspace ? 'Сюжеты' : role ? 'Ваши видео' : 'Вход'}</title></svelte:head>
+<svelte:head><title>ReelMe — {photobooth ? 'Фотобудка' : dedicatedScreen ? 'Экран результатов' : parameters ? 'Параметры' : archive ? 'Архив' : adminWorkspace ? 'Сюжеты' : role ? 'Ваши видео' : 'Вход'}</title></svelte:head>
 
 <div class:admin-shell={adminWorkspace} data-admin-theme={theme}>
 {#if role && !publicScreen}
@@ -149,11 +151,10 @@
 
 {#if ready && role && !adminDenied}
   <nav class="surface-nav" aria-label="Разделы">
-    <button class="quiet" aria-current={!archive && !guides && !displaySettings && !photobooth ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = false; guides = false; displaySettings = false; photobooth = false; }}>{adminWorkspace ? 'Сюжеты' : 'Сегодня'}</button>
-    {#if adminWorkspace}<button class="quiet" aria-current={guides ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { guides = true; archive = false; displaySettings = false; photobooth = false; } }}>Образцы ракурсов</button>{/if}
-    {#if adminWorkspace}<button class="quiet" aria-current={displaySettings ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { displaySettings = true; photobooth = false; archive = false; guides = false; } }}>Экран результатов</button>{/if}
-    {#if adminWorkspace}<button class="quiet" aria-current={photobooth ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { photobooth = true; archive = false; guides = false; displaySettings = false; } }}>Фотобудка</button>{/if}
-    {#if adminWorkspace}<a class="button" href="/operator">Сегодня / Архив</a>{:else}<button class="quiet" aria-current={archive ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = true; guides = false; displaySettings = false; photobooth = false; }}>Архив</button>{/if}
+    <button class="quiet" aria-current={!archive && !parameters && !photobooth ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = false; parameters = false; photobooth = false; }}>{adminWorkspace ? 'Сюжеты' : 'Сегодня'}</button>
+    {#if adminWorkspace}<button class="quiet" aria-current={parameters ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { parameters = true; photobooth = false; archive = false; } }}>Параметры</button>{/if}
+    {#if adminWorkspace}<button class="quiet" aria-current={photobooth ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { photobooth = true; archive = false; parameters = false; } }}>Фотобудка</button>{/if}
+    {#if adminWorkspace}<a class="button" href="/operator">Сегодня / Архив</a>{:else}<button class="quiet" aria-current={archive ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = true; parameters = false; photobooth = false; }}>Архив</button>{/if}
     <a class="button" href="/results" target="_blank" rel="noopener">Открыть экран</a>
   </nav>
 {/if}
@@ -169,10 +170,14 @@
   <main class="centered"><h1>Админка доступна администратору</h1><p>Вы вошли как оператор.</p><a class="button" href="/operator">Перейти к рабочему экрану</a></main>
 {:else if photobooth && adminWorkspace}
   <Photobooth />
-{:else if displaySettings && adminWorkspace}
-  <DisplaySettings onunauthorized={() => role = null} />
-{:else if guides && adminWorkspace}
-  <CaptureGuides onunauthorized={() => role = null} onBusy={uploadBusy} />
+{:else if parameters && adminWorkspace}
+  <main class="parameters-page">
+    <h1>Параметры</h1>
+    <EventPreparation onunauthorized={() => role = null} />
+    <CaptureSettingsForm onunauthorized={() => role = null} />
+    <DisplaySettings onunauthorized={() => role = null} />
+    <CaptureGuides onunauthorized={() => role = null} onBusy={uploadBusy} />
+  </main>
 {:else if archive}
   <Archive {role} onunauthorized={() => role = null} />
 {:else if !adminWorkspace}
@@ -189,7 +194,7 @@
             <button class="slot-open" onclick={() => openSlot(slot.id)} disabled={formDisabled} aria-pressed={selectedId === slot.id}>
               <img src={mediaUrl(slot.thumbnailId)} alt="" /><span><strong>{titleFrom(slot.description)}</strong><small>{slot.mode} · {models.find(model => model.id === slot.model)?.name}</small></span>
             </button>
-            <label class="visibility-toggle"><input type="checkbox" checked={slot.visible} disabled={formDisabled} onchange={event => toggleVisibility(slot, event.currentTarget.checked)} /><span>Отображать клиенту</span></label>
+            <label class="visibility-toggle"><input type="checkbox" checked={slot.visible} disabled={formDisabled} onchange={event => toggleVisibility(slot, event.currentTarget)} /><span>Отображать клиенту</span></label>
           </li>
         {/each}
       </ul>

@@ -12,7 +12,7 @@ const localOrigin = 'http://localhost:5513';
 const local = localOrigin + '/reelme.html';
 type TransferObservation = { path: string; blobId: number; bytes: number[]; credentials?: RequestCredentials };
 
-test('accepted JPEGs, same-Blob upload retry, lost finalize acknowledgement and two visitors before generation', async ({ page, app }) => {
+test('accepted JPEGs, transfer recovery, catalog return and a fresh repeat of the same story', async ({ page, app }) => {
   test.setTimeout(130_000);
   await mkdir(artifacts, { recursive: true });
   const admin = await apiRequest.newContext({ baseURL: app.origin, extraHTTPHeaders: { Origin: app.origin } });
@@ -120,7 +120,8 @@ test('accepted JPEGs, same-Blob upload retry, lost finalize acknowledgement and 
   const noReceipt = async () => {
     await expect(page.locator('.visitor-number')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Следующий посетитель' })).toHaveCount(0);
-    expect(await page.locator('main').innerText()).not.toContain('Ищи свое видео');
+    await expect(page.getByRole('button', { name: 'Еще фотосессия сюжета', exact: true })).toHaveCount(0);
+    expect(await page.locator('main').innerText()).not.toContain('Ищите видео под номером');
   };
   await page.goto(local + '#setup');
   await page.getByLabel('Ключ установки', { exact: true }).fill(app.installationKey);
@@ -149,7 +150,7 @@ test('accepted JPEGs, same-Blob upload retry, lost finalize acknowledgement and 
   await noReceipt();
   await page.screenshot({ path: `${artifacts}/transfer-finalize-lost-ack.png`, fullPage: true });
   await page.getByRole('button', { name: 'Повторить', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Ищи свое видео под номером 001 на промо экране', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Ищите видео под номером 001 на промоэкране', exact: true })).toBeVisible();
   expect(commands).toHaveLength(1); expect(finalizePosts).toHaveLength(1);
   await page.screenshot({ path: `${artifacts}/transfer-number-001.png`, fullPage: true });
   const firstPhotos = await app.photos(firstId);
@@ -190,7 +191,7 @@ test('accepted JPEGs, same-Blob upload retry, lost finalize acknowledgement and 
   await noReceipt();
   expect(commands).toHaveLength(5);
   releaseSecond();
-  await expect(page.getByRole('heading', { name: 'Ищи свое видео под номером 002 на промо экране', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Ищите видео под номером 002 на промоэкране', exact: true })).toBeVisible();
   const secondPhotos = await app.photos(secondId);
   expect(secondPhotos).toHaveLength(4);
   expect(secondPhotos[0]).toEqual(partial[0]);
@@ -209,6 +210,8 @@ test('accepted JPEGs, same-Blob upload retry, lost finalize acknowledgement and 
   await page.setViewportSize({ width: 375, height: 812 });
   await expect(page.locator('.visitor-number')).toHaveText('002');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const repeatScenario = page.getByRole('button', { name: 'Еще фотосессия сюжета', exact: true });
+  await expect(repeatScenario).toBeInViewport({ ratio: 1 });
   await page.screenshot({ path: `${artifacts}/transfer-number-mobile.png`, fullPage: true });
   const statusesBeforeRestart = await Promise.all([status(firstId), status(secondId)]);
   expect(statusesBeforeRestart.every(row => row.state === 'submit_pending')).toBe(true);
@@ -216,8 +219,23 @@ test('accepted JPEGs, same-Blob upload retry, lost finalize acknowledgement and 
   expect(await Promise.all([status(firstId), status(secondId)])).toEqual(statusesBeforeRestart);
   expect(await app.photos(firstId)).toEqual(firstPhotos); expect(await app.photos(secondId)).toEqual(secondPhotos);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Ищи свое видео под номером 002 на промо экране', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Ищите видео под номером 002 на промоэкране', exact: true })).toBeVisible();
   expect(commands).toHaveLength(5); expect(app.sessionCount()).toBe(2);
+  const savedStart = () => page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!) as { startRequestId: string; slotId: string; receipt: StartReceipt });
+  const previousStart = await savedStart();
+  await repeatScenario.click();
+  await expect(page.getByRole('button', { name: 'Начать съёмку' })).toBeVisible();
+  await expect(page.locator('.capture-progress')).toHaveText('Снято: 0 из 4');
+  await noReceipt();
+  const repeatedStart = await savedStart();
+  expect(repeatedStart.slotId).toBe(previousStart.slotId);
+  expect(repeatedStart.startRequestId).not.toBe(previousStart.startRequestId);
+  expect(repeatedStart.receipt.sessionId).not.toBe(secondId);
+  expect(repeatedStart.receipt).toMatchObject({ number: 3, date: second.date, story: second.story });
+  expect(await app.photos(repeatedStart.receipt.sessionId)).toEqual([]);
+  expect(await app.photos(secondId)).toEqual(secondPhotos);
+  expect((await status(secondId)).state).toBe('submit_pending');
+  expect(commands).toHaveLength(5); expect(app.sessionCount()).toBe(3);
   expect(await page.context().cookies()).toEqual([]);
   expect(transport.every(row => !row.cookie && row.authorization)).toBe(true);
   expect(pageErrors).toEqual([]); expect(unauthorizedOrigins).toEqual([]);

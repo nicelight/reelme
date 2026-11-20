@@ -1,13 +1,15 @@
 <script lang="ts">
   /** Shared story carousel. Capture mode may begin a session through its callback;
-   * previewOnly uses public media and permits browsing only, never selection/start. */
-  import { onDestroy } from 'svelte';
+   * Capture opens after the covers and selected player are ready. Unchanged cards
+   * stay mounted during a refresh; previewOnly uses native public media. */
+  import { onDestroy, tick, untrack } from 'svelte';
   import type { CatalogItem } from '../../../shared/capture';
   import ProtectedMedia from '../ProtectedMedia.svelte';
+  import { createStoryMedia, storyMediaPath, type StoryMedia } from './media';
   import { ribbonLight } from './motion';
-  import brandMark from './assets/reelme-mark.png';
+  import brandMark from './assets/reelme-mark.webp';
   import './assets/fonts.css';
-  let { items, activeId, installationKey, loading, error, busy, onbrowse, onbegin, onback, onrefresh, previewOnly = false }: {
+  let { items: incoming, activeId, installationKey, loading, error, busy, onbrowse, onbegin, onback, onrefresh, previewOnly = false }: {
     items: CatalogItem[]; activeId?: string; installationKey: string; loading: boolean; error: string; busy: boolean; previewOnly?: boolean;
     onbrowse: (item: CatalogItem) => void; onbegin: (item: CatalogItem) => void; onback: () => void; onrefresh: () => void;
   } = $props();
@@ -26,8 +28,18 @@
   let gallery = $state<HTMLElement>();
   let disposed = false;
   let identity = '';
-  onDestroy(() => { disposed = true; movement++; });
+  const media = createStoryMedia();
+  let installationItems = $state.raw<CatalogItem[]>([]);
+  let items = $derived(previewOnly ? incoming : installationItems);
+  let prepared = $state.raw<ReadonlyMap<string, StoryMedia>>(new Map());
+  const unavailable: StoryMedia = { url: '' };
+  let catalogPreparing = $state(false);
+  let loadingCovers = $state(false);
+  let staged: CatalogItem[] | undefined;
+  let stagedKey: string | undefined;
+  onDestroy(() => { disposed = true; movement++; media.dispose(); });
   const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  const source = (item: CatalogItem, id: string) => previewOnly ? undefined : prepared.get(storyMediaPath(item.id, id)) ?? unavailable;
   function relative(index: number, center = selected) {
     const count = items.length;
     if (!count) return 0;
@@ -35,6 +47,19 @@
     return distance > count / 2 ? distance - count : distance;
   }
   $effect(() => {
+    const next = incoming;
+    const key = installationKey;
+    const wanted = activeId;
+    if (!previewOnly) {
+      untrack(() => {
+        if (next !== staged || key !== stagedKey) void replaceCatalog(next, wanted, key);
+        else if (wanted && !catalogPreparing) {
+          const index = items.findIndex(item => item.id === wanted);
+          if (index >= 0 && index !== selected && index !== requested) void select(index, false);
+        }
+      });
+      return;
+    }
     const nextIdentity = items.map(item => item.id).join(',');
     const index = items.findIndex(item => item.id === activeId);
     if (nextIdentity !== identity) {
@@ -44,17 +69,44 @@
       void select(index, false);
     }
   });
+  async function retireExcept(next: ReadonlyMap<string, StoryMedia>, revision: number) {
+    prepared = next;
+    await tick();
+    if (!disposed && revision === movement) media.retain(next);
+  }
+  async function replaceCatalog(next: CatalogItem[], wanted: string | undefined, key: string) {
+    if (stagedKey !== undefined && stagedKey !== key) {
+      media.dispose(); installationItems = []; prepared = new Map();
+    }
+    staged = next; stagedKey = key;
+    const revision = ++movement;
+    const center = Math.max(0, next.findIndex(item => item.id === wanted));
+    catalogPreparing = next.length > 0;
+    loadingCovers = catalogPreparing;
+    const resources = await media.prepare(next, center, key, prepared, () => { loadingCovers = false; });
+    if (disposed || revision !== movement) return;
+    installationItems = next;
+    selected = center; requested = center;
+    wrapped = []; teleported = false; previousId = undefined; transitioning = false; catalogPreparing = false;
+    void retireExcept(resources, revision);
+  }
   function pauseVideos() { gallery?.querySelectorAll('video').forEach(video => video.pause()); }
   async function select(index: number, notify = true) {
-    if (!items.length || loading || busy) return;
+    if (!items.length || loading || busy || catalogPreparing) return;
     const next = (index + items.length) % items.length;
     requested = next;
     const revision = ++movement;
-    if (next === selected) { transitioning = false; wrapped = []; teleported = false; if (notify) onbrowse(items[next]!); return; }
+    if (next === selected && previewOnly) { transitioning = false; wrapped = []; teleported = false; if (notify) onbrowse(items[next]!); return; }
     pauseVideos(); transitioning = true;
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      wrapped = []; selected = next; previousId = undefined; transitioning = false; if (notify) onbrowse(items[next]!); return;
+    const nextMedia = previewOnly ? undefined : await media.prepare(items, next, installationKey, prepared);
+    if (disposed || revision !== movement) return;
+    if (next === selected || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      wrapped = []; teleported = false; selected = next; previousId = undefined; transitioning = false;
+      if (nextMedia) void retireExcept(nextMedia, revision);
+      if (notify) onbrowse(items[next]!);
+      return;
     }
+    if (nextMedia) prepared = new Map([...prepared, ...nextMedia]);
     wrapped = items.flatMap((item, i) => Math.abs(relative(i) - relative(i, next)) > 2 ? [item.id] : []);
     teleported = false;
     await wait(140);
@@ -65,8 +117,9 @@
     await wait(600);
     if (disposed || revision !== movement) return;
     wrapped = []; teleported = false; previousId = undefined; transitioning = false;
+    if (nextMedia) void retireExcept(nextMedia, revision);
   }
-  function choose(item: CatalogItem) { if (previewOnly || transitioning || busy || loading) return; pauseVideos(); onbegin(item); }
+  function choose(item: CatalogItem) { if (previewOnly || transitioning || busy || loading || catalogPreparing) return; pauseVideos(); onbegin(item); }
   function keyboard(event: KeyboardEvent) {
     if (loading || busy || event.target instanceof HTMLVideoElement || !(event.target instanceof HTMLElement)) return;
     if (event.target.closest('input,textarea,select,video')) return;
@@ -95,7 +148,12 @@
   </header>
   <main>
     <div class="story-intro"><h1>{previewOnly ? 'Ваша киноистория' : 'Выберите историю'}</h1><p>{previewOnly ? 'Посмотрите, каким может стать ваше фото' : 'Сделайте фото, а мы превратим его в эффектное видео'}</p></div>
-    {#if loading}<div class="catalog-state" role="status">Загружаем сюжеты…</div>
+    {#if (loading || catalogPreparing) && !items.length}
+      <div class="catalog-state" role="status">
+        {#if loadingCovers}
+          <label class="cover-progress">Подгрузка обложек<progress></progress></label>
+        {:else}Загружаем сюжеты…{/if}
+      </div>
     {:else if !items.length}<div class="catalog-state"><h2>Сюжеты скоро появятся</h2>{#if !previewOnly}<p>Сотрудник поможет вам начать.</p>{/if}<button onclick={onrefresh}>Обновить каталог</button></div>
     {:else}
       <section bind:this={gallery} class="gallery" aria-label="Галерея сюжетов" aria-roledescription="карусель">
@@ -109,16 +167,16 @@
               <div class="center-content" inert={offset !== 0} aria-hidden={offset !== 0}>
                 <div class="story-heading"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 13h23v15H5zM4 8l22-5 2 6-23 5zM10 7l5 5m4-7 5 5M11 18l8 4-8 4z"/></svg><div><h2>{title(item)}</h2></div></div>
                 <div class="story-preview" class:portrait={item.previewOrientation === 'portrait'}>
-                  {#if item.previewId && item.previewOrientation === 'portrait' && (offset === 0 || previousId === item.id)}<div class="preview-backdrop" aria-hidden="true" inert><ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} {installationKey} publicCatalog={previewOnly} /></div>{/if}
+                  {#if item.previewId && item.previewOrientation === 'portrait' && (offset === 0 || previousId === item.id)}<div class="preview-backdrop" aria-hidden="true" inert><ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} {installationKey} publicCatalog={previewOnly} prepared={source(item,item.thumbnailId)} /></div>{/if}
                   {#if offset === 0 || previousId === item.id}
-                    {#if item.previewId}<ProtectedMedia slotId={item.id} mediaId={item.previewId} {installationKey} publicCatalog={previewOnly} video active={offset === 0}/>
-                    {:else}<ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} {installationKey} publicCatalog={previewOnly} alt={title(item)}/>{/if}
+                    {#if item.previewId}<ProtectedMedia slotId={item.id} mediaId={item.previewId} {installationKey} publicCatalog={previewOnly} prepared={source(item,item.previewId)} video active={offset === 0}/>
+                    {:else}<ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} {installationKey} publicCatalog={previewOnly} prepared={source(item,item.thumbnailId)} alt={title(item)}/>{/if}
                   {/if}
                 </div>
                 <button class="choose" class:preview-only={previewOnly} onclick={() => choose(item)} disabled={previewOnly || busy || transitioning} title={previewOnly ? 'Выбор сюжета доступен в фотобудке' : undefined}>{previewOnly ? 'Выбор доступен в фотобудке' : 'Выбрать этот сюжет'}{#if !previewOnly} <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg>{/if}</button>
               </div>
               <div class="side-button" inert={offset === 0} aria-hidden={offset === 0}>
-                <div class="side-media">{#if visible}<ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} {installationKey} publicCatalog={previewOnly} alt={title(item)}/>{/if}</div>
+                <div class="side-media">{#if visible}<ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} {installationKey} publicCatalog={previewOnly} prepared={source(item,item.thumbnailId)} alt={title(item)}/>{/if}</div>
                 <a class="side-copy" href={`#slot=${encodeURIComponent(item.id)}`} onclick={(event) => { event.preventDefault(); void select(index); }} aria-label={`Выбрать сюжет: ${title(item)}`}><h2>{title(item)}</h2><span class="template"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 4 10 6-10 6z"/></svg>Шаблон</span></a>
               </div>
             </div>
@@ -137,6 +195,8 @@
   </main>
 </div>
 <style>
+  .cover-progress { display:grid; justify-items:center; gap:14px; }
+  .cover-progress progress { width:min(220px,70vw); height:8px; accent-color:#f5a4df; }
   button,a{-webkit-tap-highlight-color:transparent}button{font:inherit;color:inherit;cursor:pointer;min-height:0;padding:0}button:focus-visible,a:focus-visible{outline:3px solid #fff3dd;outline-offset:5px}main{max-width:none;padding:0;margin:0}.stage{--surface:#211421;--paper:#1e1420;--ink:#fff4fb;--muted:#d8bfd2;--line:#865b79;--accent:#f5a4df;color:#fff4fb;font-family:Manrope,sans-serif;line-height:1.4;color-scheme:dark}
   .stage{position:relative;isolation:isolate;overflow:hidden;width:100%;min-height:100svh;background:radial-gradient(ellipse 24% 18% at 81% 21%,#9d5a7a5c,transparent 80%),radial-gradient(ellipse 23% 14% at 7% 87%,#ce79ab66,transparent 75%),radial-gradient(ellipse 32% 17% at 74% 99%,#995d7555,transparent 80%),radial-gradient(ellipse 45% 25% at 50% 83%,#71394d55,transparent 78%),radial-gradient(ellipse at 63% 28%,#30203490,transparent 55%),#0d0a13;padding:1.5vw 3.3vw .4vw;container-type:inline-size}
   .light-lines{position:absolute;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none}.light-lines .ribbon{stroke-width:2.8;opacity:.85}.light-lines .glow{stroke-width:22;filter:url(#bloom);opacity:.7}.ribbon-hotspot{opacity:.85}

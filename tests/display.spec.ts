@@ -76,6 +76,8 @@ test('Chromium preparation header: stable preparation slots, hide/restore, hatch
     await page.screenshot({ path: join(artifacts, 'production-progress-header.png') });
     await page.goto(origin + '/operator');
     await expect(page.locator('[data-issue-session="3"]')).toContainText('Не удалось создать видео');
+    db.prepare("UPDATE generation_jobs SET error_code='RESULT_GONE' WHERE session_id=?").run(seeds[2].id);
+    await expect(page.locator('[data-issue-session="3"]')).toContainText('Готовое видео больше недоступно у сервиса генерации', { timeout: 6000 });
     const payload = await (await page.request.get(origin + '/api/display/today')).text();
     expect(payload).not.toMatch(/fixture.test|download_token/);
     expect(errors).toEqual([]);

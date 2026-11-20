@@ -136,7 +136,16 @@ export function openDatabase(dataDir: string) {
     page_duration_seconds INTEGER NOT NULL CHECK(page_duration_seconds IN (10,20,30,40,50,60))
   );
   INSERT OR IGNORE INTO display_settings(id,page_duration_seconds) VALUES(1,10);`);
-  db.pragma('user_version = 11');
+  db.exec(`CREATE TABLE IF NOT EXISTS capture_settings (
+    id INTEGER PRIMARY KEY CHECK(id=1), settings TEXT NOT NULL
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS capture_reports (
+    session_id TEXT NOT NULL REFERENCES capture_sessions(id) ON DELETE CASCADE,
+    report_id TEXT NOT NULL, case_id TEXT NOT NULL, received_at INTEGER NOT NULL, report TEXT NOT NULL,
+    PRIMARY KEY(session_id,report_id)
+  );
+  CREATE INDEX IF NOT EXISTS capture_reports_case ON capture_reports(case_id);`);
+  db.pragma('user_version = 13');
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

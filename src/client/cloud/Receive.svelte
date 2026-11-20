@@ -203,6 +203,10 @@
 </main>
 
 <style>
+  :global(body) { margin:0; }
+  .receive-page,.receive-page :global(*) { box-sizing:border-box; }
+  .receive-page { font-synthesis:none; -webkit-tap-highlight-color:transparent; }
+  .receive-player-error p { margin:0; }
   .receive-page { color-scheme:dark; min-height:100svh; display:grid; place-items:center; padding:max(40px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) max(40px,env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left)); --ease-out:cubic-bezier(0.23,1,0.32,1); font:400 16px/1.55 Manrope,sans-serif; color:#fff4fb; background:radial-gradient(ellipse at 6% 0%,#3d1b39 0%,transparent 40%),radial-gradient(ellipse at 97% 100%,#27112f 0%,transparent 43%),#0d0a13; }
   .receive-shell { width:min(100%,840px); }
   .receive-brand { margin:0 0 32px; text-align:center; color:#fff4fb; font-size:44px; font-weight:800; line-height:1.1; letter-spacing:-.035em; }
