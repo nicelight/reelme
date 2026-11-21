@@ -264,6 +264,62 @@ test('prompt text survives reference changes and stale fetches; real load failur
   await expect(page.getByRole('button', { name: 'Сохранить сюжет', exact: true })).toBeEnabled(); expect(errors).toEqual([]);
 });
 
+test('prompt history restores model-labelled versions across model changes and browser sessions', async ({ page, browser, app }) => {
+  const title = 'Танец на крыше';
+  const savedPrompt = 'Keep the original person.\n\nMove the camera around the rooftop slowly.';
+  const unsavedPrompt = 'Try a slow aerial shot instead.';
+  await login(page, app.origin, app.password);
+  await setup(page, 'P2V', h3, '1', '4');
+  await lock(page);
+  await upload(page, 'Изображение сюжета', app.image);
+  await page.getByLabel('Описание', { exact: true }).fill(title);
+  const prompt = page.locator('#prompt');
+  await prompt.fill(savedPrompt);
+  await save(page);
+  const history = page.getByLabel('История промптов', { exact: true });
+  const historyLabel = await history.locator('option').nth(1).textContent();
+  expect(historyLabel).toMatch(/^H3 Max Reference · Keep the original person/);
+
+  await prompt.fill(unsavedPrompt);
+  await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
+  await setup(page, 'P2V', kling, '1', '4');
+  await lock(page);
+  const template = await prompt.inputValue();
+  expect(template.length).toBeGreaterThan(0);
+  expect(template).not.toBe(savedPrompt);
+  await expect(history.locator('option')).toHaveCount(2);
+  await history.selectOption({ label: historyLabel! });
+  await expect(prompt).toHaveValue(savedPrompt);
+  await expect(page.getByText(/Промпт для H3 Max Reference/)).toBeVisible();
+  if (process.env.REELME_BROWSER_ARTIFACTS) {
+    await history.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: join(artifacts, 'prompt-history-desktop.png') });
+  }
+  const newPrompt = 'Use the frontal image to preserve the dancer.';
+  await prompt.fill(newPrompt);
+  await expect(page.getByText(/Промпт для H3 Max Reference/)).toHaveCount(0);
+  await save(page);
+  await app.restart();
+
+  const otherContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  try {
+    const other = await otherContext.newPage();
+    await login(other, app.origin, app.password);
+    await other.getByRole('button', { name: new RegExp(title) }).click();
+    const otherHistory = other.getByLabel('История промптов', { exact: true });
+    await expect(otherHistory.locator('option')).toHaveText([
+      'Выберите промпт', 'Kling 4 Reference · ' + newPrompt, historyLabel!,
+    ]);
+    await otherHistory.selectOption({ label: historyLabel! });
+    await expect(other.locator('#prompt')).toHaveValue(savedPrompt);
+    expect(await other.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    if (process.env.REELME_BROWSER_ARTIFACTS) {
+      await otherHistory.scrollIntoViewIfNeeded();
+      await other.screenshot({ path: join(artifacts, 'prompt-history-mobile.png') });
+    }
+  } finally { await otherContext.close(); }
+});
+
 test.describe('manual test flow', () => {
   test.use({ runGeneration: true });
   test('per-position JPEG cache separates people/group and real results survive resets, failures and simulation', async ({ page, app }) => {

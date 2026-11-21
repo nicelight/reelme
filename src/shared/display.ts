@@ -15,6 +15,7 @@ export interface DisplaySession {
 export interface ResultVideoDetails {
   number: number;
   model: string | null;
+  prompt: string | null;
   testVideo: boolean;
   costUsd?: number | null;
 }

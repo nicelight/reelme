@@ -1,5 +1,6 @@
-/** Module contract: Scenarios owns slot configuration and immutable media links.
+/** Module contract: Scenarios owns slot configuration, prompt history and immutable media links.
  * Server validates every save against the finite model rules and stored media;
+ * updates retain the previous prompt with its model and commit history with config.
  * only Access-verified admin can read/write editor data. Catalog exposes a
  * separate installation-only projection; no provider submission.
  * Source: docs/slot-setup/matrix.md. Editor defaults never rewrite raw legacy slots.
@@ -11,18 +12,45 @@ import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
-import { models, slotSchema, videoProblem, wanEditId, wanImageProblem, type SlotInput, type Slot } from '../../shared/scenarios.js';
+import { models, slotSchema, videoProblem, wanEditId, wanImageProblem, type SlotInput, type Slot, type SlotPromptVersion } from '../../shared/scenarios.js';
 import { editorSlot, readSlot } from './store.js';
 import { registerCatalog } from './catalog.js';
 import { registerTemplateVideos } from './templates.js';
 import { registerCaptureGuides } from './guides.js';
 import { HttpError } from '../errors.js';
 import { inspectMedia, readMedia, readTestPhoto, registerMedia } from './media.js';
+
+function recentPrompts(history: SlotPromptVersion[], ...configs: Pick<SlotInput, 'model' | 'prompt'>[]) {
+  const versions = configs.flatMap(({ model, prompt }) => {
+    const text = prompt?.trim();
+    return text ? [{ model, prompt: text }] : [];
+  });
+  const unique = new Map<string, SlotPromptVersion>();
+  for (const version of [...versions, ...history]) {
+    const key = JSON.stringify([version.model, version.prompt]);
+    if (!unique.has(key)) unique.set(key, version);
+  }
+  return [...unique.values()].slice(0, 10);
+}
+
 export function registerScenarios(app: FastifyInstance, db: DB, dataDir: string, access: Access, templateVideosDir?: string, warm?: (slot: SlotInput) => void, discard?: (url: string) => Promise<boolean>) {
   registerMedia(app, db, dataDir, access);
   registerCatalog(app, db, dataDir, access);
   registerTemplateVideos(app, db, dataDir, access, templateVideosDir);
   registerCaptureGuides(app, db, dataDir, access);
+  const selectPromptHistory = db.prepare<[string], string>('SELECT prompt_history FROM slots WHERE id=?').pluck();
+  const updateSlot = db.prepare('UPDATE slots SET config=?,prompt_history=? WHERE id=?');
+  const readPromptHistory = db.transaction((id: string) => {
+    const slot = readSlot(db, id);
+    return recentPrompts(JSON.parse(selectPromptHistory.get(id)!), slot);
+  });
+  const saveSlotUpdate = db.transaction((id: string, body: unknown, fps?: number) => {
+    const previous = readSlot(db, id);
+    const slot = validate(body, id, fps, previous);
+    const history = recentPrompts(JSON.parse(selectPromptHistory.get(id)!), slot, previous);
+    updateSlot.run(JSON.stringify(slot), JSON.stringify(history), id);
+    return slot;
+  });
   // Older imported videos only store dimensions and duration. Read frame rate from the immutable file.
   async function wanSourceFps(body: unknown) {
     const source = z.object({ model: z.literal(wanEditId), videoId: z.string().uuid() }).safeParse(body);
@@ -60,6 +88,7 @@ export function registerScenarios(app: FastifyInstance, db: DB, dataDir: string,
     return rows.map(row => editorSlot(db, { simulateGeneration: false, ...JSON.parse(row.config), id: row.id }));
   });
   app.get<{ Params: { id: string } }>('/api/admin/slots/:id', { preHandler: access.requireAdmin }, request => editorSlot(db, readSlot(db, request.params.id)));
+  app.get<{ Params: { id: string } }>('/api/admin/slots/:id/prompt-history', { preHandler: access.requireAdmin }, request => readPromptHistory(request.params.id));
   app.delete<{ Params: { id: string } }>('/api/admin/slots/:id', { preHandler: [access.requireAdmin, access.requireOrigin] }, async (request, reply) => {
     const row = db.prepare('SELECT config FROM slots WHERE id=?').pluck().get(request.params.id) as string | undefined;
     if (!row) throw new HttpError(404, 'NOT_FOUND', 'Сюжет не найден');
@@ -87,9 +116,7 @@ export function registerScenarios(app: FastifyInstance, db: DB, dataDir: string,
   });
   app.put<{ Params: { id: string } }>('/api/admin/slots/:id', { preHandler: [access.requireAdmin, access.requireOrigin] }, async request => {
     const fps = await wanSourceFps(request.body);
-    const previous = readSlot(db, request.params.id);
-    const slot = validate(request.body, request.params.id, fps, previous);
-    db.prepare('UPDATE slots SET config=? WHERE id=?').run(JSON.stringify(slot), request.params.id);
+    const slot = saveSlotUpdate.immediate(request.params.id, request.body, fps);
     if (!slot.simulateGeneration) warm?.(slot);
     return { ...slot, id: request.params.id };
   });

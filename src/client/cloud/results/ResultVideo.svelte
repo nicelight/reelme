@@ -57,6 +57,12 @@
             <div><dt>Модель</dt><dd>{details.testVideo ? 'Тестовое видео' : model}</dd></div>
             <div><dt>Цена генерации</dt><dd class="price" aria-live="polite">{details.testVideo ? 'Без списания' : details.costUsd === null ? 'Уточняется' : details.costUsd === undefined ? 'Нет данных' : formatUsd(details.costUsd)}</dd></div>
           </dl>
+          {#if details.prompt}
+            <dl class="prompt">
+              <dt>Промпт генерации</dt>
+              <dd>{details.prompt}</dd>
+            </dl>
+          {/if}
         </div>
       </article>
     {:else if error}
@@ -96,6 +102,8 @@
   dl { display:flex; align-items:baseline; gap:clamp(22px,5vw,72px); flex-wrap:wrap }
   dd { font-size:clamp(16px,2vw,23px); font-weight:600; overflow-wrap:anywhere }
   .price { color:#ffc6e5; font-variant-numeric:tabular-nums }
+  dl.prompt { display:block; flex:0 0 100%; min-width:0; border-top:1px solid #5b4155; padding-top:16px }
+  .prompt dd { max-width:72ch; font-size:1rem; font-weight:400; line-height:1.6; white-space:pre-wrap }
   .message { padding:32px 0; color:#ead6e6 }
   @media(max-width:600px) {
     .cinema { padding:24px 12px }

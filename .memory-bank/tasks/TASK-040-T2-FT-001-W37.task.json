@@ -1,0 +1,33 @@
+{
+  "id": "TASK-040-T2-FT-001-W37",
+  "title": "Восстанавливать сохранённый промпт сюжета после смены модели",
+  "status": "done",
+  "wave": "W37",
+  "tier": "T2",
+  "feature": "FT-001",
+  "reqs": ["REQ-002"],
+  "depends_on": ["TASK-017-T2-FT-001-W14"],
+  "source_artifacts": [".memory-bank/features/FT-001-scenarios.md#ft-001-ac-002"],
+  "normative_inputs": [".memory-bank/domains/core-domain.md#снимок-слота-и-фото", ".memory-bank/contracts/http-api.md"],
+  "constraints": ["В историю попадают только сохранённые промпты."],
+  "invariants": ["История хранится по ID сюжета. Версия сохраняет модель и текст."],
+  "verification_targets": ["Миграция SQLite, доступ администратора, смена модели и восстановление в другом профиле браузера."],
+  "touched_files": ["src/server/db.ts", "src/server/scenarios/index.ts", "src/shared/scenarios.ts", "src/client/cloud/App.svelte", "src/client/cloud/SlotEditor.svelte"],
+  "docs": ["docs/MANUAL.md", "docs/slot-setup/matrix.md"],
+  "evidence_required": ["Серверная проверка миграции и браузерное восстановление после перезапуска."],
+  "gates": [],
+  "verify": [
+    {
+      "result": "PASS",
+      "summary": "Сборка, проверка типов, 149 серверных и 10 браузерных тестов. Chromium восстановил прежний текст по названию модели в новом профиле после перезапуска приложения; набранный текст без сохранения отсутствовал в истории.",
+      "evidence": ["tests/api.test.ts", "tests/editor.spec.ts"]
+    },
+    {
+      "date": "2026-11-22",
+      "result": "PASS",
+      "summary": "При повторной проверке исправлена устаревшая подсказка модели после ручной замены текста. Два открытия копии прежней локальной базы сохранили значения всех старых столбцов в 21 таблице, включая 3 сюжета и 7 сессий. integrity_check и foreign_key_check прошли. Сборка, проверка типов, 149 тестов и 18 браузерных сценариев прошли. Тест каталога повторён в отдельной сети из-за занятого порта 5513.",
+      "evidence": ["tests/editor.spec.ts", "tests/capture.spec.ts", "tests/camera.spec.ts", "tests/transfer.spec.ts", "tests/results-screen.spec.ts", "tests/results-access.spec.ts", "tests/archive.spec.ts", "tests/receive.spec.ts", "tests/test-video.spec.ts"],
+      "limitations": ["Проверка камеры, fal и SMTP использовала локальные тестовые источники."]
+    }
+  ]
+}

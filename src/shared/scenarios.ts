@@ -128,6 +128,7 @@ export function normalizeSlotForEditor<T extends SlotInput>(slot: T, orientation
   return { ...defaultSlotSetup(slot.model, slot.mode, orientation), ...slot } as T & ConfiguredSlotInput;
 }
 export type Slot = SlotInput & { id: string };
+export interface SlotPromptVersion { model: string; prompt: string }
 export function isTestVideo(input: { simulateGeneration?: boolean; simulationOutput?: string }) {
   return input.simulateGeneration === true && input.simulationOutput === 'video';
 }

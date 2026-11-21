@@ -26,7 +26,7 @@ test('operator display: six stages, explicit errors, stable order, private media
   const view = async () => (await get()).json<TodayDisplay>();
   const card = (await view()).sessions[0].card!;
   const detailsUrl = `/api/display/${first.id}/video-details`;
-  assert.deepEqual((await get(detailsUrl)).json(), {number: 1, model: 'minimax/h3-max/recast', testVideo: false, costUsd: null});
+  assert.deepEqual((await get(detailsUrl)).json(), {number: 1, model: 'minimax/h3-max/recast', prompt: null, testVideo: false, costUsd: null});
   for (const url of ['/api/display/today', detailsUrl, card.photoUrl, card.frameUrl, card.qrUrl, card.videoUrl]) {
     assert.equal((await f.app.inject(url)).statusCode, 401, url);
     assert.equal((await f.app.inject({ url, headers: { cookie: admin } })).statusCode, 200, url);

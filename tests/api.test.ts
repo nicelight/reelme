@@ -70,6 +70,51 @@ test('capture loader imports current manifest assets and permits localhost modul
   assert.match(String(preflight.headers['access-control-allow-headers']), /Authorization/i);
 });
 
+test('slot prompt history migrates the saved prompt, retains its model and stays private to each slot', async t => {
+  const f = await fixture(); t.after(() => f.close());
+  const cookie = await f.login(); const operator = await f.login('operator');
+  const headers = { cookie, origin: f.config.origin };
+  const thumbnailId = (await f.upload(cookie, await imageBytes())).id;
+  const h3 = 'minimax/h3-max/reference-to-video';
+  const vidu = 'fal-ai/vidu/q4/reference-to-video';
+  const common = { description: 'История промптов', thumbnailId, visible: true, mode: 'P2V', referenceIds: [], duration: 5 };
+  const prompt = 'Preserve the guest.\nKeep the camera steady.';
+  const original = { ...defaultSlotSetup(h3, 'P2V'), ...common, model: h3, resolution: '768P', promptExpansionMode: 'disabled', prompt };
+  const replacement = { ...defaultSlotSetup(vidu, 'P2V'), ...common, model: vidu, resolution: '1080p', prompt };
+  const id = randomUUID();
+  const db = openDatabase(f.config.dataDir);
+  try {
+    db.exec('ALTER TABLE slots DROP COLUMN prompt_history');
+    db.prepare('INSERT INTO slots(id,config) VALUES (?,?)').run(id, JSON.stringify(original));
+  } finally { db.close(); }
+  await f.restart();
+
+  const url = `/api/admin/slots/${id}`;
+  const get = (slotUrl = url) => f.app.inject({ url: slotUrl + '/prompt-history', headers });
+  const save = (payload: object) => f.app.inject({ method: 'PUT', url, headers, payload });
+  assert.deepEqual((await get()).json(), [{ model: h3, prompt }]);
+  assert.equal((await f.app.inject(url + '/prompt-history')).statusCode, 401);
+  assert.equal((await f.app.inject({ url: url + '/prompt-history', headers: { cookie: operator } })).statusCode, 403);
+  const other = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers, payload: { ...replacement, prompt: 'Another story' } });
+  assert.equal(other.statusCode, 201, other.body);
+  assert.deepEqual((await get(`/api/admin/slots/${other.json().id}`)).json(), [{ model: vidu, prompt: 'Another story' }]);
+
+  for (let i = 0; i < 2; i++) {
+    const result = await save(replacement);
+    assert.equal(result.statusCode, 200, result.body);
+  }
+  assert.equal((await save({ ...replacement, duration: -1, prompt: 'Rejected draft' })).statusCode, 400);
+  await f.restart();
+  assert.deepEqual((await get()).json(), [{ model: vidu, prompt }, { model: h3, prompt }]);
+  for (let i = 0; i < 10; i++) {
+    const result = await save({ ...replacement, prompt: `Version ${i}` });
+    assert.equal(result.statusCode, 200, result.body);
+  }
+  assert.deepEqual((await get()).json(), Array.from({ length: 10 }, (_, i) => ({ model: vidu, prompt: `Version ${9 - i}` })));
+  assert.equal((await f.app.inject({ method: 'DELETE', url, headers })).statusCode, 204);
+  assert.equal((await get()).statusCode, 404);
+});
+
 // Expected public model settings are explicit: a changed production registry must
 // not silently change both the input and its expected result in these tests.
 const cases: Array<[string, 'V2V' | 'P2V', string | undefined, number]> = [

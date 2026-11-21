@@ -38,10 +38,13 @@ test('admin keeps editor access beside a reloadable results popup; operator sees
   expect(upload.status()).toBe(201);
   const thumbnailId = (await upload.json()).id;
   const seed = await preparedSession(app.dataDir, await readFile(app.video));
+  const prompt = 'Keep the person from Image 1 in focus.\n\nHold the last frame. ' + 'A'.repeat(100);
   const db = openDatabase(app.dataDir);
   try {
     const date = eventDate(Date.now());
-    db.prepare('UPDATE capture_sessions SET event_date=? WHERE id=?').run(date, seed.id);
+    db.prepare(`UPDATE capture_sessions SET event_date=?,
+      snapshot=json_set(snapshot,'$.generation.model','fal-ai/kling-video/o1/video-to-video/edit','$.generation.prompt',?)
+      WHERE id=?`).run(date, prompt, seed.id);
     db.prepare('UPDATE slots SET config=? WHERE id=(SELECT slot_id FROM capture_sessions WHERE id=?)')
       .run(JSON.stringify({ ...blankSlot(), description: 'Готовая история для проверки', thumbnailId, visible: false }), seed.id);
     await publishReady(db, app.dataDir, seed.id, app.origin);
@@ -103,7 +106,10 @@ test('admin keeps editor access beside a reloadable results popup; operator sees
     await expect(video).toHaveURL(`${app.origin}/results?video=${seed.id}`);
     watch(video);
     await expect(video.getByRole('heading', { name: /Генерация.*001/ })).toBeVisible();
-    await expect(video.getByText('MiniMax H3 Max Recast', { exact: true })).toBeVisible();
+    await expect(video.getByText('Kling O1 Edit Pro', { exact: true })).toBeVisible();
+    const promptText = video.locator('dl').filter({ hasText: 'Промпт генерации' }).locator('dd');
+    await expect(promptText).toBeVisible();
+    await expect(promptText).toHaveJSProperty('textContent', prompt);
     await expect(video.getByText('Уточняется', { exact: true })).toBeVisible();
     const player = video.locator('video');
     await player.evaluate(async node => { node.muted = true; await node.play(); });
@@ -116,6 +122,7 @@ test('admin keeps editor access beside a reloadable results popup; operator sees
     await video.setViewportSize({ width: 390, height: 844 });
     await video.reload();
     await expect(video.getByText('4,53 $', { exact: true })).toBeVisible();
+    await expect(promptText).toHaveJSProperty('textContent', prompt);
     expect(await video.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await video.screenshot({ path: join(artifacts, 'player-mobile.png') });
     await video.close();

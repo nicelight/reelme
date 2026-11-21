@@ -2,10 +2,11 @@
   /** Module contract: sequential setup, material selections, prompt text and the
    * in-memory per-slot test-photo cache. Shared matrix owns valid choices/budgets.
    * Lock is local editor state; only explicit save persists configuration. Prompt
-   * requests cannot overwrite newer setup or authored text. Test status/result
-   * remains mounted across resets. Source: docs/slot-setup/matrix.md. */
+   * requests cannot overwrite newer setup or authored text. The history contains
+   * saved versions from this slot. Test status/result remains mounted across
+   * resets. Source: docs/slot-setup/matrix.md. */
   import { onMount, onDestroy } from 'svelte';
-  import { models, recastId, wanEditId, slotSchema, MAX_VIDEO_UPLOAD_MB, MAX_VIDEO_UPLOAD_BYTES, videoUploadLimitMessage, type Media, type Mode, type SlotInput } from '../../shared/scenarios';
+  import { models, recastId, wanEditId, slotSchema, MAX_VIDEO_UPLOAD_MB, MAX_VIDEO_UPLOAD_BYTES, videoUploadLimitMessage, type Media, type Mode, type SlotInput, type SlotPromptVersion } from '../../shared/scenarios';
   import { slotSetupMatrix, selectSlotPrompt } from '../../shared/slot-prompt-selection';
   import { allocatePhotoBudget, buildPosePlan, defaultSlotSetup, getSlotSetup, type Orientation } from '../../shared/slot-setup';
   import type { Pose } from '../../shared/capture';
@@ -15,8 +16,8 @@
   import SlotTest from './SlotTest.svelte';
   import { api, mediaUrl } from './api';
 
-  let { draft = $bindable(), videoMedia = $bindable(), canSave = $bindable(false), slotId, draftId, cacheKey, photoCaches, disabled, dirty, sourceProblem, onError, onBusy }: {
-    draft: SlotInput; videoMedia?: Media; canSave?: boolean; slotId: string | null; draftId: string;
+  let { draft = $bindable(), videoMedia = $bindable(), canSave = $bindable(false), slotId, slotSaveVersion, draftId, cacheKey, photoCaches, disabled, dirty, sourceProblem, onError, onBusy }: {
+    draft: SlotInput; videoMedia?: Media; canSave?: boolean; slotId: string | null; slotSaveVersion: number; draftId: string;
     cacheKey: string; photoCaches: Map<string, Record<string, string>>; disabled: boolean; dirty: boolean;
     sourceProblem?: string; onError: (value: unknown) => void; onBusy: (value: boolean) => void;
   } = $props();
@@ -36,6 +37,9 @@
   const testsExpanded = $derived(testsOpen || !!draft.simulateGeneration);
   let promptLoading = $state(false);
   let promptError = $state('');
+  let promptHistory = $state<SlotPromptVersion[]>([]);
+  let historyError = $state(false);
+  let promptSourceModel = $state<string>();
   // A saved prompt is protected until comparison with the matching file completes.
   // svelte-ignore state_referenced_locally
   let manualPrompt = $state(!!slotId);
@@ -73,6 +77,17 @@
   const completeTestSet = $derived(plan.length > 0 && plan.every(pose => !!photoCache[positionKey(pose)]));
   $effect(() => { photoCaches.set(cacheKey, { ...photoCache }); });
   $effect(() => { canSave = locked && !promptLoading && !promptError; });
+  $effect(() => {
+    // Refresh from the server after successful saves.
+    void slotSaveVersion;
+    if (!slotId) return;
+    const request = new AbortController();
+    historyError = false;
+    api<SlotPromptVersion[]>(`/admin/slots/${encodeURIComponent(slotId)}/prompt-history`, { signal: request.signal })
+      .then(versions => { if (!request.signal.aborted) promptHistory = versions; })
+      .catch(() => { if (!request.signal.aborted) historyError = true; });
+    return () => request.abort();
+  });
 
   function cancelPrompt() { requestRevision++; controller?.abort(); controller = undefined; promptLoading = false; }
   function resetLower() {
@@ -80,7 +95,7 @@
     cancelPrompt(); draft.referenceIds = []; draft.demoId = undefined; draft.prompt = '';
     draft.simulateGeneration = false; draft.simulationOutput = undefined; draft.testPhotoIds = undefined; draft.testPhotoId = undefined;
     // The fixed V2V source survives unlocking. Its compatibility is checked on save.
-    manualPrompt = false; promptError = ''; referenceNotice = ''; setupError = '';
+    manualPrompt = false; promptError = ''; promptSourceModel = undefined; referenceNotice = ''; setupError = '';
   }
   function unlock() { locked = false; testsOpen = false; resetLower(); }
   function changeMode(mode: Mode) {
@@ -191,7 +206,7 @@
     cancelPrompt();
     const revision = requestRevision;
     const request = controller = new AbortController();
-    if (!compareSaved) { manualPrompt = false; promptLoading = true; promptError = ''; referenceNotice = ''; }
+    if (!compareSaved) { manualPrompt = false; promptLoading = true; promptError = ''; promptSourceModel = undefined; referenceNotice = ''; }
     try {
       const { url } = selectSlotPrompt({ model: draft.model, mode: draft.mode, participants: draft.participants!, photosPerParticipant: draft.photosPerParticipant!, additionalReferenceCount: draft.referenceIds.length });
       const response = await fetch(url, { signal: request.signal, cache: 'no-cache' });
@@ -205,7 +220,24 @@
       if (!compareSaved) promptError = value instanceof Error ? value.message : 'Не удалось загрузить промпт.';
     } finally { if (revision === requestRevision) promptLoading = false; }
   }
-  function editPrompt(text: string) { cancelPrompt(); draft.prompt = text; manualPrompt = true; promptError = ''; }
+  function editPrompt(text: string, sourceModel?: string) {
+    cancelPrompt();
+    draft.prompt = text;
+    manualPrompt = true;
+    promptError = '';
+    promptSourceModel = sourceModel;
+  }
+  function modelName(id: string) { return models.find(model => model.id === id)?.name ?? id; }
+  function promptPreview(text: string) {
+    const line = text.trim().replace(/\s+/g, ' ');
+    return line.length > 56 ? line.slice(0, 56) + '…' : line;
+  }
+  function choosePromptVersion(select: HTMLSelectElement) {
+    const version = promptHistory[select.selectedIndex - 1];
+    if (!version) return;
+    editPrompt(version.prompt, version.model);
+    select.selectedIndex = 0;
+  }
   function changeReferences(ids: string[]) {
     draft.referenceIds = ids;
     if (manualPrompt) { cancelPrompt(); referenceNotice = 'Референсы изменены. Проверьте ссылки на изображения в вашем промпте; текст сохранён.'; }
@@ -322,6 +354,21 @@
     {#if promptError}<p class="error" role="alert">{promptError}</p>{/if}
     {#if referenceNotice}<p class="hint reference-notice" role="status">{referenceNotice}</p>{/if}
     <button type="button" class="quiet small" onclick={() => loadPrompt()} disabled={promptLoading}>Восстановить готовый промпт</button>
+    {#if promptHistory.length}
+      <label for="prompt-history">История промптов</label>
+      <select id="prompt-history" onchange={event => choosePromptVersion(event.currentTarget)}>
+        <option value="">Выберите промпт</option>
+        {#each promptHistory as version, index}
+          <option value={index}>{modelName(version.model)} · {promptPreview(version.prompt)}</option>
+        {/each}
+      </select>
+      {#if promptSourceModel && promptSourceModel !== draft.model}
+        <p class="hint" role="status">Промпт для {modelName(promptSourceModel)}. Проверьте формулировки и ссылки на изображения для текущей модели.</p>
+      {/if}
+    {/if}
+    {#if historyError}
+      <p class="hint" role="status">Не удалось загрузить историю промптов. Откройте сюжет заново.</p>
+    {/if}
   {/if}
 </section>
 <section class="form-section" aria-label="Тестирование сюжета">

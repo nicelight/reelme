@@ -1,6 +1,7 @@
 /** Module contract: idempotent SQLite schema for Access, Scenarios and capture
  * sessions/photos and generation state. Metadata stays in SQLite; media bytes stay outside the build. Repeated
- * setup/start preserves rows. Session number and start-request uniqueness are DB
+ * setup/start preserves rows. Slot prompt history is stored separately from its
+ * generation configuration. Session number and start-request uniqueness are DB
  * invariants. One accepted photo belongs to one session/pose. Generation records
  * preserve confirmed fal identity and verified files. Nullable submit/ready times
  * preserve unknown history; migrations never invent historical timestamps. Session issuance owns scoped
@@ -40,7 +41,9 @@ export function openDatabase(dataDir: string) {
     CREATE TABLE IF NOT EXISTS fal_template_pending (
       media_id TEXT PRIMARY KEY REFERENCES slot_media(id) ON DELETE CASCADE
     );
-    CREATE TABLE IF NOT EXISTS slots (id TEXT PRIMARY KEY, config TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS slots (
+      id TEXT PRIMARY KEY, config TEXT NOT NULL, prompt_history TEXT NOT NULL DEFAULT '[]'
+    );
     CREATE TABLE IF NOT EXISTS events (
       date TEXT PRIMARY KEY, next_number INTEGER NOT NULL CHECK(next_number >= 1)
     );
@@ -86,6 +89,11 @@ export function openDatabase(dataDir: string) {
   if (!db.prepare("SELECT 1 FROM pragma_table_info('slots') WHERE name='deleted'").get()) {
     db.exec('ALTER TABLE slots ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0');
   }
+  db.transaction(() => {
+    if (!db.prepare("SELECT 1 FROM pragma_table_info('slots') WHERE name='prompt_history'").get()) {
+      db.exec("ALTER TABLE slots ADD COLUMN prompt_history TEXT NOT NULL DEFAULT '[]'");
+    }
+  }).immediate();
   const photosSql = (db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='capture_photos'").get() as { sql: string }).sql;
   if (/BETWEEN\s+0\s+AND\s+3/i.test(photosSql)) {
     // Keep the original table name in dependent FK definitions. Renaming the old

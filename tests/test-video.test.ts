@@ -68,10 +68,23 @@ test('test-video snapshots survive edits and every worker restart, deliver both 
   const h = await setup(t); const { f, db } = h;
   const slot = await h.save({ ...h.input, simulateGeneration: false, simulationOutput: undefined });
   const real = await h.start(slot.id);
+  await h.save({ ...h.input, prompt: 'Edited after capture', simulateGeneration: false, simulationOutput: undefined }, slot.id);
   const bytes = await readFile(join(h.directory, 'landscape.mp4'));
-  let worker = h.worker({ client: { submit: async () => ({ request_id: 'real-fixture' }), status: async () => ({ status: 'COMPLETED' }), result: async () => ({ video: { url: 'https://fixture.test/real.mp4' } }) }, download: async () => new Response(bytes) });
+  let submittedPrompt: unknown;
+  let worker = h.worker({ client: { submit: async (_model, input) => {
+    submittedPrompt = input.prompt;
+    return { request_id: 'real-fixture' };
+  }, status: async () => ({ status: 'COMPLETED' }), result: async () => ({ video: { url: 'https://fixture.test/real.mp4' } }) }, download: async () => new Response(bytes) });
   await worker.runOnce(); await worker.runOnce(); await worker.runOnce(); await worker.stop();
   assert.equal(h.state(real), 'ready');
+  assert.equal(submittedPrompt, h.input.prompt);
+  const details = (id: string) => f.app.inject({ url: `/api/display/${id}/video-details`, headers: { cookie: h.operator } });
+  const realDetails = await details(real);
+  assert.equal(realDetails.statusCode, 200);
+  assert.equal(realDetails.json().prompt, submittedPrompt);
+  const guestDetails = await f.app.inject(`/api/receive/${h.delivery(real).receive_token}`);
+  assert.equal(guestDetails.statusCode, 200);
+  assert.ok(!guestDetails.body.includes(h.input.prompt!));
   const ids: string[] = [];
   for (const orientation of ['landscape', 'portrait'] as const) {
     await h.save({ ...h.input, orientation, aspectRatio: orientation === 'portrait' ? '9:16' : '16:9' }, slot.id);
@@ -93,6 +106,7 @@ test('test-video snapshots survive edits and every worker restart, deliver both 
     assert.deepEqual((await f.app.inject(`/download/${delivery.download_token}`)).rawPayload, await readFile(join(h.directory, `${orientation}.mp4`)));
     assert.deepEqual((await f.app.inject(`/api/receive/${delivery.receive_token}/photo`)).rawPayload, h.jpeg);
     assert.equal((await f.app.inject({ url: `/api/display/${id}/qr`, headers: { cookie: h.operator } })).statusCode, 200);
+    assert.equal((await details(id)).json().prompt, null);
     const display = (await f.app.inject({ url: '/api/display/today', headers: { cookie: h.operator } })).json<TodayDisplay>().sessions.find(row => row.id === id)!;
     assert.equal(display.stage, 4); assert.equal(display.simulation?.status, 'passed'); assert.ok(display.card);
     assert.equal((await f.app.inject({ url: `/api/admin/slots/${slot.id}/latest-video`, headers: h.admin })).json().video.sessionId, real);

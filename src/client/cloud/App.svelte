@@ -52,6 +52,7 @@
   let selectedId = $state<string | null>(null);
   let draftId = $state<string>(crypto.randomUUID());
   let slotSelection = $state(0);
+  let slotSaveVersion = $state(0);
   let draft = $state<SlotInput>(blankSlot());
   let baseline = $state(JSON.stringify(blankSlot()));
   let videoMedia = $state<Media | undefined>();
@@ -125,6 +126,7 @@
       const saved = await api<Slot>(selectedId ? `/admin/slots/${selectedId}` : '/admin/slots', { method: selectedId ? 'PUT' : 'POST', body: JSON.stringify(selectedId ? result.data : { ...result.data, id: draftId }) });
       const { id, ...config } = saved;
       selectedId = id; draft = config; baseline = JSON.stringify(config);
+      slotSaveVersion++;
       await loadSlots(); notice = 'Сюжет сохранён.';
     } catch (value) { fail(value); }
     finally { busy = false; saving = false; }
@@ -247,7 +249,7 @@
           </section>
 
           {#key slotSelection}
-            <SlotEditor bind:draft bind:videoMedia bind:canSave={editorCanSave} slotId={selectedId} {draftId} cacheKey={selectedId ?? `draft:${slotSelection}`} {photoCaches} disabled={formDisabled} {dirty} {sourceProblem} onError={fail} onBusy={uploadBusy} />
+            <SlotEditor bind:draft bind:videoMedia bind:canSave={editorCanSave} slotId={selectedId} {slotSaveVersion} {draftId} cacheKey={selectedId ?? `draft:${slotSelection}`} {photoCaches} disabled={formDisabled} {dirty} {sourceProblem} onError={fail} onBusy={uploadBusy} />
           {/key}
         </fieldset>
         <div class="editor-footer">

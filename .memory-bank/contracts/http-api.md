@@ -21,6 +21,7 @@ status: active
 | GET /catalog?page=1, /catalog/:id | Установка | Видимые сюжеты, по 12 на страницу; описание, миниатюра, пример видео |
 | GET /catalog/:id/media/:mediaId | Установка | Только миниатюра или пример видео текущего видимого сюжета; байты с Range |
 | GET /admin/slots, /admin/slots/:id | Администратор | Список и полная конфигурация слота |
+| GET /admin/slots/:id/prompt-history | Администратор | До 10 последних уникальных записей `{model, prompt}` сохранённого слота, новые первыми |
 | POST /admin/slot-media | Администратор | Multipart `file` → метаданные с `id` материала |
 | GET /admin/slot-media/:id, /admin/slot-media/:id/info | Администратор | Байты (с Range) / метаданные материала. Для изображений браузер проверяет приватный кеш по ETag после авторизации |
 | POST /admin/slots, PUT /admin/slots/:id | Администратор | Сохранение конфигурации; POST допускает UUID `id` черновика |
@@ -200,6 +201,7 @@ StartReceipt и CaptureStatus содержат `story: {slotId, description, thu
 | POST /display/:id/load-failure | Оператор/администратор + разрешённый Origin | `{attempts: 4, reason: "timeout"\|"image"}` → 204; предупреждение `DISPLAY_CARD_DEPRECATED` для видимого ready-номера текущего дня, без изменения сессии |
 | GET /display/:id/{photo,frame,qr} | Оператор/администратор | Медиа видимой готовой карточки текущего дня |
 | GET /display/:id/video | Оператор/администратор | Исходный MP4 сегодняшней готовой истории, inline с поддержкой Range. Доступен для активного снимка после истечения срока по email. Ручное скрытие закрывает этот маршрут |
+| GET /display/:id/video-details | Оператор/администратор | В том же окне доступа, что и видео. `{number, model, prompt, testVideo, costUsd?}`. Промпт из snapshot сессии либо `null` для видео без промпта и эмуляций |
 | POST /display/:id/hide | Оператор/администратор и разрешённый Origin | Идемпотентное скрытие готовой истории сегодняшнего мероприятия из показа, 204 |
 | GET /admin/display-settings | Администратор | `{pageDurationSeconds}` |
 | PUT /admin/display-settings | Администратор + разрешённый Origin | Строго `{pageDurationSeconds: 10\|20\|30\|40\|50\|60}` → сохранённое значение |

@@ -2,7 +2,8 @@
  * Serves the QR saved before ready; older results without a file render it on demand.
  * Polling/media reads never confirm email or open a receive form. Authenticated
  * card-load failures produce one warning per request, without changing session state.
- * The player caption uses the same access window as its video.
+ * The player caption uses the same access window as its video and reads generation
+ * parameters from that session's snapshot.
  * Manual hiding belongs to the display alone and survives reloads on every screen. */
 import { createHash } from 'node:crypto';
 import QRCode from 'qrcode';
@@ -15,6 +16,7 @@ import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
 import { HttpError } from '../errors.js';
 import { eventKey } from '../../shared/events.js';
+import type { SlotSnapshot } from '../../shared/capture.js';
 import { eventDate } from './index.js';
 import { readyCard } from './receive.js';
 import { matchesPrivateCache, sendMedia } from '../scenarios/media.js';
@@ -92,11 +94,12 @@ export function registerDisplay(app: FastifyInstance, db: DB, dataDir: string, o
       number: number; snapshot: string; request_id: string | null; cost_usd: number | null; submittedAt: number;
     } | undefined;
     if (!row) throw new HttpError(404, 'NOT_FOUND', 'Результат недоступен на общем экране');
-    const generation = JSON.parse(row.snapshot).generation ?? {};
+    const generation: Partial<SlotSnapshot['generation']> = JSON.parse(row.snapshot).generation ?? {};
     const billable = isBillableRequest(row.request_id, generation.simulateGeneration);
     if (billable && row.cost_usd === null) costs.refresh([{ id, requestId: row.request_id!, submittedAt: row.submittedAt }]);
     return { number: row.number, model: generation.model ?? null, testVideo: isTestVideo(generation),
-      costUsd: billable ? row.cost_usd : undefined };
+      costUsd: billable ? row.cost_usd : undefined,
+      prompt: generation.simulateGeneration ? null : (generation.prompt?.trim() || null) };
   });
   app.get<{ Params: { id: string } }>('/api/display/:id/video', { preHandler: account }, (request, reply) => {
     // A card already on the active page is still actionable after its email deadline.
