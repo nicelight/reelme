@@ -217,7 +217,20 @@ test('page silence is a recoverable capture issue only for new installation sess
   assert.equal((await f.app.inject({url:'/api/statuses/' + sessionId,headers:{cookie}})).json().entries.at(-1).event,'page_reconnected');
   f.advance(59_999);
   assert.equal((await issues()).issues, 0);
+  const transfer = () => f.app.inject({ method: 'POST', url: path(sessionId) + '/transfer', headers: installation });
+  const detail = async () => (await f.app.inject({url:'/api/statuses/' + sessionId, headers:{cookie}})).json();
+  assert.deepEqual((await transfer()).json(), await status(f, sessionId));
+  await f.restart();
+  f.advance(60_001);
+  assert.deepEqual((await issues()).sessions, []);
+  assert.equal((await beat(sessionId)).statusCode, 204);
+  assert.equal(seen(sessionId), null);
+  assert.equal((await detail()).session.label, 'Принято 0 из 1 фото');
   assert.equal((await upload(f, sessionId, 0, await jpeg('blue'))).statusCode, 200);
+  assert.equal((await transfer()).json().complete, true);
+  f.advance(60_001);
+  assert.equal((await issues()).issues, 0);
+  assert.equal((await detail()).session.label, 'Принято 1 из 1 фото');
   assert.equal((await finalize(f, sessionId)).json().state, 'submit_pending');
   const atHandoff = seen(sessionId);
   f.advance(60_001);
@@ -225,4 +238,20 @@ test('page silence is a recoverable capture issue only for new installation sess
   assert.equal(seen(sessionId), atHandoff);
   assert.deepEqual((await issues()).sessions, []);
   assert.equal((await status(f, sessionId)).state, 'submit_pending');
+});
+
+test('existing capture pages and sessions with stored photos stop being monitored on transfer', async t => {
+  const f = await fixture(); t.after(() => f.close());
+  const { cookie, ids } = await setup(f);
+  const { sessionId } = await start(f, ids[1]);
+  assert.equal((await upload(f, sessionId, 0, await jpeg('red'))).statusCode, 200);
+  const db = openDatabase(f.config.dataDir); t.after(() => db.close());
+  assert.equal(db.prepare('SELECT page_seen_at FROM capture_sessions WHERE id=?').pluck().get(sessionId), null);
+  db.prepare('UPDATE capture_sessions SET page_seen_at=created_at WHERE id=?').run(sessionId);
+  db.pragma('user_version = 20');
+  await f.restart();
+  f.advance(60_001);
+  const monitor = (await f.app.inject({url:'/api/statuses', headers:{cookie}})).json();
+  assert.equal(monitor.issues, 0);
+  assert.equal(monitor.sessions[0].label, 'Принято 1 из 4 фото');
 });

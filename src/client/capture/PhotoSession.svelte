@@ -3,7 +3,7 @@
    * JPEG upload and finalize. Retries retain original Blobs/positions and never
    * call the camera again. Server status is authoritative, including after reload
    * or a lost acknowledgement. Only finalized=true permits the number and release.
-   * Heartbeats belong to the mounted capture page, including camera waits and uploads.
+   * Heartbeats run during shooting, including camera waits, until transfer starts.
    * Request deadlines include response bodies; timeout preserves manual recovery.
    * Finish records only a session marker, never JPEG bytes. Reload with missing
    * local Blobs stops explicitly; accepted server positions are never recaptured.
@@ -29,9 +29,8 @@
     return () => clearTimeout(timer);
   });
   const path = () => `/api/capture/sessions/${encodeURIComponent(receipt.sessionId)}`;
-  const capturing = $derived((status?.state ?? receipt.state) === 'capturing');
   $effect(() => {
-    if (!capturing) return;
+    if (phase !== 'capture') return;
     const controller = new AbortController();
     const url = path() + '/heartbeat', key = installationKey;
     let pending = false;
@@ -40,7 +39,7 @@
       pending = true;
       try {
         await request(url, key, { method: 'POST', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]) });
-      } catch { /* The next heartbeat retries independently of camera and upload operations. */ }
+      } catch { /* The next heartbeat retries independently of the camera. */ }
       finally { pending = false; }
     }
     void heartbeat();
@@ -63,9 +62,12 @@
     busy = true; error = ''; phase = 'loading';
     try {
       if (photos.length) sessionStorage.setItem(transferStorage, receipt.sessionId);
-      status = await readResponse(await request(path(), installationKey, { signal: AbortSignal.any([lifecycle.signal, AbortSignal.timeout(15_000)]) }));
+      const transferring = sessionStorage.getItem(transferStorage) === receipt.sessionId;
+      status = await readResponse(await request(transferring ? path() + '/transfer' : path(), installationKey, {
+        method: transferring ? 'POST' : 'GET', signal: AbortSignal.any([lifecycle.signal, AbortSignal.timeout(15_000)]),
+      }));
       if (status.finalized) { clearTransferMarker(); photos = []; phase = 'done'; return; }
-      if (!status.complete && photos.length === 0 && status.acceptedPoseIndices.length === 0 && sessionStorage.getItem(transferStorage) !== receipt.sessionId) { phase = 'capture'; return; }
+      if (!status.complete && photos.length === 0 && status.acceptedPoseIndices.length === 0 && !transferring) { phase = 'capture'; return; }
       const missing = status.posePlan.filter(pose => !status!.acceptedPoseIndices.includes(pose.index));
       if (missing.some(pose => !photos.some(photo => photo.sessionId === receipt.sessionId && photo.poseIndex === pose.index))) {
         phase = 'lost'; return;

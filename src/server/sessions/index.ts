@@ -185,6 +185,14 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     const { id } = sessionParams.parse(request.params);
     return captureStatus(db, id);
   });
+  // NULL disables page monitoring durably. A late heartbeat cannot re-enable it.
+  const stopPageMonitoring = db.prepare("UPDATE capture_sessions SET page_seen_at=NULL WHERE id=? AND state='capturing' AND page_seen_at IS NOT NULL");
+  app.post('/api/capture/sessions/:id/transfer', { preHandler: access.requireInstallation }, request => {
+    const { id } = sessionParams.parse(request.params);
+    const status = captureStatus(db, id);
+    stopPageMonitoring.run(id);
+    return status;
+  });
   async function storePhoto(id: string, poseIndex: number, write: (path: string) => Promise<void>) {
     requireCapturing(db, id, poseIndex);
     // Unique path per attempt: never overwrite a file that finalize may have accepted.
@@ -216,6 +224,8 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     try {
       requireCapturing(db, id, poseIndex);
       if (!request.isMultipart()) throw new HttpError(415, 'INVALID_PHOTO', 'Передайте JPEG в multipart-поле file');
+      // Older capture pages start transfer directly with the first upload.
+      stopPageMonitoring.run(id);
       return await storePhoto(id, poseIndex, async path => {
         let received = false;
         for await (const part of request.parts({ limits: { files: 1, fields: 0, parts: 1, fileSize: MAX_PHOTO_BYTES } })) {

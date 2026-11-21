@@ -142,8 +142,9 @@ TEST_PHOTO_REQUIRED, неверный файл — INVALID_PHOTO, без зап�
 | GET /capture/sessions/:id/thumbnail | Закреплённая картинка сюжета из snapshot, независимо от правок/видимости текущего слота; ключ установки обязателен |
 | GET /capture/sessions/:id/guides/:number | Закреплённый образец из snapshot; 404 при отсутствии, ключ установки обязателен |
 | GET /capture/sessions/:id | `CaptureStatus`: состояние, принятые позиции, полный набор и подтверждение finalize |
+| POST /capture/sessions/:id/transfer | Ключ установки. Начало передачи завершает контроль связи до загрузки первого JPEG. Возвращает текущий `CaptureStatus`, повтор безопасен |
 | PUT /capture/sessions/:id/photos/:poseIndex | Multipart `file` (JPEG) → `CaptureStatus` с принятой позицией |
-| POST /capture/sessions/:id/heartbeat | Ключ установки, без тела, ответ 204. Сервер отмечает контакт только для новой сессии установки в состоянии `capturing`; неизвестная или удаляемая сессия получает 404 |
+| POST /capture/sessions/:id/heartbeat | Ключ установки, без тела, ответ 204. Сервер отмечает контакт только для новой сессии установки до начала передачи фото. Неизвестная или удаляемая сессия получает 404 |
 | POST /capture/sessions/:id/capture-reports | Отчёт попытки или настроек камеры для сессии с включённым сбором. 204 при сохранении и повторной доставке, 409 при выключенном сборе |
 | POST /capture/sessions/:id/finalize | Полный набор → `submit_pending`, `CaptureStatus.finalized=true` |
 

@@ -222,7 +222,12 @@ export function openDatabase(dataDir: string) {
     CREATE INDEX IF NOT EXISTS session_history_session ON session_history(session_id,id);
     CREATE INDEX IF NOT EXISTS session_history_bucket ON session_history(session_id,bucket,id);`);
   } catch { console.warn('SESSION_HISTORY_SCHEMA_UNAVAILABLE'); }
-  db.pragma('user_version = 20');
+  if (Number(db.pragma('user_version', { simple: true })) < 21) {
+    // Sessions with stored photos were already transferring before this upgrade.
+    db.exec(`UPDATE capture_sessions SET page_seen_at=NULL WHERE state='capturing' AND page_seen_at IS NOT NULL
+      AND EXISTS (SELECT 1 FROM capture_photos WHERE session_id=capture_sessions.id)`);
+    db.pragma('user_version = 21');
+  }
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

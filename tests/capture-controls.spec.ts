@@ -153,6 +153,8 @@ test('group uses guide 5; lost local transfer after reload stops even before fir
   });
   await freeze(page); await installation(page, app.installationKey);
   const sessions: string[] = [];
+  let heartbeats = 0;
+  page.on('request', request => { if (request.url().endsWith('/heartbeat')) heartbeats++; });
   for (const position of [0, 1]) {
     failPosition = position;
     await page.getByRole('button', { name: 'Сюжет 1: Групповой снимок', exact: true }).click();
@@ -163,11 +165,18 @@ test('group uses guide 5; lost local transfer after reload stops even before fir
     for (let i = 0; i < 2; i++) { await page.clock.runFor(5000); await expect(page.getByText('Кадр снят ✓', { exact: true })).toBeVisible(); await page.clock.runFor(1000); }
     await page.getByRole('button', { name: 'Завершить фотосессию' }).click();
     await expect(page.getByRole('alert')).toContainText('снятые кадры сохранены');
+    const beatsAtTransfer = heartbeats;
+    await page.clock.fastForward(65_000);
+    await app.advanceTime(65_000);
+    const monitor = (await (await admin.get('/api/statuses/' + id)).json()).session;
+    expect(monitor).toMatchObject({ issue: null, label: `Принято ${position} из 2 фото` });
+    expect(heartbeats).toBe(beatsAtTransfer);
     const accepted = await app.photos(id); expect(accepted).toHaveLength(position);
     const before = shutters;
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Недостающие кадры потеряны после перезагрузки' })).toBeVisible();
     await page.clock.runFor(10000); expect(shutters).toBe(before);
+    expect(heartbeats).toBe(beatsAtTransfer);
     expect(await app.photos(id)).toEqual(accepted);
     await expect(page.getByRole('button', { name: 'Начать заново' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Начать новую фотосессию' }).click();
