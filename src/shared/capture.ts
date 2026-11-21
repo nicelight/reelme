@@ -50,6 +50,9 @@ export const defaultCaptureSettings: CaptureSettings = {
   sendCaptureLogs: false, startMode: 'manual', countdownSeconds: 5, reviewSeconds: 3, receiptSeconds: 5,
 };
 
+export const captureHeartbeatIntervalMs = 15_000;
+export const captureHeartbeatTimeoutMs = 60_000;
+
 export interface StartReceipt {
   captureSettings?: CaptureSettings;
   sessionId: string;

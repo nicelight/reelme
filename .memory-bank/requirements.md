@@ -75,7 +75,7 @@ status: active
 | REQ-020 | EP-001 | FT-006 | [FT-006-AC-003](features/FT-006-slot-testing.md#ft-006-ac-003) | [done](tasks/TASK-014-T2-FT-006-W11.task.json) |
 | REQ-021 | EP-001 | FT-006 | [FT-006-AC-004](features/FT-006-slot-testing.md#ft-006-ac-004) | [done](tasks/TASK-015-T2-FT-006-W12.task.json) |
 | REQ-022 | EP-001 | FT-001 | [FT-001-AC-005](features/FT-001-scenarios.md#ft-001-ac-005) | [TASK-028](tasks/TASK-028-T2-FT-001-W25.task.json) |
-| REQ-023 | EP-001 | FT-007 | [Критерии статусов](features/FT-007-session-statuses.md#ft-007-ac-001) | [done](tasks/TASK-035-T2-FT-007-W32.task.json) |
+| REQ-023 | EP-001 | FT-007 | [Критерии статусов](features/FT-007-session-statuses.md#ft-007-ac-001) | [История](tasks/TASK-035-T2-FT-007-W32.task.json), [стоимость](tasks/TASK-036-T1-FT-007-W33.task.json), [связь со страницей съёмки](tasks/TASK-037-T1-FT-007-W34.task.json) |
 
 Исключения — [за пределами первой версии](prd.md#за-пределами-первой-версии).
 Их изменение возвращается в PRD; художественная оценка AI-видео не является критерием приёмки.

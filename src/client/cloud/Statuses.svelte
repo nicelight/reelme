@@ -16,6 +16,7 @@
   let detailError = $state('');
   let copied = $state('');
   let copying = $state(false);
+  const usd = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 9 });
   const clock = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Novosibirsk', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const reason = (e: unknown) => e instanceof Error ? e.message : 'Ошибка запроса';
   function denied(e: unknown) {
@@ -147,7 +148,9 @@
         <button class="row" class:problem={!!row.issue} data-stage={row.stage} aria-expanded={opened === row.id} onclick={() => expand(row.id)}>
           <span class="num">№ {row.number}</span><span class="when">{clock.format(row.updatedAt)}</span>
           <span class="track" aria-hidden="true"><i style:width={(row.issue ? 100 : Math.min(100,(row.stage+1)*16)) + '%'}></i></span>
-          <span class="step">{#if row.issue}<b>{row.issue === 'retry' ? 'Сбой · повторяем' : 'Ошибка'}</b> · {/if}{row.label}{#if row.mode} · {row.mode}{/if}</span>
+          <span class="step">{#if row.issue}<b>{row.issue === 'retry' ? 'Сбой · повторяем' : 'Ошибка'}</b>{row.issue === 'retry' ? ' · ' : ': '}{/if}{row.label}{#if row.mode} · {row.mode}{/if}
+            {#if row.costUsd !== undefined}{' · '}<span title="Стоимость генерации в USD">{row.costUsd === null ? '..$' : usd.format(row.costUsd) + ' $'}</span>{/if}
+          </span>
           <span class="chevron" aria-hidden="true">{opened === row.id ? '−' : '+'}</span>
         </button>
         {#if opened === row.id}

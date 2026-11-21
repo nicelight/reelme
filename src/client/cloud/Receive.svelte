@@ -1,6 +1,7 @@
 <script lang="ts">
   /** Receive keeps email acceptance separate from delivery; network uncertainty
-   * never triggers another POST or invents a sent/failed server state. */
+   * never triggers another POST or invents a sent/failed server state.
+   * Web Share receives the complete MP4 directly from the visitor's click. */
   import { onMount } from 'svelte';
   import './results-prototype/assets/fonts.css';
   import { api, ApiError } from './api';
@@ -13,14 +14,13 @@
   let emailUncertain = $state(false);
   let error = $state('');
   let shareFile = $state<File>();
-  let shareState = $state<'preparing' | 'ready' | 'link' | 'copy' | 'failed'>('preparing');
+  let shareState = $state<'preparing' | 'ready' | 'unavailable' | 'failed'>('preparing');
   const shareLabels = {
-    preparing: 'Подготавливаем видео…', ready: 'Поделиться видео',
-    link: 'Поделиться ссылкой на видео', copy: 'Скопировать ссылку на видео', failed: 'Подготовить видео снова',
+    preparing: 'Видео доставляется…', ready: 'Поделиться видео',
+    failed: 'Подготовить видео снова',
   };
   let sharing = $state(false);
   let shareMessage = $state('');
-  let showLink = $state(false);
   let shareAttempt = $state(0);
   let player = $state<HTMLVideoElement>();
   let playerError = $state(false);
@@ -31,7 +31,6 @@
   const requests = new Set<AbortController>();
   const path = $derived(`/receive/${encodeURIComponent(token)}`);
   const shareUrl = $derived(view?.downloadUrl);
-  const videoLink = $derived(view ? new URL(view.videoUrl, window.location.origin).href : '');
   const shareNumber = $derived(view?.number);
   const messages = {
     not_requested: '',
@@ -110,40 +109,33 @@
       }
     }
   }
-  function offerLink() {
-    let canSendLink = false;
-    try {
-      canSendLink = typeof navigator.share === 'function' && (typeof navigator.canShare !== 'function' || navigator.canShare({ url: videoLink }));
-    } catch {}
-    shareState = canSendLink ? 'link' : 'copy';
-    shareMessage = 'Чтобы отправить сам файл, откройте скачанный MP4 в «Загрузках» и нажмите «Поделиться».';
+  function offerDownload() {
+    shareState = 'unavailable';
+    shareMessage = 'Этот браузер не может поделиться файлом. Скачайте видео и отправьте его из загрузок.';
   }
   $effect(() => {
     const url = shareUrl;
     const number = shareNumber;
     shareAttempt;
     if (!url) return;
-    const controller = new AbortController();
-    shareFile = undefined; shareMessage = ''; showLink = false;
-    const filename = `reelme-${number}.mp4`;
-    if (typeof navigator.share !== 'function') {
-      offerLink();
+    shareFile = undefined; shareMessage = '';
+    if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') {
+      offerDownload();
       return;
     }
+    const controller = new AbortController();
     shareState = 'preparing';
     void (async () => {
       try {
         const file = await bounded(async signal => {
           const response = await fetch(`${url}?purpose=share`, { signal });
-          if (!response.ok) throw new Error('Download failed');
-          return new File([await response.blob()], filename, { type: 'video/mp4' });
+          if (response.status !== 200) throw new Error('Download failed');
+          const video = await response.blob();
+          if (!video.size || video.type !== 'video/mp4') throw new Error('Invalid MP4 response');
+          return new File([video], `reelme-${number}.mp4`, { type: video.type });
         }, 120_000, controller.signal);
         if (controller.signal.aborted || !active) return;
-        if (typeof navigator.canShare === 'function') {
-          let supported = false;
-          try { supported = navigator.canShare({ files: [file] }); } catch {}
-          if (!supported) { offerLink(); return; }
-        }
+        if (!navigator.canShare({ files: [file] })) { offerDownload(); return; }
         shareFile = file; shareState = 'ready';
       } catch {
         if (controller.signal.aborted || !active) return;
@@ -161,34 +153,21 @@
     } catch { return undefined; }
   }
   async function share() {
-    if (sharing || shareState === 'preparing') return;
+    if (sharing) return;
     if (shareState === 'failed') { shareAttempt += 1; return; }
-    if (shareState === 'copy') {
-      try {
-        await navigator.clipboard.writeText(videoLink);
-        showLink = false; shareMessage = 'Ссылка на видео скопирована.';
-      } catch {
-        showLink = true;
-        shareMessage = 'Выделите и скопируйте ссылку на видео.';
-      }
-      return;
-    }
-    let data: ShareData;
-    if (shareState === 'link') data = { url: videoLink };
-    else if (shareFile) data = { files: [shareFile] };
-    else return;
+    if (shareState !== 'ready' || !shareFile) return;
     sharing = true; shareMessage = '';
     let operationId: string | undefined;
     try {
-      const shared = navigator.share(data);
+      const shared = navigator.share({ files: [shareFile] });
       operationId = report('share_started');
       await shared;
       report('share_returned', operationId);
     } catch (e) {
-      report(e instanceof DOMException && e.name === 'AbortError' ? 'share_cancelled' : 'share_failed', operationId);
-      if (active && !(e instanceof DOMException && e.name === 'AbortError')) {
-        if (data.files) offerLink();
-        else { shareState = 'copy'; shareMessage = 'Меню отправки недоступно. Скопируйте ссылку на видео.'; }
+      const cancelled = e instanceof DOMException && e.name === 'AbortError';
+      report(cancelled ? 'share_cancelled' : 'share_failed', operationId);
+      if (active && !cancelled) {
+        shareMessage = 'Не удалось открыть меню отправки. Попробуйте снова или скачайте видео.';
       }
     } finally { if (active) sharing = false; }
   }
@@ -219,12 +198,12 @@
         </div>
         <div class="receive-content">
           <h1 id="receive-title">История № {view.number}</h1>
-          <button class="receive-submit" onclick={share} disabled={shareState === 'preparing' || sharing}>
-            {sharing ? 'Открываем отправку…' : shareLabels[shareState]}
-          </button>
-          {#if shareState === 'ready'}<p class="receive-hint">можно поделиться сразу в инсте, телеге, etc</p>{/if}
+          {#if shareState !== 'unavailable'}
+            <button class="receive-submit" class:receive-preparing={shareState === 'preparing'} onclick={share} disabled={shareState === 'preparing' || sharing} aria-live="polite">
+              {sharing ? 'Открываем отправку…' : shareLabels[shareState]}
+            </button>
+          {/if}
           {#if shareMessage}<p class="receive-hint" role="status">{shareMessage}</p>{/if}
-          {#if showLink}<input readonly aria-label="Ссылка на видео" value={videoLink} onfocus={event => event.currentTarget.select()} />{/if}
           <a class="receive-submit receive-download" href={view.downloadUrl} onclick={() => { report('download_clicked'); }} download={`reelme-${view.number}.mp4`}>Скачать видео</a>
           <p class="receive-hint receive-retention-note">видео будет доступно для скачивания 1-2 дня, рекомендую отправить его на почту</p>
           {#if view.emailState !== 'not_requested'}<p class:receive-failed={view.emailState === 'failed'} class:receive-sent={view.emailState === 'sent'} class="receive-status" role="status">{#if view.emailState === 'sent'}<span class="receive-sent-light" aria-hidden="true"></span><span class="receive-check" aria-hidden="true">✓</span>{/if}{messages[view.emailState]}</p>{/if}
@@ -286,6 +265,18 @@
   .receive-download { text-align:center; text-decoration:none; }
   .receive-email-submit,.receive-download { background:#211324; color:#fff4fb; border-color:#956080; }
   .receive-submit:disabled { opacity:.6; cursor:wait; }
+  .receive-submit.receive-preparing { display:flex; align-items:center; justify-content:center; gap:8px; opacity:.75; }
+  .receive-preparing::before {
+    content:'';
+    box-sizing:border-box;
+    width:1rem;
+    height:1rem;
+    flex:none;
+    border:2px solid #23112240;
+    border-top-color:currentColor;
+    border-radius:50%;
+    animation:receive-spin .8s linear infinite;
+  }
   .receive-submit:focus-visible { outline:2px solid #fff4fb; outline-offset:4px; }
   .receive-error { margin:16px 0 0; font-size:13px; line-height:1.5; overflow-wrap:anywhere; }
   .receive-submit:active:not(:disabled) { transform:scale(.97); }
@@ -297,6 +288,7 @@
   @keyframes receive-enter { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
   @keyframes receive-check { from { opacity:0; transform:scale(.95); } to { opacity:1; transform:scale(1); } }
   @keyframes receive-confirm { 0% { opacity:0; } 35% { opacity:1; } 100% { opacity:0; } }
+  @keyframes receive-spin { to { transform:rotate(360deg); } }
   ::selection { background:#854569; color:#fff; }
   .receive-submit:hover:not(:disabled) { background:#f5a4df; border-color:#f1a9d5; }
   .receive-email-submit:hover:not(:disabled),.receive-download:hover { background:#211324; border-color:#956080; }
@@ -320,5 +312,5 @@
     .receive-content label { margin-top:18px; }
     .receive-submit { margin-top:20px; }
   }
-  @media(prefers-reduced-motion:reduce) { .receive-submit { transition:none; } .receive-submit:active:not(:disabled) { transform:none; } .receive-card,.receive-check,.receive-sent-light { animation:none; } }
+  @media(prefers-reduced-motion:reduce) { .receive-submit { transition:none; } .receive-submit:active:not(:disabled) { transform:none; } .receive-card,.receive-check,.receive-sent-light,.receive-preparing::before { animation:none; } }
 </style>

@@ -55,6 +55,11 @@ test('телефон оператора видит сбой за предела�
     db.prepare("UPDATE capture_sessions SET state='failed' WHERE number=2").run();
     db.prepare("UPDATE generation_jobs SET error_code='FAL_FAILED' WHERE session_id='id-2'").run();
     await expect(page.getByRole('heading',{name:'Вечер кино'})).toBeVisible({timeout:8000});
+    const pricedRow = page.locator('.row').filter({hasText:'№ 35'});
+    db.prepare("UPDATE capture_sessions SET state='ready' WHERE id='id-35'").run();
+    await expect(pricedRow).toContainText('Видео готово · ..$', {timeout:8000});
+    db.prepare("UPDATE generation_jobs SET cost_usd=0.045 WHERE session_id='id-35'").run();
+    await expect(pricedRow).toContainText('Видео готово · 0,045 $', {timeout:8000});
     const issues = page.getByRole('button',{name:'Проблемы · 2'});
     await expect(issues).toBeVisible();
     expect(await page.locator('.row').count()).toBe(30);

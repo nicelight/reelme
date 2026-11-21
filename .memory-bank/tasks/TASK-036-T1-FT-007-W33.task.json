@@ -1,0 +1,59 @@
+{
+  "id": "TASK-036-T1-FT-007-W33",
+  "title": "Показывать фактическую стоимость генерации в строке видео",
+  "status": "done",
+  "wave": "W33",
+  "feature": "FT-007",
+  "tier": "T1",
+  "reqs": [
+    "REQ-023"
+  ],
+  "depends_on": [
+    "TASK-035-T2-FT-007-W32"
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-007-session-statuses.md#ft-007-ac-001"
+  ],
+  "normative_inputs": [
+    "https://api.fal.ai/v1/openapi.json"
+  ],
+  "constraints": [
+    "Пока запись fal недоступна, показывать ..$."
+  ],
+  "invariants": [
+    "Выдача видео и QR независима от биллинга."
+  ],
+  "verification_targets": [
+    "Совпадение request_id, задержка записи, нулевой cost_total и сохранение суммы после рестарта."
+  ],
+  "touched_files": [
+    "src/server/sessions/fal-costs.ts",
+    "src/server/sessions/statuses.ts",
+    "src/server/db.ts",
+    "src/server/config.ts",
+    "src/shared/statuses.ts",
+    "src/client/cloud/Statuses.svelte"
+  ],
+  "docs": [
+    "docs/MANUAL.md",
+    ".memory-bank/contracts/http-api.md"
+  ],
+  "evidence_required": [
+    "Обновление суммы в строке готового видео при просмотре с телефона."
+  ],
+  "gates": [],
+  "verify": [
+    {
+      "date": "2026-11-21",
+      "result": "PASS",
+      "summary": "npm run check и npm run build прошли, npm test — 138/138. В Chromium при ширине 360 px готовая строка обновилась с ..$ до 0,045 $.",
+      "evidence": [
+        "tests/fal-costs.test.ts",
+        "tests/statuses.spec.ts"
+      ],
+      "limitations": [
+        "Ответы Billing Events имитированы. Проверка ключа и выкладка на VPS не проводились."
+      ]
+    }
+  ]
+}

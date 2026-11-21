@@ -6,6 +6,7 @@
  * including across edits, hidden slots and midnight. Manual admin tests alone use
  * saved test JPEGs, copied by position through the same intake/finalize. Legacy
  * tests retain their single-source retry; new plans never duplicate it.
+ * Page contact is diagnostic only and stops at handoff to generation.
  * Test retries retain their original source; concurrent preparation is rejected. Photo bytes are written and
  * decoded without image statistics before a short DB transaction publishes one position. Finalize changes
  * capturing to submit_pending once, only for a complete set; later photo writes
@@ -25,13 +26,13 @@ import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
 import { snapshotSlot } from '../scenarios/store.js';
 import { readMedia, readTestPhoto, sendMedia } from '../scenarios/media.js';
-import { defaultCaptureSettings, type CaptureSettings, MAX_PHOTO_BYTES, snapshotPosePlan, type StartReceipt, type SlotSnapshot, type SessionState, type CaptureStatus } from '../../shared/capture.js';
+import { captureHeartbeatTimeoutMs, defaultCaptureSettings, type CaptureSettings, MAX_PHOTO_BYTES, snapshotPosePlan, type StartReceipt, type SlotSnapshot, type SessionState, type CaptureStatus } from '../../shared/capture.js';
 import { HttpError } from '../errors.js';
 import { participantRanges, type EventSetup } from '../../shared/events.js';
 
 interface SessionRow {
   id: string; start_request_id: string; event_date: string; number: number;
-  slot_id: string; snapshot: string; state: SessionState; created_at: number;
+  slot_id: string; snapshot: string; state: SessionState; created_at: number; page_seen_at: number | null;
 }
 const eventSetupSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('check') }).strict(),
@@ -129,9 +130,9 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     const { number } = db.prepare('UPDATE events SET next_number=next_number+1 WHERE date=? RETURNING next_number-1 AS number').get(date) as { number: number };
     const row: SessionRow = {
       id: randomUUID(), start_request_id: startRequestId, event_date: date, number,
-      slot_id: slotId, snapshot: JSON.stringify(snapshot), state: 'capturing', created_at: createdAt,
+      slot_id: slotId, snapshot: JSON.stringify(snapshot), state: 'capturing', created_at: createdAt, page_seen_at: manualTest ? null : createdAt,
     };
-    db.prepare('INSERT INTO capture_sessions(id,start_request_id,event_date,number,slot_id,snapshot,state,created_at) VALUES (@id,@start_request_id,@event_date,@number,@slot_id,@snapshot,@state,@created_at)').run(row);
+    db.prepare('INSERT INTO capture_sessions(id,start_request_id,event_date,number,slot_id,snapshot,state,created_at,page_seen_at) VALUES (@id,@start_request_id,@event_date,@number,@slot_id,@snapshot,@state,@created_at,@page_seen_at)').run(row);
     return { created: true, value: receipt(row) };
   });
   app.post('/api/capture/sessions', { preHandler: access.requireInstallation }, (request, reply) => {
@@ -139,6 +140,22 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     const result = start.immediate(startRequestId, slotId, false, eventSetup);
     if (result.created) recordHistory(db, result.value.sessionId, 'capture', 'capture.start', 'number_assigned', 'succeeded', { total: result.value.posePlan.length }, now);
     return reply.code(result.created ? 201 : 200).send(result.value);
+  });
+  const pageContact = db.prepare<[string], { state: SessionState; page_seen_at: number | null }>(
+    'SELECT s.state,s.page_seen_at FROM capture_sessions s JOIN events e ON e.date=s.event_date AND e.deleting=0 WHERE s.id=?');
+  const touchPage = db.prepare("UPDATE capture_sessions SET page_seen_at=? WHERE id=? AND state='capturing' AND page_seen_at=?");
+  app.post('/api/capture/sessions/:id/heartbeat', { preHandler: access.requireInstallation }, (request, reply) => {
+    const { id } = sessionParams.parse(request.params);
+    const session = pageContact.get(id);
+    if (!session) throw new HttpError(404, 'NOT_FOUND', 'Сессия не найдена');
+    if (session.state === 'capturing' && session.page_seen_at !== null) {
+      const time = now();
+      const updated = touchPage.run(time, id, session.page_seen_at);
+      if (updated.changes && time - session.page_seen_at > captureHeartbeatTimeoutMs) {
+        recordHistory(db, id, 'server', 'capture.heartbeat', 'page_reconnected', 'succeeded', {}, () => time);
+      }
+    }
+    return reply.code(204).send();
   });
   app.post('/api/capture/sessions/:id/capture-reports', { preHandler: access.requireInstallation, bodyLimit: 32 * 1024 }, (request, reply) => {
     const { id } = sessionParams.parse(request.params);

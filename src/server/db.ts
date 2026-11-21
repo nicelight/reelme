@@ -130,10 +130,15 @@ export function openDatabase(dataDir: string) {
       ) WHERE date=?`).run(`Session_${number}`, date);
     }
   }).immediate();
+  // Older sessions have no observation of page contact.
+  if (!db.prepare("SELECT 1 FROM pragma_table_info('capture_sessions') WHERE name='page_seen_at'").get()) {
+    db.exec('ALTER TABLE capture_sessions ADD COLUMN page_seen_at INTEGER');
+  }
   const jobColumns = new Set((db.prepare('PRAGMA table_info(generation_jobs)').all() as { name: string }[]).map(column => column.name));
   for (const column of ['submitted_at', 'ready_at']) {
     if (!jobColumns.has(column)) db.exec(`ALTER TABLE generation_jobs ADD COLUMN ${column} INTEGER`);
   }
+  if (!jobColumns.has('cost_usd')) db.exec('ALTER TABLE generation_jobs ADD COLUMN cost_usd REAL');
   if (!jobColumns.has('template_repaired')) db.exec('ALTER TABLE generation_jobs ADD COLUMN template_repaired INTEGER NOT NULL DEFAULT 0');
   const mediaColumns = new Set((db.prepare('PRAGMA table_info(slot_media)').all() as { name: string }[]).map(column => column.name));
   for (const column of ['template_slot_id', 'template_orientation']) {
@@ -182,7 +187,7 @@ export function openDatabase(dataDir: string) {
     CREATE INDEX IF NOT EXISTS session_history_session ON session_history(session_id,id);
     CREATE INDEX IF NOT EXISTS session_history_bucket ON session_history(session_id,bucket,id);`);
   } catch { console.warn('SESSION_HISTORY_SCHEMA_UNAVAILABLE'); }
-  db.pragma('user_version = 16');
+  db.pragma('user_version = 18');
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

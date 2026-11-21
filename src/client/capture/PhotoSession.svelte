@@ -3,12 +3,13 @@
    * JPEG upload and finalize. Retries retain original Blobs/positions and never
    * call the camera again. Server status is authoritative, including after reload
    * or a lost acknowledgement. Only finalized=true permits the number and release.
+   * Heartbeats belong to the mounted capture page, including camera waits and uploads.
    * Request deadlines include response bodies; timeout preserves manual recovery.
    * Finish records only a session marker, never JPEG bytes. Reload with missing
    * local Blobs stops explicitly; accepted server positions are never recaptured.
    * Source: docs/slot-setup/matrix.md. SQLite/files remain owned by the server. */
   import { onMount } from 'svelte';
-  import { defaultCaptureSettings, type CaptureStatus, type StartReceipt } from '../../shared/capture';
+  import { captureHeartbeatIntervalMs, defaultCaptureSettings, type CaptureStatus, type StartReceipt } from '../../shared/capture';
   import { prepareUploadPhoto, type CapturedPhoto } from './photos';
   import Capture from './Capture.svelte';
   import { ApiError, request } from './api';
@@ -28,6 +29,30 @@
     return () => clearTimeout(timer);
   });
   const path = () => `/api/capture/sessions/${encodeURIComponent(receipt.sessionId)}`;
+  const capturing = $derived((status?.state ?? receipt.state) === 'capturing');
+  $effect(() => {
+    if (!capturing) return;
+    const controller = new AbortController();
+    const url = path() + '/heartbeat', key = installationKey;
+    let pending = false;
+    async function heartbeat() {
+      if (pending) return;
+      pending = true;
+      try {
+        await request(url, key, { method: 'POST', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]) });
+      } catch { /* The next heartbeat retries independently of camera and upload operations. */ }
+      finally { pending = false; }
+    }
+    void heartbeat();
+    const timer = setInterval(heartbeat, captureHeartbeatIntervalMs);
+    window.addEventListener('online', heartbeat);
+    window.addEventListener('pageshow', heartbeat);
+    return () => {
+      controller.abort(); clearInterval(timer);
+      window.removeEventListener('online', heartbeat);
+      window.removeEventListener('pageshow', heartbeat);
+    };
+  });
   async function readResponse(response: Response): Promise<CaptureStatus> {
     const value: CaptureStatus = await response.json();
     if (value.sessionId !== receipt.sessionId) throw new Error('Неверное подтверждение сессии');

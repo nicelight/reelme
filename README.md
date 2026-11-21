@@ -35,4 +35,4 @@ AI-фотобудка для корпоративов, вечеринок и д�
 
 **Svelte · TypeScript · Fastify · SQLite · fal · digiCamControl**
 
-[Установка и работа с проектом](docs/MANUAL.md) · [Настройка сюжетов](docs/slot-setup/matrix.md) · [Развёртывание](deploy_to_nskserver.md)
+[Установка и работа с проектом](docs/MANUAL.md) · [Настройка сюжетов](docs/slot-setup/matrix.md) · [Деплой на nskserver одной командой](deploy_to_nskserver.md#обновление-одной-командой)

@@ -8,6 +8,8 @@ export interface SessionStatus {
   issue: 'error' | 'retry' | null;
   label: string;
   updatedAt: number;
+  /** Absent for sessions without a fal request, null until billing confirms the amount. */
+  costUsd?: number | null;
 }
 
 export interface StatusPage {

@@ -1,0 +1,57 @@
+{
+  "id": "TASK-037-T1-FT-007-W34",
+  "title": "Показывать потерю связи со страницей новой фотосессии",
+  "status": "done",
+  "wave": "W34",
+  "feature": "FT-007",
+  "tier": "T1",
+  "reqs": [
+    "REQ-023"
+  ],
+  "depends_on": [
+    "TASK-035-T2-FT-007-W32"
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-007-session-statuses.md#ft-007-ac-006"
+  ],
+  "normative_inputs": [
+    ".memory-bank/contracts/http-api.md"
+  ],
+  "constraints": [
+    "Старые сессии исключены."
+  ],
+  "invariants": [
+    "Потеря связи меняет только диагностику съёмки."
+  ],
+  "verification_targets": [
+    "Граница 60 секунд, возобновление связи, поздний heartbeat после finalize."
+  ],
+  "touched_files": [
+    "src/client/capture/PhotoSession.svelte",
+    "src/server/sessions/index.ts",
+    "src/server/sessions/statuses.ts",
+    "src/server/db.ts"
+  ],
+  "docs": [
+    "docs/MANUAL.md"
+  ],
+  "evidence_required": [
+    "Закрытие страницы съёмки и красная строка на /statuses."
+  ],
+  "gates": [],
+  "verify": [
+    {
+      "date": "2026-11-21",
+      "result": "PASS",
+      "summary": "Проверка типов и сборка прошли, 139 серверных тестов и оба сценария Chromium прошли. Проверены периодические сигналы, закрытие вкладки, порог 60 секунд, красная строка, фильтр, восстановление и исключение старых и переданных на обработку сессий.",
+      "evidence": [
+        "tests/transfer.test.ts",
+        "tests/capture-heartbeat.spec.ts",
+        "tests/statuses.spec.ts"
+      ],
+      "limitations": [
+        "Локальный сервер и Chromium, без физической камеры."
+      ]
+    }
+  ]
+}

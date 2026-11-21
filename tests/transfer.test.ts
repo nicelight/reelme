@@ -186,3 +186,43 @@ test('large JPEG intake accepts original bytes and rejects late-body damage with
   assert.equal((await readdir(join(f.config.dataDir, 'media', 'sessions', session.sessionId))).length, 1);
   assert.equal((await finalize(f, session.sessionId)).statusCode, 200);
 });
+
+test('page silence is a recoverable capture issue only for new installation sessions', async t => {
+  const f = await fixture(); t.after(() => f.close());
+  const { cookie, ids } = await setup(f);
+  const { sessionId } = await start(f, ids[0]);
+  const db = openDatabase(f.config.dataDir); t.after(() => db.close());
+  const legacyId = randomUUID();
+  db.prepare(`INSERT INTO capture_sessions(id,start_request_id,event_date,number,slot_id,snapshot,state,created_at)
+    SELECT ?,?,event_date,5,slot_id,snapshot,state,created_at FROM capture_sessions WHERE id=?`).run(legacyId, randomUUID(), sessionId);
+  const seen = (id: string) => db.prepare<[string], { page_seen_at: number | null }>('SELECT page_seen_at FROM capture_sessions WHERE id=?').get(id)!.page_seen_at;
+  const beat = (id: string, headers: Record<string,string> = installation) => f.app.inject({ method: 'POST', url: path(id) + '/heartbeat', headers });
+  const issues = async () => (await f.app.inject({url:'/api/statuses?issues=1', headers:{cookie}})).json();
+  assert.equal((await beat(sessionId, {})).statusCode, 401);
+  assert.equal((await beat(sessionId, { cookie })).statusCode, 403);
+  f.advance(60_000);
+  assert.equal((await issues()).issues, 0);
+  f.advance(1);
+  await f.restart();
+  const stale = await issues();
+  assert.equal(stale.issues, 1);
+  assert.equal(stale.sessions.length, 1);
+  assert.equal(stale.sessions[0].id, sessionId);
+  assert.equal(stale.sessions[0].issue, 'error');
+  assert.equal(stale.sessions[0].label, 'потеряна связь со страницей фотосессии');
+  assert.equal((await beat(legacyId)).statusCode, 204);
+  assert.equal(seen(legacyId), null);
+  assert.equal((await beat(sessionId)).statusCode, 204);
+  assert.equal((await issues()).issues, 0);
+  assert.equal((await f.app.inject({url:'/api/statuses/' + sessionId,headers:{cookie}})).json().entries.at(-1).event,'page_reconnected');
+  f.advance(59_999);
+  assert.equal((await issues()).issues, 0);
+  assert.equal((await upload(f, sessionId, 0, await jpeg('blue'))).statusCode, 200);
+  assert.equal((await finalize(f, sessionId)).json().state, 'submit_pending');
+  const atHandoff = seen(sessionId);
+  f.advance(60_001);
+  assert.equal((await beat(sessionId)).statusCode, 204);
+  assert.equal(seen(sessionId), atHandoff);
+  assert.deepEqual((await issues()).sessions, []);
+  assert.equal((await status(f, sessionId)).state, 'submit_pending');
+});
