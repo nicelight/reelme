@@ -8,7 +8,7 @@ checked: 2026-11-16
 Поведение и трактовки лимитов согласованы с оператором. Неоднозначности документации
 сохранены ниже с источниками; дополнительных ограничений для перестраховки нет.
 Это целевое поведение интерфейса; его внедрение **ещё не завершено**.
-[Машинная матрица](../../src/shared/slot-setup-matrix.json) и 813 готовых `.md`-промптов
+[Машинная матрица](../../src/shared/slot-setup-matrix.json) и 936 готовых `.md`-промптов
 уже сформированы: [каталог и правила выбора файла](prompt-catalog.md),
 [функция выбора](../../src/shared/slot-prompt-selection.ts).
 [План внедрения](../../.memory-bank/analysis/slot-setup-plan.md).
@@ -30,6 +30,7 @@ checked: 2026-11-16
   очищает дополнительные референсы, правку промпта, демо и нижние настройки;
   тестовые фото остаются в кеше. Обложка/описание/видимость — карточка слота,
   не сбрасываемые генерационные материалы. Жёсткая привязка V2V-видео сохраняется.
+- Wan 3.0 V2V получает один MP4 (1–15 с, от 16 fps, до 100 МБ) и до 10 изображений. Фото камеры идут первыми в `reference_image_urls`, исходник — в `reference_video_urls`. Готовый промпт редактирует Video 1 по ссылкам Image 1…N. ReelMe передаёт `aspect_ratio: adaptive`, отключает расширение промпта и задаёт длительность по исходнику с округлением до ближайшей секунды, минимум 2 с. [Схема fal](https://fal.ai/models/alibaba/wan-3.0/reference-to-video/api) · [Лимиты Alibaba](https://www.alibabacloud.com/help/en/model-studio/wan3-video-generation-api-reference).
 - Для Kling 4 Editing (3–30 с) и Flash Editing (3–20 с) под референсным видео можно выбрать длительность результата. По умолчанию используется длина исходника, и ReelMe опускает `duration`. Явное значение передаётся как целое число секунд. [Kling 4](https://fal.ai/models/kling/v4/video-to-video/edit/api) · [Flash](https://fal.ai/models/kling/v4/flash/video-to-video/api).
 - На верхней панели находятся также качество, ориентация, ratio и P2V-длительность.
   Смена верхнего параметра пересчитывает допустимые следующие варианты; сохраняет
@@ -60,8 +61,10 @@ checked: 2026-11-16
 | Модель / режим | Индивидуально | Группа | Дополнительные фото R | Elements / общий предел | Пример готового промпта |
 |---|---|---|---|---|---|
 | H3 Max Recast / V2V | C=1/2, K=1 | Отключена | 0 | Нет; API до 4 людей, по 1 фото | [пустой](../../public/slot-prompts/recast/people-1__photos-1__refs-0.md) |
+| Wan 3.0 / V2V | C=1/2, K=1–4 | K=1–4 | 10−C×K; G: 10−K | До 10 обычных фото | [Wan](../../public/slot-prompts/wan-3-edit/people-2__photos-4__refs-2.md) |
 | Kling O1 Edit Pro / V2V | C=1/2, K=2–4 | K=1–4 | 4−C; G: 4−K | E + ordinary ≤4 | [O1](../../public/slot-prompts/kling-o1-edit/people-1__photos-4__refs-0.md) |
 | Kling O3 Edit Pro / V2V | C=1/2, K=2–4 | K=1–4 | 4−C; G: 4−K | E + ordinary ≤4 | [O3 edit](../../public/slot-prompts/kling-o3-edit/people-1__photos-4__refs-0.md) |
+| Kling O3 Edit Standard / V2V | C=1/2, K=2–4 | K=1–4 | 4−C; G: 4−K | E + ordinary ≤4 | [O3 edit](../../public/slot-prompts/kling-o3-edit-standard/people-1__photos-4__refs-0.md) |
 | Kling 4 Editing / V2V | C=1/2, K=2–4 | K=1–4 | 10; G: 10−K¹ | E≤7, ordinary≤10, assets≤15¹ | [4 edit](../../public/slot-prompts/kling-v4-edit/people-1__photos-4__refs-0.md) |
 | Kling 4 Flash Editing / V2V | C=1/2, K=2–4 | K=1–4 | 10; G: 10−K¹ | E≤7, ordinary≤10, assets≤15¹ | [Flash edit](../../public/slot-prompts/kling-v4-flash-edit/people-1__photos-4__refs-0.md) |
 | Kling 4 Reference / P2V | C=1/2, K=2–4 | K=1–4 | 10; G: 10−K¹ | E≤7, ordinary≤10, assets≤15¹ | [4 reference](../../public/slot-prompts/kling-v4-reference/people-1__photos-4__refs-0.md) |
@@ -77,13 +80,13 @@ checked: 2026-11-16
 ² Семь без видео указаны официальным Kling guide; применение к этому fal endpoint
 — вывод из первичных источников. fal prose упоминает четыре только «when using video».
 
-Эта таблица задаёт все **108** вариантов «модель + персонажи + кадры»:
-Recast 2; семь Kling по 10; три остальных P2V по 12. Выбор выходных параметров
+Эта таблица задаёт все **130** вариантов «модель + персонажи + кадры»:
+Recast 2; восемь Kling по 10; Wan V2V и три остальных P2V по 12. Выбор выходных параметров
 образует произведение только с допустимыми строками следующей таблицы. Недопустимые
 сочетания отключены; примерные лимиты из задания не приписываются конкретной модели.
 
 С учётом каждого возможного количества дополнительных references от 0 до R
-получаются **813 файлов**. JSON содержит все 108 строк съёмки и в каждой —
+получаются **936 файлов**. JSON содержит все 130 строк съёмки и в каждой —
 `promptFiles[фактическое количество дополнительных фото]`. Ссылки в таблице выше
 открывают только примеры; полный выбор делается по JSON. Качество, ориентация и
 длительность не меняют текст и не умножают набор файлов; это отдельные параметры API.
@@ -131,6 +134,7 @@ Element. При max Elements >3 сохранять формат «доступн
 | Модели | Значения resolution в API | Горизонтальная | Вертикальная |
 |---|---|---|---|
 | Recast | 768P / 1080P | По ролику, без aspect_ratio | По ролику, без aspect_ratio |
+| Wan 3.0 V2V | 720p / 1080p | По ролику, adaptive | По ролику, adaptive |
 | Kling O1/O3 V2V | Поля нет | По ролику, без aspect_ratio | По ролику, без aspect_ratio |
 | Kling O3 P2V | Поля нет | 16:9 | 9:16 |
 | Kling 4 full V2V/P2V | 720p / 1080p | 16:9, 21:9 | 9:16 |

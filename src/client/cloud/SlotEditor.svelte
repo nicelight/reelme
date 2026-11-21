@@ -5,7 +5,7 @@
    * requests cannot overwrite newer setup or authored text. Test status/result
    * remains mounted across resets. Source: docs/slot-setup/matrix.md. */
   import { onMount, onDestroy } from 'svelte';
-  import { models, recastId, slotSchema, MAX_VIDEO_UPLOAD_MB, MAX_VIDEO_UPLOAD_BYTES, videoUploadLimitMessage, type Media, type Mode, type SlotInput } from '../../shared/scenarios';
+  import { models, recastId, wanEditId, slotSchema, MAX_VIDEO_UPLOAD_MB, MAX_VIDEO_UPLOAD_BYTES, videoUploadLimitMessage, type Media, type Mode, type SlotInput } from '../../shared/scenarios';
   import { slotSetupMatrix, selectSlotPrompt } from '../../shared/slot-prompt-selection';
   import { allocatePhotoBudget, buildPosePlan, defaultSlotSetup, getSlotSetup, type Orientation } from '../../shared/slot-setup';
   import type { Pose } from '../../shared/capture';
@@ -131,7 +131,7 @@
     draft.recastShotsConfirmed = draft.model === recastId ? false : undefined;
     draft.aspectRatio = matrixModel.orientationMode === 'aspect-ratio' ? matrixModel.aspectRatios[value][0] : undefined;
   }
-  const sourceLimits = $derived(`MP4 · ${currentModel.minSeconds}–${currentModel.maxSeconds} с · до ${MAX_VIDEO_UPLOAD_MB} МБ`);
+  const sourceLimits = $derived(`MP4 · ${currentModel.minSeconds}–${currentModel.maxSeconds} с · до ${Math.min(MAX_VIDEO_UPLOAD_MB, currentModel.maxVideoMB ?? MAX_VIDEO_UPLOAD_MB)} МБ${draft.model === wanEditId ? ' · от 16 кадров/с' : ''}`);
   async function importSource(file?: File) {
     sourceFromFolder = !file;
     if (file && file.size > MAX_VIDEO_UPLOAD_BYTES) {
@@ -272,6 +272,7 @@
           <FileButton label={draft.videoId ? 'Заменить референсное видео' : 'Добавить референсное видео'} accept="video/mp4,.mp4" disabled={sourceLoading} describedBy="source-limits" onchange={uploadSource} />
           {#if sourceLoading && !sourceFromFolder}<ServerUploadStatus />{/if}
           {#if draft.videoId}<video src={mediaUrl(draft.videoId)} aria-label="Исходный ролик сюжета" controls playsinline preload="metadata"><track kind="captions" /></video>{/if}
+          {#if draft.model === wanEditId && videoMedia?.duration}<p class="hint">Длительность результата: {Math.max(2, Math.round(videoMedia.duration))} с</p>{/if}
           {#if currentModel.editableVideoDuration}
             <label for="output-duration">Длительность результата</label>
             <select id="output-duration" value={draft.duration ?? ''} onchange={event => {

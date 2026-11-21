@@ -1,4 +1,4 @@
-/** Ten additional endpoints through the real worker/files, with a controlled
+/** Model endpoints through the real worker/files, with a controlled
  * fal SDK HTTP transport. No external generation or CDN upload is performed. Source: docs/slot-setup/matrix.md. */
 import { buildPosePlan, defaultSlotSetup } from '../src/shared/slot-setup.js';
 import { slotSetupMatrix } from '../src/shared/slot-prompt-selection.js';
@@ -19,6 +19,7 @@ import { buildModelInput } from '../src/server/sessions/model-input.js';
 
 const endpoints = [
   'fal-ai/kling-video/o1/video-to-video/edit', 'fal-ai/kling-video/o3/pro/video-to-video/edit',
+  'fal-ai/kling-video/o3/standard/video-to-video/edit',
   'kling/v4/video-to-video/edit', 'kling/v4/flash/video-to-video',
   'kling/v4/reference-to-video', 'fal-ai/kling-video/o3/pro/reference-to-video',
   'kling/v4/flash/reference-to-video', 'minimax/h3-max/reference-to-video',
@@ -33,7 +34,7 @@ const promptFor = (endpoint: string) => endpoint.startsWith('minimax/')
       ? '<IMAGE_REF_0>, <IMAGE_REF_1>, <IMAGE_REF_2>, <IMAGE_REF_3> show the same person in <IMAGE_REF_4>.'
       : '@Element1 walks through the scene.';
 
-test('ten model inputs, snapshot isolation and reusable P2V URLs yield decoded session-owned results', async t => {
+test('model inputs, snapshot isolation and reusable P2V URLs yield decoded session-owned results', async t => {
   const f = await fixture(); t.after(() => f.close());
   const db = openDatabase(f.config.dataDir); t.after(() => db.close());
   const cookie = await f.login(); const admin = { cookie, origin: f.config.origin };
@@ -95,11 +96,11 @@ test('ten model inputs, snapshot isolation and reusable P2V URLs yield decoded s
     await capture(slot.json().id, input);
   }
   const old = sessions.find(s => s.input.model === 'kling/v4/reference-to-video')!;
-  await capture(old.slotId, old.input);
+  const repeatedId = await capture(old.slotId, old.input);
   const changed: SlotInput = { ...old.input, model: 'google/gemini-omni-flash/v1.2/reference-to-video', prompt: 'Changed prompt <IMAGE_REF_0>', resolution: '1080p', duration: 15, referenceIds: [referenceIds[2]] };
   const update = await f.app.inject({ method: 'PUT', url: `/api/admin/slots/${old.slotId}`, headers: admin, payload: changed });
   assert.equal(update.statusCode, 200, update.body);
-  await capture(old.slotId, changed);
+  const changedId = await capture(old.slotId, changed);
   await runner.runOnce();
   assert.equal(requests.length, sessions.length);
   const observation: unknown[] = [];
@@ -145,9 +146,9 @@ test('ten model inputs, snapshot isolation and reusable P2V URLs yield decoded s
     if (session.input.model.startsWith('minimax/')) assert.equal(input.prompt_expansion_mode, 'disabled');
     observation.push({ sessionId: session.id, endpoint: request.endpoint, input });
   }
-  assert.deepEqual(payloads.get(old.id)!.image_urls, payloads.get(sessions[10].id)!.image_urls);
-  assert.notEqual(payloads.get(old.id)!.elements[0].frontal_image_url, payloads.get(sessions[10].id)!.elements[0].frontal_image_url);
-  assert.equal(payloads.get(old.id)!.duration, 10); assert.equal(payloads.get(sessions[11].id)!.duration, 15);
+  assert.deepEqual(payloads.get(old.id)!.image_urls, payloads.get(repeatedId)!.image_urls);
+  assert.notEqual(payloads.get(old.id)!.elements[0].frontal_image_url, payloads.get(repeatedId)!.elements[0].frontal_image_url);
+  assert.equal(payloads.get(old.id)!.duration, 10); assert.equal(payloads.get(changedId)!.duration, 15);
   await runner.runOnce(); await runner.runOnce(); await runner.runOnce();
   assert.equal(requests.length, sessions.length); assert.equal(downloaded.length, sessions.length);
   const jobs = [];

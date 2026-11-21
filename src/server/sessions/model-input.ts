@@ -5,9 +5,9 @@
  * from the current capability matrix. Source: docs/slot-setup/matrix.md.
  */
 import { snapshotPosePlan, type SlotSnapshot } from '../../shared/capture.js';
-import { legacySlotSchema, recastId, slotSchema } from '../../shared/scenarios.js';
+import { legacySlotSchema, recastId, wanEditId, slotSchema } from '../../shared/scenarios.js';
 
-export interface GenerationMedia { photos: string[]; video?: string; references: string[] }
+export interface GenerationMedia { photos: string[]; video?: string; videoDuration?: number; references: string[] }
 export function buildModelInput(snapshot: SlotSnapshot, media: GenerationMedia): Record<string, unknown> {
   const value = { ...snapshot.generation, description: snapshot.description,
     thumbnailId: snapshot.thumbnailId, demoId: snapshot.demoId, visible: true };
@@ -29,6 +29,12 @@ export function buildModelInput(snapshot: SlotSnapshot, media: GenerationMedia):
   if (input.model === recastId) return { video_url: media.video, reference_image_urls: media.photos,
     resolution: input.resolution, ...(configured?.prompt ? { prompt: configured.prompt } : {}) };
   const prompt = input.prompt!;
+  if (input.model === wanEditId) {
+    const seconds = media.videoDuration;
+    if (seconds === undefined || !Number.isFinite(seconds) || seconds < 1 || seconds > 15) throw new Error('Invalid Wan source duration');
+    return { prompt, reference_video_urls: [media.video], reference_image_urls: [...media.photos, ...media.references],
+      resolution: input.resolution, aspect_ratio: 'adaptive', duration: Math.max(2, Math.round(seconds)), enable_prompt_expansion: false };
+  }
   const group = configured?.participants === 'group';
   const perPerson = configured?.photosPerParticipant ?? 4;
   const elements = Array.from({ length: configured?.participants === 2 ? 2 : 1 }, (_, person) => ({
@@ -43,6 +49,7 @@ export function buildModelInput(snapshot: SlotSnapshot, media: GenerationMedia):
   switch (input.model) {
     case 'fal-ai/kling-video/o1/video-to-video/edit':
     case 'fal-ai/kling-video/o3/pro/video-to-video/edit':
+    case 'fal-ai/kling-video/o3/standard/video-to-video/edit':
       return { ...kling, video_url: media.video };
     case 'kling/v4/video-to-video/edit':
       return { ...kling, video_url: media.video, resolution: input.resolution, ...editDuration, ...aspect };

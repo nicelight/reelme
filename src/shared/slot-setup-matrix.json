@@ -332,6 +332,149 @@
       ]
     },
     {
+      "key": "kling-o3-edit-standard",
+      "capabilities": {
+        "combinedReferenceLimit": 4,
+        "photosPerElement": {
+          "min": 2,
+          "max": 4
+        }
+      },
+      "id": "fal-ai/kling-video/o3/standard/video-to-video/edit",
+      "mode": "V2V",
+      "referenceStrategy": "elements",
+      "resolutionOptions": [],
+      "orientationMode": "source-video",
+      "aspectRatios": {
+        "landscape": [],
+        "portrait": []
+      },
+      "promptMaxLength": 2500,
+      "captureVariants": [
+        {
+          "participants": 1,
+          "photosPerParticipant": 2,
+          "cameraPhotos": 2,
+          "elementsCount": 1,
+          "additionalReferenceLimit": 3,
+          "promptFiles": [
+            "kling-o3-edit-standard/people-1__photos-2__refs-0.md",
+            "kling-o3-edit-standard/people-1__photos-2__refs-1.md",
+            "kling-o3-edit-standard/people-1__photos-2__refs-2.md",
+            "kling-o3-edit-standard/people-1__photos-2__refs-3.md"
+          ]
+        },
+        {
+          "participants": 1,
+          "photosPerParticipant": 3,
+          "cameraPhotos": 3,
+          "elementsCount": 1,
+          "additionalReferenceLimit": 3,
+          "promptFiles": [
+            "kling-o3-edit-standard/people-1__photos-3__refs-0.md",
+            "kling-o3-edit-standard/people-1__photos-3__refs-1.md",
+            "kling-o3-edit-standard/people-1__photos-3__refs-2.md",
+            "kling-o3-edit-standard/people-1__photos-3__refs-3.md"
+          ]
+        },
+        {
+          "participants": 1,
+          "photosPerParticipant": 4,
+          "cameraPhotos": 4,
+          "elementsCount": 1,
+          "additionalReferenceLimit": 3,
+          "promptFiles": [
+            "kling-o3-edit-standard/people-1__photos-4__refs-0.md",
+            "kling-o3-edit-standard/people-1__photos-4__refs-1.md",
+            "kling-o3-edit-standard/people-1__photos-4__refs-2.md",
+            "kling-o3-edit-standard/people-1__photos-4__refs-3.md"
+          ]
+        },
+        {
+          "participants": 2,
+          "photosPerParticipant": 2,
+          "cameraPhotos": 4,
+          "elementsCount": 2,
+          "additionalReferenceLimit": 2,
+          "promptFiles": [
+            "kling-o3-edit-standard/people-2__photos-2__refs-0.md",
+            "kling-o3-edit-standard/people-2__photos-2__refs-1.md",
+            "kling-o3-edit-standard/people-2__photos-2__refs-2.md"
+          ]
+        },
+        {
+          "participants": 2,
+          "photosPerParticipant": 3,
+          "cameraPhotos": 6,
+          "elementsCount": 2,
+          "additionalReferenceLimit": 2,
+          "promptFiles": [
+            "kling-o3-edit-standard/people-2__photos-3__refs-0.md",
+            "kling-o3-edit-standard/people-2__photos-3__refs-1.md",
+            "kling-o3-edit-standard/people-2__photos-3__refs-2.md"
+          ]
+        },
+        {
+          "participants": 2,
+          "photosPerParticipant": 4,
+          "cameraPhotos": 8,
+          "elementsCount": 2,
+          "additionalReferenceLimit": 2,
+          "promptFiles": [
+            "kling-o3-edit-standard/people-2__photos-4__refs-0.md",
+            "kling-o3-edit-standard/people-2__photos-4__refs-1.md",
+            "kling-o3-edit-standard/people-2__photos-4__refs-2.md"
+          ]
+        },
+        {
+          "participants": "group",
+          "photosPerParticipant": 1,
+          "cameraPhotos": 1,
+          "elementsCount": 0,
+          "additionalReferenceLimit": 3,
+          "promptFiles": [
+            "kling-o3-edit-standard/group__photos-1__refs-0.md",
+            "kling-o3-edit-standard/group__photos-1__refs-1.md",
+            "kling-o3-edit-standard/group__photos-1__refs-2.md",
+            "kling-o3-edit-standard/group__photos-1__refs-3.md"
+          ]
+        },
+        {
+          "participants": "group",
+          "photosPerParticipant": 2,
+          "cameraPhotos": 2,
+          "elementsCount": 0,
+          "additionalReferenceLimit": 2,
+          "promptFiles": [
+            "kling-o3-edit-standard/group__photos-2__refs-0.md",
+            "kling-o3-edit-standard/group__photos-2__refs-1.md",
+            "kling-o3-edit-standard/group__photos-2__refs-2.md"
+          ]
+        },
+        {
+          "participants": "group",
+          "photosPerParticipant": 3,
+          "cameraPhotos": 3,
+          "elementsCount": 0,
+          "additionalReferenceLimit": 1,
+          "promptFiles": [
+            "kling-o3-edit-standard/group__photos-3__refs-0.md",
+            "kling-o3-edit-standard/group__photos-3__refs-1.md"
+          ]
+        },
+        {
+          "participants": "group",
+          "photosPerParticipant": 4,
+          "cameraPhotos": 4,
+          "elementsCount": 0,
+          "additionalReferenceLimit": 0,
+          "promptFiles": [
+            "kling-o3-edit-standard/group__photos-4__refs-0.md"
+          ]
+        }
+      ]
+    },
+    {
       "key": "kling-v4-edit",
       "capabilities": {
         "elementLimit": 7,
@@ -1385,6 +1528,227 @@
             "kling-v4-flash-reference/group__photos-4__refs-4.md",
             "kling-v4-flash-reference/group__photos-4__refs-5.md",
             "kling-v4-flash-reference/group__photos-4__refs-6.md"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "wan-3-edit",
+      "capabilities": {
+        "ordinaryImageLimit": 10
+      },
+      "id": "alibaba/wan-3.0/reference-to-video",
+      "mode": "V2V",
+      "referenceStrategy": "flat",
+      "resolutionOptions": [
+        "720p",
+        "1080p"
+      ],
+      "orientationMode": "source-video",
+      "aspectRatios": {
+        "landscape": [],
+        "portrait": []
+      },
+      "promptMaxLength": 20000,
+      "captureVariants": [
+        {
+          "participants": 1,
+          "photosPerParticipant": 1,
+          "cameraPhotos": 1,
+          "elementsCount": 0,
+          "additionalReferenceLimit": 9,
+          "promptFiles": [
+            "wan-3-edit/people-1__photos-1__refs-0.md",
+            "wan-3-edit/people-1__photos-1__refs-1.md",
+            "wan-3-edit/people-1__photos-1__refs-2.md",
+            "wan-3-edit/people-1__photos-1__refs-3.md",
+            "wan-3-edit/people-1__photos-1__refs-4.md",
+            "wan-3-edit/people-1__photos-1__refs-5.md",
+            "wan-3-edit/people-1__photos-1__refs-6.md",
+            "wan-3-edit/people-1__photos-1__refs-7.md",
+            "wan-3-edit/people-1__photos-1__refs-8.md",
+            "wan-3-edit/people-1__photos-1__refs-9.md"
+          ]
+        },
+        {
+          "participants": 1,
+          "photosPerParticipant": 2,
+          "cameraPhotos": 2,
+          "elementsCount": 0,
+          "additionalReferenceLimit": 8,
+          "promptFiles": [
+            "wan-3-edit/people-1__photos-2__refs-0.md",
+            "wan-3-edit/people-1__photos-2__refs-1.md",
+            "wan-3-edit/people-1__photos-2__refs-2.md",
+            "wan-3-edit/people-1__photos-2__refs-3.md",
+            "wan-3-edit/people-1__photos-2__refs-4.md",
+            "wan-3-edit/people-1__photos-2__refs-5.md",
+            "wan-3-edit/people-1__photos-2__refs-6.md",
+            "wan-3-edit/people-1__photos-2__refs-7.md",
+            "wan-3-edit/people-1__photos-2__refs-8.md"
+          ]
+        },
+        {
+          "participants": 1,
+          "photosPerParticipant": 3,
+          "cameraPhotos": 3,
+          "elementsCount": 0,
+          "additionalReferenceLimit": 7,
+          "promptFiles": [
+            "wan-3-edit/people-1__photos-3__refs-0.md",
+            "wan-3-edit/people-1__photos-3__refs-1.md",
+            "wan-3-edit/people-1__photos-3__refs-2.md",
+            "wan-3-edit/people-1__photos-3__refs-3.md",
+            "wan-3-edit/people-1__photos-3__refs-4.md",
+            "wan-3-edit/people-1__photos-3__refs-5.md",
+            "wan-3-edit/people-1__photos-3__refs-6.md",
+            "wan-3-edit/people-1__photos-3__refs-7.md"
+          ]
+        },
+        {
+          "participants": 1,
+          "photosPerParticipant": 4,
+          "cameraPhotos": 4,
+          "elementsCount": 0,
+          "additionalReferenceLimit": 6,
+          "promptFiles": [
+            "wan-3-edit/people-1__photos-4__refs-0.md",
+            "wan-3-edit/people-1__photos-4__refs-1.md",
+            "wan-3-edit/people-1__photos-4__refs-2.md",
+            "wan-3-edit/people-1__photos-4__refs-3.md",
+            "wan-3-edit/people-1__photos-4__refs-4.md",
+            "wan-3-edit/people-1__photos-4__refs-5.md",
+            "wan-3-edit/people-1__photos-4__refs-6.md"
+          ]
+        },
+        {
+          "participants": 2,
+          "photosPerParticipant": 1,
+          "cameraPhotos": 2,
+          "elementsCount": 0,
+          "additionalReferenceLimit": 8,
+          "promptFiles": [
+            "wan-3-edit/people-2__photos-1__refs-0.md",
+            "wan-3-edit/people-2__photos-1__refs-1.md",
+            "wan-3-edit/people-2__photos-1__refs-2.md",
+            "wan-3-edit/people-2__photos-1__refs-3.md",
+            "wan-3-edit/people-2__photos-1__refs-4.md",
+            "wan-3-edit/people-2__photos-1__refs-5.md",
+            "wan-3-edit/people-2__photos-1__refs-6.md",
+            "wan-3-edit/people-2__photos-1__refs-7.md",
+            "wan-3-edit/people-2__photos-1__refs-8.md"
+          ]
+        },
+        {
+          "participants": 2,
+          "photosPerParticipant": 2,
+          "cameraPhotos": 4,
+          "elementsCount": 0,
+          "additionalReferenceLimit": 6,
+          "promptFiles": [
+            "wan-3-edit/people-2__photos-2__refs-0.md",
+            "wan-3-edit/people-2__photos-2__refs-1.md",
+            "wan-3-edit/people-2__photos-2__refs-2.md",
+            "wan-3-edit/people-2__photos-2__refs-3.md",
+            "wan-3-edit/people-2__photos-2__refs-4.md",
+            "wan-3-edit/people-2__photos-2__refs-5.md",
+            "wan-3-edit/people-2__photos-2__refs-6.md"
+          ]
+        },
+        {
+          "participants": 2,
+          "photosPerParticipant": 3,
+          "cameraPhotos": 6,
+          "elementsCount": 0,
+          "additionalReferenceLimit": 4,
+          "promptFiles": [
+            "wan-3-edit/people-2__photos-3__refs-0.md",
+            "wan-3-edit/people-2__photos-3__refs-1.md",
+            "wan-3-edit/people-2__photos-3__refs-2.md",
+            "wan-3-edit/people-2__photos-3__refs-3.md",
+            "wan-3-edit/people-2__photos-3__refs-4.md"
+          ]
+        },
+        {
+          "participants": 2,
+          "photosPerParticipant": 4,
+          "cameraPhotos": 8,
+          "elementsCount": 0,
+          "additionalReferenceLimit": 2,
+          "promptFiles": [
+            "wan-3-edit/people-2__photos-4__refs-0.md",
+            "wan-3-edit/people-2__photos-4__refs-1.md",
+            "wan-3-edit/people-2__photos-4__refs-2.md"
+          ]
+        },
+        {
+          "participants": "group",
+          "photosPerParticipant": 1,
+          "cameraPhotos": 1,
+          "elementsCount": 0,
+          "additionalReferenceLimit": 9,
+          "promptFiles": [
+            "wan-3-edit/group__photos-1__refs-0.md",
+            "wan-3-edit/group__photos-1__refs-1.md",
+            "wan-3-edit/group__photos-1__refs-2.md",
+            "wan-3-edit/group__photos-1__refs-3.md",
+            "wan-3-edit/group__photos-1__refs-4.md",
+            "wan-3-edit/group__photos-1__refs-5.md",
+            "wan-3-edit/group__photos-1__refs-6.md",
+            "wan-3-edit/group__photos-1__refs-7.md",
+            "wan-3-edit/group__photos-1__refs-8.md",
+            "wan-3-edit/group__photos-1__refs-9.md"
+          ]
+        },
+        {
+          "participants": "group",
+          "photosPerParticipant": 2,
+          "cameraPhotos": 2,
+          "elementsCount": 0,
+          "additionalReferenceLimit": 8,
+          "promptFiles": [
+            "wan-3-edit/group__photos-2__refs-0.md",
+            "wan-3-edit/group__photos-2__refs-1.md",
+            "wan-3-edit/group__photos-2__refs-2.md",
+            "wan-3-edit/group__photos-2__refs-3.md",
+            "wan-3-edit/group__photos-2__refs-4.md",
+            "wan-3-edit/group__photos-2__refs-5.md",
+            "wan-3-edit/group__photos-2__refs-6.md",
+            "wan-3-edit/group__photos-2__refs-7.md",
+            "wan-3-edit/group__photos-2__refs-8.md"
+          ]
+        },
+        {
+          "participants": "group",
+          "photosPerParticipant": 3,
+          "cameraPhotos": 3,
+          "elementsCount": 0,
+          "additionalReferenceLimit": 7,
+          "promptFiles": [
+            "wan-3-edit/group__photos-3__refs-0.md",
+            "wan-3-edit/group__photos-3__refs-1.md",
+            "wan-3-edit/group__photos-3__refs-2.md",
+            "wan-3-edit/group__photos-3__refs-3.md",
+            "wan-3-edit/group__photos-3__refs-4.md",
+            "wan-3-edit/group__photos-3__refs-5.md",
+            "wan-3-edit/group__photos-3__refs-6.md",
+            "wan-3-edit/group__photos-3__refs-7.md"
+          ]
+        },
+        {
+          "participants": "group",
+          "photosPerParticipant": 4,
+          "cameraPhotos": 4,
+          "elementsCount": 0,
+          "additionalReferenceLimit": 6,
+          "promptFiles": [
+            "wan-3-edit/group__photos-4__refs-0.md",
+            "wan-3-edit/group__photos-4__refs-1.md",
+            "wan-3-edit/group__photos-4__refs-2.md",
+            "wan-3-edit/group__photos-4__refs-3.md",
+            "wan-3-edit/group__photos-4__refs-4.md",
+            "wan-3-edit/group__photos-4__refs-5.md",
+            "wan-3-edit/group__photos-4__refs-6.md"
           ]
         }
       ]

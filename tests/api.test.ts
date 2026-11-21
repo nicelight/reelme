@@ -76,7 +76,9 @@ const cases: Array<[string, 'V2V' | 'P2V', string | undefined, number]> = [
   ['minimax/h3-max/recast', 'V2V', '768P', 30],
   ['fal-ai/kling-video/o1/video-to-video/edit', 'V2V', undefined, 10],
   ['fal-ai/kling-video/o3/pro/video-to-video/edit', 'V2V', undefined, 15],
+  ['fal-ai/kling-video/o3/standard/video-to-video/edit', 'V2V', undefined, 15],
   ['kling/v4/video-to-video/edit', 'V2V', '1080p', 30],
+  ['alibaba/wan-3.0/reference-to-video', 'V2V', '720p', 15],
   ['kling/v4/flash/video-to-video', 'V2V', '720p', 20],
   ['kling/v4/reference-to-video', 'P2V', '1080p', 30],
   ['fal-ai/kling-video/o3/pro/reference-to-video', 'P2V', undefined, 15],
@@ -86,7 +88,7 @@ const cases: Array<[string, 'V2V' | 'P2V', string | undefined, number]> = [
   ['google/gemini-omni-flash/v1.2/reference-to-video', 'P2V', '1080p', 15],
 ];
 
-test('all eleven models save; invalid model settings and wrong media are rejected', async t => {
+test('all supported models save; invalid model settings and wrong media are rejected', async t => {
   const f = await fixture(); t.after(() => f.close());
   const cookie = await f.login(); const headers = { cookie, origin: f.config.origin };
   const image = await f.upload(cookie, await imageBytes());
@@ -101,7 +103,7 @@ test('all eleven models save; invalid model settings and wrong media are rejecte
       const recast = model === 'minimax/h3-max/recast';
       const input: SlotInput = { ...defaultSlotSetup(model, mode), description: 'Первые три слова описания сюжета', visible: true, simulateGeneration: false, thumbnailId: image.id, model, mode, referenceIds: [], ...(resolution ? { resolution } : {}), ...(recast ? { recastShotsConfirmed: true } : { prompt: 'Transform the visitor' }), ...(mode === 'V2V' ? { videoId: video.id } : { duration: max }), ...(model === 'minimax/h3-max/reference-to-video' ? { promptExpansionMode: 'disabled' } : {}) };
       const slotId = randomUUID();
-      if (mode === 'V2V') input.videoId = (await f.importTemplate(cookie, await videoBytes(f.root), slotId, model)).id;
+      if (mode === 'V2V') input.videoId = (await f.importTemplate(cookie, await videoBytes(f.root, 10, 'blue', 24), slotId, model)).id;
       const saved = (await save({ ...input, id: slotId }, 201)).json<Slot>();
       const read = await f.app.inject({ url: `/api/admin/slots/${saved.id}`, headers });
       assert.equal(read.statusCode, 200); assert.deepEqual(read.json(), saved);
@@ -123,7 +125,7 @@ test('all eleven models save; invalid model settings and wrong media are rejecte
   const db = openDatabase(f.config.dataDir); db.prepare('UPDATE slot_media SET owner=? WHERE id=?').run('session', foreign.id); db.close();
   await save({ ...base, thumbnailId: foreign.id }, 400);
   const list = await f.app.inject({ url: '/api/admin/slots', headers });
-  assert.equal(list.json().length, 12);
+  assert.equal(list.json().length, cases.length + 1);
 });
 
 test('real file validation, immutable replacement and restart preserve old media', async t => {

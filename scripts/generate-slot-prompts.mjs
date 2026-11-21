@@ -25,11 +25,13 @@ const models = [
   { key: 'recast', capabilities: {"peopleLimit":4,"photosPerPerson":1}, id: 'minimax/h3-max/recast', mode: 'V2V', referenceStrategy: 'recast', resolutionOptions: ['768P', '1080P'], ...sourceVideo, promptMaxLength: 2000 },
   { key: 'kling-o1-edit', capabilities: {"combinedReferenceLimit":4,"photosPerElement":{"min":2,"max":4}}, id: 'fal-ai/kling-video/o1/video-to-video/edit', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: [], ...sourceVideo, promptMaxLength: 2500 },
   { key: 'kling-o3-edit', capabilities: {"combinedReferenceLimit":4,"photosPerElement":{"min":2,"max":4}}, id: 'fal-ai/kling-video/o3/pro/video-to-video/edit', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: [], ...sourceVideo, promptMaxLength: 2500 },
+  { key: 'kling-o3-edit-standard', capabilities: {"combinedReferenceLimit":4,"photosPerElement":{"min":2,"max":4}}, id: 'fal-ai/kling-video/o3/standard/video-to-video/edit', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: [], ...sourceVideo, promptMaxLength: 2500 },
   { key: 'kling-v4-edit', capabilities: {"elementLimit":7,"ordinaryImageLimit":10,"assetLimit":15,"photosPerElement":{"min":2,"max":4}}, id: 'kling/v4/video-to-video/edit', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: ['720p', '1080p'], ...ratios(['16:9', '21:9']), promptMaxLength: 26000 },
   { key: 'kling-v4-flash-edit', capabilities: {"elementLimit":7,"ordinaryImageLimit":10,"assetLimit":15,"photosPerElement":{"min":2,"max":4}}, id: 'kling/v4/flash/video-to-video', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: ['720p'], ...sourceVideo, promptMaxLength: 26000 },
   { key: 'kling-v4-reference', capabilities: {"elementLimit":7,"ordinaryImageLimit":10,"assetLimit":15,"photosPerElement":{"min":2,"max":4}}, id: 'kling/v4/reference-to-video', mode: 'P2V', referenceStrategy: 'elements', resolutionOptions: ['720p', '1080p'], ...ratios(['16:9', '21:9']), promptMaxLength: 26000 },
   { key: 'kling-o3-reference', capabilities: {"combinedReferenceLimit":7,"photosPerElement":{"min":2,"max":4}}, id: 'fal-ai/kling-video/o3/pro/reference-to-video', mode: 'P2V', referenceStrategy: 'elements', resolutionOptions: [], ...ratios(), promptMaxLength: 2500 },
   { key: 'kling-v4-flash-reference', capabilities: {"elementLimit":7,"ordinaryImageLimit":10,"assetLimit":15,"photosPerElement":{"min":2,"max":4}}, id: 'kling/v4/flash/reference-to-video', mode: 'P2V', referenceStrategy: 'elements', resolutionOptions: ['720p'], ...ratios(['16:9', '21:9']), promptMaxLength: 26000 },
+  { key: 'wan-3-edit', capabilities: { ordinaryImageLimit: 10 }, id: 'alibaba/wan-3.0/reference-to-video', mode: 'V2V', referenceStrategy: 'flat', resolutionOptions: ['720p', '1080p'], ...sourceVideo, promptMaxLength: 20000 },
   { key: 'h3-reference', capabilities: {"ordinaryImageLimit":9}, id: 'minimax/h3-max/reference-to-video', mode: 'P2V', referenceStrategy: 'flat', resolutionOptions: ['768P', '1080P'], ...ratios(['16:9', '4:3', '21:9'], ['9:16', '3:4']), promptMaxLength: 50000 },
   { key: 'vidu-q4-reference', capabilities: {"ordinaryImageLimit":12}, id: 'fal-ai/vidu/q4/reference-to-video', mode: 'P2V', referenceStrategy: 'flat', resolutionOptions: ['720p', '1080p'], ...ratios(['16:9', '4:3'], ['9:16', '3:4']), promptMaxLength: 5000 },
   { key: 'gemini-omni-reference', capabilities: {"ordinaryImageLimit":10}, id: 'google/gemini-omni-flash/v1.2/reference-to-video', mode: 'P2V', referenceStrategy: 'flat', resolutionOptions: ['720p', '1080p'], ...ratios(), promptMaxLength: 20000 },
@@ -45,7 +47,7 @@ function referenceLimit(model, people, photos) {
     const budget = model.key === 'kling-o3-reference' ? 7 : 4;
     return budget - (group ? photos : people);
   }
-  const budget = { 'h3-reference': 9, 'vidu-q4-reference': 12, 'gemini-omni-reference': 10 }[model.key];
+  const budget = model.capabilities.ordinaryImageLimit;
   return budget - (group ? photos : people * photos);
 }
 
@@ -68,6 +70,7 @@ function klingPrompt(key, people, photos, additional) {
         optional(`Use ${sceneRefs} only for compatible prop and appearance details within the existing environment. Keep the source video's setting and do not introduce additional main characters.`),
         'Preserve the source environment, camera movement, action timing, and shot sequence. Keep faces stable and avoid merging or duplicating people.',
       );
+    case 'kling-o3-edit-standard':
     case 'kling-o3-edit':
       return lines(
         'Edit @Video1.',
@@ -142,6 +145,7 @@ function klingPrompt(key, people, photos, additional) {
 
 function flatPrompt(key, people, photos, additional) {
   const tokens = {
+    'wan-3-edit': i => `Image ${i + 1}`,
     'h3-reference': i => `Image ${i + 1}`,
     'vidu-q4-reference': i => `[@reference_image_${i + 1}]`,
     'gemini-omni-reference': i => `<IMAGE_REF_${i}>`,
@@ -152,6 +156,7 @@ function flatPrompt(key, people, photos, additional) {
   const identity = [];
   if (group) {
     const peopleInstructions = {
+      'wan-3-edit': 'Replace the main group in Video 1 with this group, retaining each visible member’s appearance and relative position.',
       'h3-reference': "Keep the group members together and preserve each visible member's appearance. Do not add or duplicate people.",
       'vidu-q4-reference': 'Show these group members together, preserving their individual appearances. Do not add or duplicate people.',
       'gemini-omni-reference': "Keep these people together and preserve each visible group member's appearance. Do not add or duplicate people.",
@@ -165,6 +170,11 @@ function flatPrompt(key, people, photos, additional) {
     identity.push("Preserve each person's appearance from their own reference images. Keep their identities separate and do not merge faces or duplicate a person.");
   }
   const scene = additional ? `Use ${refs(additional, cameraPhotos)} as visual references for the environment, objects and style. They are not additional main characters.` : '';
+  if (key === 'wan-3-edit') {
+    const action = group ? '' : people === 1 ? 'Replace the main person in Video 1 with Person 1.'
+      : 'In the first shot where both appear, replace the person on the left with Person 1 and the person on the right with Person 2. Keep these assignments throughout Video 1.';
+    return lines('Edit Video 1.', identity, action, scene, 'Preserve the original camera movement, shot sequence, action timing and background.');
+  }
   const endings = {
     'h3-reference': 'Keep the subjects recognizable throughout the shot, with natural movement and coherent anatomy.',
     'vidu-q4-reference': 'Use natural movement and keep the subjects recognizable for the whole clip.',
@@ -212,7 +222,7 @@ const catalog = {
     return { ...model, captureVariants };
   }),
 };
-if (captureCount !== 108 || files.size !== 813) throw new Error(`Incomplete catalog: ${captureCount} captures, ${files.size} prompts`);
+if (captureCount !== 130 || files.size !== 936) throw new Error(`Incomplete catalog: ${captureCount} captures, ${files.size} prompts`);
 const expected = new Map([[matrixPath, `${JSON.stringify(catalog, null, 2)}\n`],
   ...Array.from(files, ([path, text]) => [join(assetRoot, path), text])]);
 

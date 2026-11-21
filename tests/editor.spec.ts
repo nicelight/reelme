@@ -2,6 +2,7 @@
  * tests against the real isolated backend. Only representative setup/prompt paths
  * are exercised; provider transport is controlled. Source: docs/slot-setup/matrix.md. */
 import { test, expect } from './browser-fixture';
+import { execFileSync } from 'node:child_process';
 import type { Page } from '@playwright/test';
 import { mkdir, readFile, truncate, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -53,6 +54,30 @@ async function save(page: Page) {
   await page.getByRole('button', { name: 'Сохранить сюжет', exact: true }).click();
   await expect(page.getByText('Сюжет сохранён.', { exact: true })).toBeVisible();
 }
+
+test('Wan 3.0 saves a 14-second template and a positional edit prompt', async ({ page, app }) => {
+  await login(page, app.origin, app.password);
+  await setup(page, 'V2V', 'alibaba/wan-3.0/reference-to-video', '2', '4');
+  await expect(page.getByLabel('Распределение фотографий')).toContainText('Фото камеры: 8. Elements: 0. Дополнительные фото: 2');
+  await lock(page);
+  await expect(page.locator('#prompt')).toHaveValue(/Edit Video 1\.[\s\S]+Image 8/);
+  const clip = join(app.dataDir, 'wan.mp4');
+  const makeClip = (fps: number) => execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i',
+    `color=c=blue:s=320x240:d=14:r=${fps}`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', clip]);
+  makeClip(10);
+  await chooseFile(page, 'Добавить референсное видео', clip);
+  await expect(page.getByText('Видео для Wan 3.0 должно иметь частоту не менее 16 кадров/с')).toBeVisible();
+  makeClip(24);
+  await chooseFile(page, 'Добавить референсное видео', clip);
+  await expect(page.getByText('Длительность результата: 14 с')).toBeVisible();
+  await upload(page, 'Изображение сюжета', app.image);
+  await page.getByLabel('Описание', { exact: true }).fill('Танец');
+  await save(page);
+  await page.reload();
+  await page.locator('.slot-open').click();
+  await expect(page.locator('#model')).toHaveValue('alibaba/wan-3.0/reference-to-video');
+  await expect(page.getByText('Длительность результата: 14 с')).toBeVisible();
+});
 
 test('Kling edit duration can be saved and reset without rebuilding the prompt', async ({ page, app }) => {
   await login(page, app.origin, app.password);
@@ -128,7 +153,7 @@ test('sequential setup exposes real capacities, locks fields, saves both modes a
   await chooseFile(page, 'Добавить референс 1', app.image);
   await expect(page.getByRole('button', { name: 'Добавить референс 2', exact: true })).toHaveCount(0);
   await expect(page.locator('#prompt')).toHaveValue(await readFile('public/slot-prompts/h3-reference/people-2__photos-4__refs-1.md', 'utf8'));
-  await save(page); await expect(page.locator('.slot-list strong')).toHaveText('Групповой портрет для');
+  await save(page); await expect(page.locator('.slot-list strong')).toHaveText('Групповой портрет для гостей');
   await app.restart(); await page.reload(); await page.getByRole('button', { name: /Групповой портрет для/ }).click();
   await expect(page.locator('#model')).toBeDisabled(); await expect(page.getByRole('button', { name: 'Заменить референс 1', exact: true })).toBeVisible();
   await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
@@ -161,7 +186,9 @@ test('sequential setup exposes real capacities, locks fields, saves both modes a
   await expect(page.locator('#photos-per-person option[value="1"]')).toBeDisabled();
   await page.locator('#photos-per-person').selectOption('4');
   await expect(page.getByLabel('Распределение фотографий')).toContainText('Фото камеры: 8. Elements: 2. Дополнительные фото: 2');
+  await page.getByLabel('Модель', { exact: true }).selectOption({ label: 'Kling O3 Edit Standard' });
   await expect(page.locator('#resolution')).toHaveCount(0); await lock(page);
+  await expect(page.locator('#prompt')).toHaveValue(/Edit @Video1\.[\s\S]+@Element2/);
   await expect(page.locator('.materials h4')).toHaveText(['Референсное видео', 'Референсные фото', 'Исходное видео']);
   await expect(page.locator('.materials video')).toHaveAttribute('src', source!); await chooseFile(page, 'Добавить референс 1', app.image); await save(page);
   await page.screenshot({ path: join(artifacts, 'editor-desktop.png'), fullPage: true });

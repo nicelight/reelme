@@ -26,6 +26,7 @@ import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
 import { snapshotSlot } from '../scenarios/store.js';
 import { readMedia, readTestPhoto, sendMedia } from '../scenarios/media.js';
+import { wanEditId, wanImageProblem } from '../../shared/scenarios.js';
 import { captureHeartbeatTimeoutMs, defaultCaptureSettings, type CaptureSettings, MAX_PHOTO_BYTES, snapshotPosePlan, type StartReceipt, type SlotSnapshot, type SessionState, type CaptureStatus } from '../../shared/capture.js';
 import { HttpError } from '../errors.js';
 import { participantRanges, type EventSetup } from '../../shared/events.js';
@@ -75,6 +76,7 @@ function requireCapturing(db: DB, sessionId: string, poseIndex: number) {
   if (session.state === 'cancelled') throw new HttpError(409, 'CAPTURE_CANCELLED', 'Фотосессия отменена оператором');
   if (session.state !== 'capturing') throw new HttpError(409, 'CAPTURE_CLOSED', 'Фотографии уже переданы на обработку');
   if (!snapshotPosePlan(session.snapshot).some(pose => pose.index === poseIndex)) throw new HttpError(400, 'INVALID_POSE', 'Эта позиция не входит в план съёмки');
+  return session;
 }
 async function inspectPhoto(path: string) {
   try {
@@ -204,7 +206,7 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     return status;
   });
   async function storePhoto(id: string, poseIndex: number, write: (path: string) => Promise<void>) {
-    requireCapturing(db, id, poseIndex);
+    const session = requireCapturing(db, id, poseIndex);
     // Unique path per attempt: never overwrite a file that finalize may have accepted.
     const relative = `sessions/${id}/${randomUUID()}.jpg`;
     const directory = join(dataDir, 'media', 'sessions', id);
@@ -216,6 +218,10 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
       const { width, height } = await inspectPhoto(path);
       const { size } = await stat(path);
       if (size > MAX_PHOTO_BYTES) throw new HttpError(413, 'PHOTO_TOO_LARGE', 'JPEG превышает 20 MiB');
+      if (session.snapshot.generation.model === wanEditId) {
+        const problem = wanImageProblem({ width, height, size });
+        if (problem) throw new HttpError(400, 'INVALID_PHOTO', problem);
+      }
       previous = db.transaction(() => {
         requireCapturing(db, id, poseIndex);
         const old = db.prepare('SELECT path FROM capture_photos WHERE session_id=? AND pose_index=?').get(id, poseIndex) as { path: string } | undefined;

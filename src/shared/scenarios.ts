@@ -19,11 +19,13 @@ export interface Model {
   defaultResolution?: string; prompt: boolean; hint: string;
   minSeconds: number; maxSeconds: number; maxVideoMB?: number; editableVideoDuration?: true;
 }
+export const wanEditId = 'alibaba/wan-3.0/reference-to-video';
 const klingHint = 'Посетитель: @Element1. Фото сюжета: @Image1, @Image2, @Image3.';
 const legacyModels: readonly Model[] = [
   { id: 'minimax/h3-max/recast', name: 'MiniMax H3 Max Recast', mode: 'V2V', resolutions: ['768P', '1080P'], defaultResolution: '768P', prompt: false, hint: 'Один главный персонаж. Непрерывный кадр — не более 15 секунд.', minSeconds: 5, maxSeconds: 30 },
   { id: 'fal-ai/kling-video/o1/video-to-video/edit', name: 'Kling O1 Edit Pro', mode: 'V2V', resolutions: [], prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 10, maxVideoMB: 200 },
   { id: 'fal-ai/kling-video/o3/pro/video-to-video/edit', name: 'Kling O3 Edit Pro', mode: 'V2V', resolutions: [], prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 15, maxVideoMB: 200 },
+  { id: 'fal-ai/kling-video/o3/standard/video-to-video/edit', name: 'Kling O3 Edit Standard', mode: 'V2V', resolutions: [], prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 15, maxVideoMB: 200 },
   { id: 'kling/v4/video-to-video/edit', name: 'Kling 4 Editing', mode: 'V2V', resolutions: ['720p', '1080p'], defaultResolution: '720p', prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 30, maxVideoMB: 300, editableVideoDuration: true },
   { id: 'kling/v4/flash/video-to-video', name: 'Kling 4 Flash Editing', mode: 'V2V', resolutions: ['720p'], defaultResolution: '720p', prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 20, maxVideoMB: 300, editableVideoDuration: true },
   { id: 'kling/v4/reference-to-video', name: 'Kling 4 Reference', mode: 'P2V', resolutions: ['720p', '1080p'], defaultResolution: '720p', prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 30 },
@@ -33,7 +35,9 @@ const legacyModels: readonly Model[] = [
   { id: 'fal-ai/vidu/q4/reference-to-video', name: 'Vidu Q4 Reference', mode: 'P2V', resolutions: ['540p', '720p', '1080p', '2K', '4K'], defaultResolution: '720p', prompt: true, hint: 'Фото посетителя: [@reference_image_1]–[@reference_image_4]. Фото сюжета: [@reference_image_5]–[@reference_image_7].', minSeconds: 3, maxSeconds: 16 },
   { id: 'google/gemini-omni-flash/v1.2/reference-to-video', name: 'Gemini Omni Flash 1.2', mode: 'P2V', resolutions: ['360p', '720p', '1080p', '4k'], defaultResolution: '720p', prompt: true, hint: 'Фото посетителя: <IMAGE_REF_0>–<IMAGE_REF_3>. Фото сюжета: <IMAGE_REF_4>–<IMAGE_REF_6>.', minSeconds: 3, maxSeconds: 15 },
 ];
-export const models: readonly Model[] = legacyModels.map(model => ({ ...model,
+const wanEdit: Model = { id: wanEditId, name: 'Wan 3.0', mode: 'V2V', resolutions: ['720p', '1080p'], defaultResolution: '720p',
+  prompt: true, hint: 'Исходник — Video 1. Фото идут по порядку: Image 1, Image 2 и далее.', minSeconds: 1, maxSeconds: 15, maxVideoMB: 100 };
+export const models: readonly Model[] = [...legacyModels, wanEdit].map(model => ({ ...model,
   resolutions: slotSetupMatrix.models.find(item => item.id === model.id)!.resolutionOptions,
 }));
 export const recastId = models[0].id;
@@ -131,13 +135,26 @@ export function isTestVideo(input: { simulateGeneration?: boolean; simulationOut
 export interface LastSlotVideo {
   sessionId: string; videoUrl: string; submittedAt: number | null; readyAt: number | null; elapsedMs: number | null;
 }
-export interface Media { id: string; kind: 'image' | 'video'; mime: string; size: number; duration?: number; width: number; height: number }
+export interface Media { id: string; kind: 'image' | 'video'; mime: string; size: number; duration?: number; fps?: number; width: number; height: number }
 export function blankSlot(mode: Mode = 'V2V'): SlotInput {
   const model = models.find(m => m.mode === mode)!;
   return { ...defaultSlotSetup(model.id, mode), description: '', visible: true, simulateGeneration: false, thumbnailId: '', mode, model: model.id, referenceIds: [], resolution: model.defaultResolution, ...(mode === 'P2V' ? { duration: 10, prompt: '' } : { recastShotsConfirmed: false }) };
 }
+export function wanImageProblem(media: Pick<Media, 'size' | 'width' | 'height'>): string | undefined {
+  const short = Math.min(media.width, media.height);
+  const long = Math.max(media.width, media.height);
+  if (short < 240 || long > 8000 || long > short * 8 || media.size > 20_000_000) {
+    return 'Фото для Wan 3.0 должно быть до 20 МБ, со сторонами 240–8000 px и пропорциями до 8:1';
+  }
+}
 export function videoProblem(model: Model, media: Media): string | undefined {
   if (media.kind !== 'video') return 'Нужен видеофайл';
   if (!media.duration || media.duration < model.minSeconds || media.duration > model.maxSeconds) return `Исходное видео: ${model.minSeconds}–${model.maxSeconds} с`;
+  if (model.id === wanEditId) {
+    const short = Math.min(media.width, media.height);
+    const long = Math.max(media.width, media.height);
+    if (short < 240 || long > 4096 || long > short * 8) return 'Видео для Wan 3.0 должно иметь стороны 240–4096 px и пропорции до 8:1';
+    if (media.fps !== undefined && media.fps < 16) return 'Видео для Wan 3.0 должно иметь частоту не менее 16 кадров/с';
+  }
   if (model.maxVideoMB && media.size > model.maxVideoMB * 1_000_000) return `Исходное видео: не более ${model.maxVideoMB} MB`;
 }

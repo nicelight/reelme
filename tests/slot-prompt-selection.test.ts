@@ -1,5 +1,5 @@
 /** Verify a bounded sample of materialized prompts against accepted budgets and
- * API token syntax. Do not expand this into exhaustive tests of all 813 files.
+ * API token syntax. Do not expand this into exhaustive tests of all prompt files.
  * Source: docs/slot-setup/matrix.md; catalog: src/shared/slot-setup-matrix.json.
  */
 import test from 'node:test';
@@ -23,9 +23,10 @@ test('representative prompts cover model families, identity roles and reference 
   const samples: Array<[string, SlotPromptSelection['participants'], number, number]> = [
     ['recast', 1, 1, 0], ['recast', 2, 1, 0],
     ['kling-o1-edit', 1, 2, 0], ['kling-o1-edit', 2, 4, 2], ['kling-o1-edit', 'group', 1, 3],
-    ['kling-o3-edit', 'group', 4, 0], ['kling-o3-reference', 2, 3, 5],
+    ['kling-o3-edit', 'group', 4, 0], ['kling-o3-edit-standard', 2, 4, 2], ['kling-o3-reference', 2, 3, 5],
     ['kling-v4-edit', 2, 4, 10], ['kling-v4-flash-edit', 'group', 4, 6],
     ['kling-v4-reference', 1, 2, 0], ['kling-v4-flash-reference', 'group', 1, 0],
+    ['wan-3-edit', 2, 4, 2], ['wan-3-edit', 'group', 2, 1],
     ['h3-reference', 1, 1, 8], ['h3-reference', 2, 4, 1],
     ['vidu-q4-reference', 'group', 4, 8], ['vidu-q4-reference', 2, 3, 0],
     ['gemini-omni-reference', 2, 4, 2], ['gemini-omni-reference', 'group', 1, 0],
@@ -63,7 +64,8 @@ test('representative prompts cover model families, identity roles and reference 
       assert.doesNotMatch(text, /IMAGE_REF_|reference_image_|\bImage \d/, selected.file);
     } else {
       assert.doesNotMatch(text, /@Element|@Image\d|@Video|VIDEO_REF_/, selected.file);
-      const pattern = key === 'h3-reference' ? /\bImage (\d+)/g : key === 'vidu-q4-reference' ? /\[@reference_image_(\d+)\]/g : /<IMAGE_REF_(\d+)>/g;
+      if (key === 'wan-3-edit') assert.match(text, /^Edit Video 1\./);
+      const pattern = key === 'h3-reference' || key === 'wan-3-edit' ? /\bImage (\d+)/g : key === 'vidu-q4-reference' ? /\[@reference_image_(\d+)\]/g : /<IMAGE_REF_(\d+)>/g;
       assert.deepEqual(tokens(text, pattern), sequence(camera + references, key === 'gemini-omni-reference' ? 0 : 1), selected.file);
     }
   }

@@ -1,0 +1,13 @@
+Edit Video 1.
+
+Use Image 1 as a reference view of the same person, Person 1. Portray this person once, using the supplied view to preserve their appearance.
+
+Use Image 2 as a reference view of the same person, Person 2. Portray this person once, using the supplied view to preserve their appearance.
+
+Preserve each person's appearance from their own reference images. Keep their identities separate and do not merge faces or duplicate a person.
+
+In the first shot where both appear, replace the person on the left with Person 1 and the person on the right with Person 2. Keep these assignments throughout Video 1.
+
+Use Image 3, Image 4, Image 5, Image 6, Image 7, Image 8, Image 9, Image 10 as visual references for the environment, objects and style. They are not additional main characters.
+
+Preserve the original camera movement, shot sequence, action timing and background.

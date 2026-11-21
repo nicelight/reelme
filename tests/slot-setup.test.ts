@@ -19,6 +19,7 @@ import { buildModelInput } from '../src/server/sessions/model-input.js';
 import { photoProviderUrl } from '../src/server/sessions/provider-media.js';
 
 const installation = { authorization: `Bearer ${'a'.repeat(43)}` };
+const wan = 'alibaba/wan-3.0/reference-to-video';
 const o1 = 'fal-ai/kling-video/o1/video-to-video/edit';
 const o3 = 'fal-ai/kling-video/o3/pro/reference-to-video';
 const v4 = 'kling/v4/reference-to-video';
@@ -38,7 +39,7 @@ test('setup uses accepted Element/group/flat budgets and API-only output setting
   for (const [total, photos, additional, error] of [[5, [4, 1], 0, unequalPhotoMessage], [12, [4, 4], 4, undefined], [2, [2, 0], 0, unequalPhotoMessage]] as const) {
     assert.deepEqual(allocatePhotoBudget(total, 2, 4), { photos, additionalReferences: additional, error });
   }
-  for (const [model, participants, count, extra] of [[o1, 2, 4, 2], [o3, 2, 4, 5], [v4, 2, 4, 10], [h3, 2, 4, 1], [v4, 'group', 4, 6]] as const) {
+  for (const [model, participants, count, extra] of [[o1, 2, 4, 2], [o3, 2, 4, 5], [v4, 2, 4, 10], [h3, 2, 4, 1], [wan, 2, 4, 2], [wan, 'group', 2, 8], [v4, 'group', 4, 6]] as const) {
     const input = { ...config(model), participants, photosPerParticipant: count };
     assert.equal(getSlotSetup(input).variant.additionalReferenceLimit, extra);
     assert.equal(slotSchema.safeParse({ ...input, referenceIds: Array.from({ length: extra }, () => randomUUID()) }).success, true);
@@ -55,7 +56,7 @@ test('setup uses accepted Element/group/flat budgets and API-only output setting
     for (const duration of [undefined, 3, max]) assert.ok(slotSchema.safeParse({ ...config(id), duration }).success);
     for (const duration of [2, 3.5, max + 1]) assert.equal(slotSchema.safeParse({ ...config(id), duration }).success, false);
   }
-  for (const id of [o1, 'fal-ai/kling-video/o3/pro/video-to-video/edit', 'minimax/h3-max/recast']) {
+  for (const id of [o1, 'fal-ai/kling-video/o3/pro/video-to-video/edit', 'fal-ai/kling-video/o3/standard/video-to-video/edit', 'minimax/h3-max/recast']) {
     assert.equal(slotSchema.safeParse({ ...config(id), duration: 5 }).success, false);
   }
   const plan = buildPosePlan({ ...valid, participants: 2, photosPerParticipant: 4 });
@@ -67,23 +68,25 @@ test('setup uses accepted Element/group/flat budgets and API-only output setting
   assert.equal(saved[0].instruction, 'Saved guide');
 });
 
-test('all eleven endpoints receive ordered new plans through real intake and mocked fal submission', async t => {
+test('all configured endpoints receive ordered new plans through real intake and mocked fal submission', async t => {
   const f = await fixture(); t.after(() => f.close());
   const cookie = await f.login(); const admin = { cookie, origin: f.config.origin };
   const db = openDatabase(f.config.dataDir); t.after(() => db.close());
   const thumbnail = await f.upload(cookie, await imageBytes());
   const video = await f.upload(cookie, await videoBytes(f.root, 5), 'video/mp4', 'template.mp4');
-  const bytes = await Promise.all(Array.from({ length: 8 }, (_, index) => sharp({ create: { width: 32, height: 32, channels: 3, background: { r: 20 * index, g: 30, b: 80 } } }).jpeg().toBuffer()));
+  const bytes = await Promise.all(Array.from({ length: 8 }, (_, index) => sharp({ create: { width: 240, height: 240, channels: 3, background: { r: 20 * index, g: 30, b: 80 } } }).jpeg().toBuffer()));
+  const wanReference = await f.upload(cookie, bytes[0], 'image/jpeg', 'reference.jpg');
   const records = new Map<string, { input: ConfiguredSlotInput; snapshot: SlotSnapshot }>();
   for (const model of models) {
+    const isWan = model.id === wan;
     const input: ConfiguredSlotInput = { ...config(model.id), thumbnailId: thumbnail.id, participants: 2,
       photosPerParticipant: model.id.includes('recast') ? 1 : 4,
-      referenceIds: model.id.includes('recast') ? [] : [thumbnail.id],
+      referenceIds: model.id.includes('recast') ? [] : [isWan ? wanReference.id : thumbnail.id],
       ...(model.mode === 'V2V' ? { videoId: video.id } : {}),
       ...(model.id.includes('recast') ? { prompt: 'Replace two people from left to right.' } : {}) };
     if (model.editableVideoDuration) input.duration = 8;
     const slotId = randomUUID();
-    if (model.mode === 'V2V') input.videoId = (await f.importTemplate(cookie, await videoBytes(f.root, 5), slotId, model.id)).id;
+    if (model.mode === 'V2V') input.videoId = (await f.importTemplate(cookie, await videoBytes(f.root, isWan ? 14 : 5, 'blue', isWan ? 24 : 10), slotId, model.id)).id;
     const saved = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: admin, payload: { ...input, id: slotId } });
     assert.equal(saved.statusCode, 201, saved.body);
     const start = await f.app.inject({ method: 'POST', url: '/api/capture/sessions', headers: installation, payload: { slotId: saved.json().id, startRequestId: randomUUID() } });
@@ -111,15 +114,26 @@ test('all eleven endpoints receive ordered new plans through real intake and moc
   } });
   t.after(() => runner.stop());
   await runner.runOnce();
-  assert.equal(calls.size, 11);
+  assert.equal(calls.size, models.length);
   for (const model of slotSetupMatrix.models) {
     const payload = calls.get(model.id)!; assert.ok(payload, model.id);
     const { input } = records.get(model.id)!;
     assert.equal(payload.prompt, input.prompt);
-    assert.equal(payload.aspect_ratio, model.orientationMode === 'aspect-ratio' ? '16:9' : undefined);
+    const isWan = model.id === wan;
+    assert.equal(payload.aspect_ratio, isWan ? 'adaptive' : model.orientationMode === 'aspect-ratio' ? '16:9' : undefined);
     assert.equal(payload.resolution, input.resolution);
-    assert.equal(payload.duration, model.id === o3 ? '5' : input.duration);
-    assert.equal(!!payload.video_url, model.mode === 'V2V');
+    assert.equal(payload.duration, isWan ? 14 : model.id === o3 ? '5' : input.duration);
+    if (isWan) {
+      assert.equal(payload.video_url, undefined);
+      assert.equal(payload.reference_video_urls.length, 1);
+      const source = await f.app.inject({ url: new URL(payload.reference_video_urls[0]).pathname });
+      assert.equal(source.statusCode, 200);
+      assert.deepEqual(source.rawPayload, await readFile(join(f.config.dataDir, 'media', input.videoId!)));
+      assert.equal(payload.enable_prompt_expansion, false);
+      assert.equal(payload.reference_image_urls.length, 9);
+      const scene = await f.app.inject({ url: new URL(payload.reference_image_urls[8]).pathname });
+      assert.deepEqual(scene.rawPayload, bytes[0]);
+    } else assert.equal(!!payload.video_url, model.mode === 'V2V');
     let photos: string[];
     if (model.referenceStrategy === 'elements') {
       assert.equal(payload.elements.length, 2);

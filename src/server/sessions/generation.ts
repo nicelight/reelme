@@ -25,7 +25,7 @@ import { photoProviderUrl, slotProviderUrl } from './provider-media.js';
 import type { FalTransport } from './fal.js';
 import { InvalidVideo, prepareVideo } from './video.js';
 import { falHistoryReason, GenerationFailure, generationMessages } from './generation-errors.js';
-import { isTestVideo } from '../../shared/scenarios.js';
+import { isTestVideo, wanEditId } from '../../shared/scenarios.js';
 import { testVideoTransport } from './test-video.js';
 
 interface Job { template_repaired: number; request_id: string | null; result_url: string | null; video_path: string | null; frame_path: string | null; submitted_at: number | null }
@@ -108,6 +108,7 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
           payload = buildModelInput(session.snapshot, {
             photos: photos.map(photo => photoProviderUrl(db, origin, id, photo.pose_index)),
             video: input.videoId ? templateUrl(input.videoId) : undefined,
+            videoDuration: input.model === wanEditId && input.videoId ? readMedia(db, input.videoId).duration : undefined,
             references: input.referenceIds.map(templateUrl),
           });
         } catch (error) {

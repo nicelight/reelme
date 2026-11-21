@@ -10,7 +10,9 @@ test('video limits include boundary values and provider file size limits', () =>
     ['minimax/h3-max/recast', 5, 30, undefined],
     ['fal-ai/kling-video/o1/video-to-video/edit', 3, 10, 200],
     ['fal-ai/kling-video/o3/pro/video-to-video/edit', 3, 15, 200],
+    ['fal-ai/kling-video/o3/standard/video-to-video/edit', 3, 15, 200],
     ['kling/v4/video-to-video/edit', 3, 30, 300],
+    ['alibaba/wan-3.0/reference-to-video', 1, 15, 100],
     ['kling/v4/flash/video-to-video', 3, 20, 300],
   ];
   for (const [id, min, max, mb] of expected) {

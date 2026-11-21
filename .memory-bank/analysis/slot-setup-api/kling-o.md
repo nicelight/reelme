@@ -14,11 +14,12 @@ status: researched
 | Endpoint | Бюджет без видео-Elements | Промпт | Выходные параметры |
 |---|---|---|---|
 | `fal-ai/kling-video/o1/video-to-video/edit` | `len(elements)+len(image_urls) ≤ 4` | Обязательный, ≤2500 символов; `@Element1`, `@Image1`; исходное видео надёжнее называть обычными словами | Ни `resolution`, ни `aspect_ratio` нет |
-| `fal-ai/kling-video/o3/pro/video-to-video/edit` | `len(elements)+len(image_urls) ≤ 4` | Обязательный, ≤2500; `@Element1`, `@Image1`, исходное видео `@Video1` | Ни `resolution`, ни `aspect_ratio` нет |
+| `fal-ai/kling-video/o3/pro/video-to-video/edit`, `fal-ai/kling-video/o3/standard/video-to-video/edit` | `len(elements)+len(image_urls) ≤ 4` | Обязательный, ≤2500; `@Element1`, `@Image1`, исходное видео `@Video1` | Ни `resolution`, ни `aspect_ratio` нет |
 | `fal-ai/kling-video/o3/pro/reference-to-video` | До 7 images/elements без видео по официальному Kling guide; точный fal schema не кодирует этот максимум | `prompt` либо `multi_prompt`, не оба; один prompt ≤2500; `@Element1`, `@Image1` | `aspect_ratio`: `16:9`, `9:16`, `1:1`; default `16:9`. `resolution` отсутствует. `duration`: строки `"3"`…`"15"` |
 
 Источники: [O1 API](https://fal.ai/models/fal-ai/kling-video/o1/video-to-video/edit/api),
-[O3 Edit API](https://fal.ai/models/fal-ai/kling-video/o3/pro/video-to-video/edit/api),
+[O3 Standard Edit API](https://fal.ai/models/fal-ai/kling-video/o3/standard/video-to-video/edit/api),
+[O3 Pro Edit API](https://fal.ai/models/fal-ai/kling-video/o3/pro/video-to-video/edit/api),
 [O3 Reference API](https://fal.ai/models/fal-ai/kling-video/o3/pro/reference-to-video/api).
 Машинные схемы проверены отдельно:
 [O1 OpenAPI](https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/kling-video/o1/video-to-video/edit),
