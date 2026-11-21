@@ -44,6 +44,8 @@ test('телефон оператора видит сбой за предела�
     expect((await page.request.get(origin+'/api/statuses',{headers:{authorization:'Bearer '+bearer}})).status()).toBe(403);
     expect((await page.request.get(origin+'/api/statuses')).status()).toBe(401);
     expect((await page.request.get(origin+'/api/statuses/id-1')).status()).toBe(401);
+    expect((await page.request.get(origin+'/api/statuses/fal-balance')).status()).toBe(401);
+    expect((await page.request.get(origin+'/api/statuses/fal-balance',{headers:{authorization:'Bearer '+bearer}})).status()).toBe(403);
     await page.setViewportSize({width:360,height:760});
     await page.goto(origin+'/statuses');
     await page.getByLabel('Логин').fill('operator');
@@ -93,6 +95,21 @@ test('телефон оператора видит сбой за предела�
     db.prepare('UPDATE events SET deleting=1 WHERE date=?').run(date);
     expect((await page.request.get(origin+'/api/statuses/id-1')).status()).toBe(404);
     expect((await (await page.request.get(origin+'/api/statuses')).json()).sessions).toEqual([]);
+    await expect(page.getByText('Ключ для проверки баланса не настроен')).toBeVisible();
+    let balanceCalls = 0;
+    await page.route('**/api/statuses/fal-balance', route => route.fulfill({ json: {
+      credits: { amount: ++balanceCalls, currency: 'USD', checkedAt: time }, error: null,
+    } }));
+    await page.clock.install();
+    await page.reload();
+    await expect(page.locator('.balance strong')).toHaveText('1,00 USD');
+    await page.clock.fastForward(50_000);
+    expect(balanceCalls).toBe(1);
+    await page.clock.fastForward(10_000);
+    await expect(page.locator('.balance strong')).toHaveText('2,00 USD');
+    await page.goto(origin+'/operator');
+    await page.clock.fastForward(60_000);
+    expect(balanceCalls).toBe(2);
   } finally {
     if (server.exitCode === null) { const stopped = once(server,'exit'); server.kill('SIGTERM'); await stopped; }
     db.close(); await rm(dataDir,{recursive:true,force:true});

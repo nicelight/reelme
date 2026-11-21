@@ -10,7 +10,7 @@ import sharp from 'sharp';
 import jsQR from 'jsqr';
 import { fixture, imageBytes, videoBytes, multipart } from './helpers.js';
 import { openDatabase } from '../src/server/db.js';
-import { createTemplateCache } from '../src/server/sessions/template-cache.js';
+import { createTemplateCache, falTemplateUpload } from '../src/server/sessions/template-cache.js';
 import { publishReady } from '../src/server/sessions/receive.js';
 import { createGenerationWorker } from '../src/server/sessions/generation.js';
 import { createFalTransport, falHeaders, type FalTransport } from '../src/server/sessions/fal.js';
@@ -40,14 +40,19 @@ async function setup(t: TestContext) {
   assert.equal(response.statusCode, 201, response.body);
   return { f, cookie, input, slotId: response.json().id as string, bytes };
 }
-async function captured(f: Pick<Fixture, 'app'>, slotId: string) {
+function visitorJpeg(background: string) {
+  return sharp({ create: { width: 64, height: 48, channels: 3, background } }).jpeg().toBuffer();
+}
+async function captured(f: Pick<Fixture, 'app'>, slotId: string, photos?: Buffer[]) {
   const response = await f.app.inject({ method: 'POST', url: '/api/capture/sessions', headers: installation, payload: { slotId, startRequestId: randomUUID() } });
   assert.equal(response.statusCode, 201, response.body);
   const id = response.json().sessionId as string;
-  const bytes = await sharp({ create: { width: 64, height: 48, channels: 3, background: '#aabbcc' } }).jpeg().toBuffer();
-  const part = multipart(bytes, 'image/jpeg', 'visitor.jpg');
-  const upload = await f.app.inject({ method: 'PUT', url: `/api/capture/sessions/${id}/photos/0`, headers: { ...installation, 'content-type': part.contentType }, payload: part.bytes });
-  assert.equal(upload.statusCode, 200, upload.body);
+  const frames = photos ?? [await visitorJpeg('#aabbcc')];
+  for (const [index, bytes] of frames.entries()) {
+    const part = multipart(bytes, 'image/jpeg', 'visitor.jpg');
+    const upload = await f.app.inject({ method: 'PUT', url: `/api/capture/sessions/${id}/photos/${index}`, headers: { ...installation, 'content-type': part.contentType }, payload: part.bytes });
+    assert.equal(upload.statusCode, 200, upload.body);
+  }
   const finalized = await f.app.inject({ method: 'POST', url: `/api/capture/sessions/${id}/finalize`, headers: installation });
   assert.equal(finalized.statusCode, 200, finalized.body);
   return id;
@@ -382,6 +387,82 @@ test('provider failure details stay server-side with credentials and capability 
   assert.doesNotMatch(JSON.stringify(publicStatus.error), /422/); // UUIDs may legitimately contain these digits.
 });
 
+test('two visitors reuse the saved video and reference without further fal storage uploads', async t => {
+  const f = await fixture();
+  t.after(() => f.close());
+  const cookie = await f.login();
+  const model = 'fal-ai/kling-video/o1/video-to-video/edit';
+  const video = await videoBytes(f.root, 5);
+  const clip = await f.importTemplate(cookie, video, randomUUID(), model);
+  const reference = await imageBytes();
+  const image = await f.upload(cookie, reference);
+
+  // Count actual SDK storage requests and inspect their bytes at the HTTP boundary.
+  let initiated = 0;
+  const puts: { url: string; bytes: Buffer }[] = [];
+  const submissions: { video_url: string; image_urls: string[]; elements: { frontal_image_url: string; reference_image_urls: string[] }[] }[] = [];
+  const transport: typeof fetch = async (url, init) => {
+    const address = new URL(String(url));
+    if (address.pathname.endsWith('/initiate')) {
+      const fileUrl = `https://cdn.test/file/${++initiated}`;
+      return Response.json({ file_url: fileUrl, upload_url: fileUrl });
+    }
+    if (address.host === 'cdn.test' && init?.method === 'PUT') {
+      puts.push({ url: address.href, bytes: Buffer.from(await new Response(init.body).arrayBuffer()) });
+      return new Response(null, { status: 200 });
+    }
+    assert.equal(address.host, 'queue.fal.run');
+    if (init?.method === 'POST') {
+      assert.equal(address.pathname, '/' + model);
+      submissions.push(JSON.parse(String(init.body)));
+      return Response.json({ request_id: `request-${submissions.length}` });
+    }
+    if (address.pathname.endsWith('/status')) return Response.json({ status: 'COMPLETED' });
+    return Response.json({ video: { url: 'https://result.test/generated.mp4' } });
+  };
+
+  const app = await createApp(f.config, {
+    now: () => Date.UTC(2026, 0, 1),
+    templateUpload: falTemplateUpload('test-key', transport),
+    generation: { client: createFalTransport('test-key', transport), intervalMs: 15, download: async () => new Response(video) },
+  });
+  t.after(() => app.close());
+  const save = await app.inject({ method: 'POST', url: '/api/admin/slots', headers: { cookie, origin: f.config.origin },
+    payload: { id: clip.slotId, description: 'Two visitors', visible: true, thumbnailId: image.id, model, mode: 'V2V',
+      participants: 1, photosPerParticipant: 2, orientation: 'landscape', prompt: '@Element1 in @Image1', videoId: clip.id, referenceIds: [image.id] } });
+  assert.equal(save.statusCode, 201, save.body);
+  await eventually(() => assert.equal(puts.length, 2));
+  const videoUrl = puts.find(put => put.bytes.equals(video))?.url;
+  const referenceUrl = puts.find(put => put.bytes.equals(reference))?.url;
+  assert.ok(videoUrl && referenceUrl && videoUrl !== referenceUrl);
+
+  const guestPhotoUrls = new Set<string>();
+  for (const [index, colors] of [['red', 'orange'], ['blue', 'green']].entries()) {
+    const photos = await Promise.all(colors.map(visitorJpeg));
+    const session = await captured({ app }, clip.slotId, photos);
+    await eventually(async () => assert.equal((await state(f, session)).state, 'ready'));
+    assert.equal(submissions.length, index + 1);
+    assert.equal(initiated, 2);
+    assert.equal(puts.length, 2);
+    const payload = submissions[index];
+    assert.equal(payload.video_url, videoUrl);
+    assert.deepEqual(payload.image_urls, [referenceUrl]);
+    assert.equal(payload.elements.length, 1);
+    const element = payload.elements[0];
+    const urls = [element.frontal_image_url, ...element.reference_image_urls];
+    assert.equal(urls.length, photos.length);
+    for (const [pose, url] of urls.entries()) {
+      assert.ok(!guestPhotoUrls.has(url));
+      guestPhotoUrls.add(url);
+      const address = new URL(url);
+      assert.equal(address.origin, f.config.origin);
+      const served = await app.inject(address.pathname);
+      assert.equal(served.statusCode, 200);
+      assert.deepEqual(served.rawPayload, photos[pose]);
+    }
+  }
+});
+
 test('save warms the CDN, sessions share uploads and a replacement can submit and poll while the original is uploading', async t => {
   const { f, cookie, input, slotId, bytes } = await setup(t);
   const gates = new Map<string, () => void>();
@@ -440,6 +521,30 @@ test('save warms the CDN, sessions share uploads and a replacement can submit an
   assert.match(String(queue.submit[3].input.reference_image_urls), /reelme.test\/provider-media\//);
   assert.equal(calls.length, 2);
   assert.equal(await progress(), null);
+
+  // Replace an already cached source through the same upload route as the web editor.
+  const replacement = await videoBytes(f.root, 7);
+  const part = multipart(replacement, 'video/mp4', 'reference.mp4');
+  const params = new URLSearchParams({ orientation: 'landscape', model: endpoint });
+  const uploaded = await app.inject({ method: 'POST', url: `/api/admin/slots/${slotId}/template-video?${params}`,
+    headers: { cookie, origin: f.config.origin, 'content-type': part.contentType }, payload: part.bytes });
+  assert.equal(uploaded.statusCode, 201, uploaded.body);
+  const { id: replacementId } = uploaded.json();
+  assert.notEqual(replacementId, bVideo.id);
+  const beforeSave = await captured(f, slotId);
+  await eventually(async () => assert.equal((await state(f, beforeSave)).state, 'observing'));
+  assert.equal(queue.submit.at(-1)!.input.video_url, 'https://cdn.test/' + newHash);
+  assert.equal(calls.length, 2);
+
+  const replacementHash = createHash('sha256').update(replacement).digest('hex');
+  await save({ videoId: replacementId });
+  await eventually(() => assert.ok(gates.has(replacementHash)));
+  const afterSave = await captured(f, slotId);
+  assert.equal((await state(f, afterSave)).state, 'submit_pending');
+  gates.get(replacementHash)!();
+  await eventually(async () => assert.equal((await state(f, afterSave)).state, 'observing'));
+  assert.equal(queue.submit.at(-1)!.input.video_url, 'https://cdn.test/' + replacementHash);
+  assert.equal(calls.length, 3);
 });
 
 test('only confirmed CDN loss retries a refused submit; loss after acceptance repairs inputs for the next session', async t => {

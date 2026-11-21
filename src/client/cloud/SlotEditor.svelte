@@ -9,6 +9,7 @@
   import { slotSetupMatrix, selectSlotPrompt } from '../../shared/slot-prompt-selection';
   import { allocatePhotoBudget, buildPosePlan, defaultSlotSetup, getSlotSetup, type Orientation } from '../../shared/slot-setup';
   import type { Pose } from '../../shared/capture';
+  import FileButton from './FileButton.svelte';
   import MediaField from './MediaField.svelte';
   import SlotTest from './SlotTest.svelte';
   import { api, mediaUrl } from './api';
@@ -40,6 +41,7 @@
   let referenceNotice = $state('');
   let sourceLoading = $state(false);
   let sourceError = $state('');
+  let sourceFromFolder = $state(false);
   let requestRevision = 0;
   let controller: AbortController | undefined;
   const currentModel = $derived(models.find(item => item.id === draft.model)!);
@@ -73,6 +75,7 @@
 
   function cancelPrompt() { requestRevision++; controller?.abort(); controller = undefined; promptLoading = false; }
   function resetLower() {
+    sourceError = '';
     cancelPrompt(); draft.referenceIds = []; draft.demoId = undefined; draft.prompt = '';
     draft.simulateGeneration = false; draft.simulationOutput = undefined; draft.testPhotoIds = undefined; draft.testPhotoId = undefined;
     // The fixed V2V source survives unlocking. Its compatibility is checked on save.
@@ -125,14 +128,32 @@
     draft.recastShotsConfirmed = draft.model === recastId ? false : undefined;
     draft.aspectRatio = matrixModel.orientationMode === 'aspect-ratio' ? matrixModel.aspectRatios[value][0] : undefined;
   }
-  async function importSource() {
+  const sourceLimits = $derived(`MP4 · ${currentModel.minSeconds}–${currentModel.maxSeconds} с · до ${currentModel.maxVideoMB ?? 300} MB`);
+  async function importSource(file?: File) {
+    sourceFromFolder = !file;
     sourceLoading = true; sourceError = ''; onBusy(true);
     try {
-      const media = await api<Media>(`/admin/slots/${draftId}/template-video`, { method: 'POST', body: JSON.stringify({ orientation: draft.orientation, model: draft.model }) });
+      const setup = { orientation: draft.orientation!, model: draft.model };
+      let path = `/admin/slots/${draftId}/template-video`;
+      let body: FormData | string;
+      if (file) {
+        body = new FormData();
+        body.append('file', file);
+        path += '?' + new URLSearchParams(setup);
+      } else {
+        body = JSON.stringify(setup);
+      }
+      const media = await api<Media>(path, { method: 'POST', body });
       draft.videoId = media.id; videoMedia = media;
       draft.recastShotsConfirmed = draft.model === recastId ? false : undefined;
     } catch (value) { sourceError = value instanceof Error ? value.message : 'Не удалось подключить исходник'; }
     finally { sourceLoading = false; onBusy(false); }
+  }
+  function uploadSource(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) void importSource(file);
   }
   function syncTestSet() {
     const ids = plan.map(pose => photoCache[positionKey(pose)]);
@@ -238,28 +259,40 @@
   {#if locked}
     <div class="materials">
       {#if draft.mode === 'V2V'}
+        <section aria-label="Референсное видео" class="reference-video">
+          <h4>Референсное видео</h4>
+          <p class="hint" id="source-limits">{sourceLimits} · {draft.orientation === 'portrait' ? 'вертикальное' : 'горизонтальное'}</p>
+          <FileButton label={draft.videoId ? 'Заменить референсное видео' : 'Добавить референсное видео'} accept="video/mp4,.mp4" disabled={sourceLoading} describedBy="source-limits" onchange={uploadSource} />
+          {#if sourceLoading && !sourceFromFolder}<p class="hint" role="status">Загружаем и проверяем ролик…</p>{/if}
+          {#if draft.videoId}<video src={mediaUrl(draft.videoId)} aria-label="Исходный ролик сюжета" controls playsinline preload="metadata"><track kind="captions" /></video>{/if}
+          {#if sourceError && !sourceFromFolder}<p class="error" role="alert">{sourceError}</p>{/if}
+          {#if sourceProblem}<p class="error" role="alert">{sourceProblem}</p>{/if}
+          {#if draft.model === recastId && draft.videoId}<label class="checkbox-label shot-confirmation"><input type="checkbox" bind:checked={draft.recastShotsConfirmed} />Подтверждаю: каждый непрерывный кадр длится не более 15 секунд</label>{/if}
+        </section>
+      {/if}
+      {#if variant && variant.additionalReferenceLimit > 0}
+        <section aria-label="Референсные фото">
+          <h4>Референсные фото</h4>
+          <p class="hint">До {variant.additionalReferenceLimit}. Фото с камеры сюда загружать не нужно.</p>
+          <p class="hint">JPEG, PNG или WebP. Рекомендуем 1024 px по длинной стороне. Сохраните исходные пропорции, лицо и важные детали.</p>
+          <div class="references">
+            {#each Array.from({ length: Math.min(draft.referenceIds.length + 1, variant.additionalReferenceLimit) }, (_, index) => index) as index}
+              <MediaField label={`Референс ${index + 1}`} kind="image" id={draft.referenceIds[index]} buttonLabel={`${draft.referenceIds[index] ? 'Заменить' : 'Добавить'} референс ${index + 1}`} onUploaded={media => { const refs = [...draft.referenceIds]; refs[index] = media.id; changeReferences(refs); }} onRemove={() => changeReferences(draft.referenceIds.filter((_, position) => position !== index))} {onError} {onBusy} />
+            {/each}
+          </div>
+        </section>
+      {:else}<p class="hint">Дополнительные фото для этого набора не передаются.</p>{/if}
+      {#if draft.mode === 'V2V'}
         <section class="template-video" aria-label="Исходное видео слота">
           <h4>Исходное видео</h4>
           <p class="hint">ID сюжета: <code data-testid="draft-slot-id">{draftId}</code></p>
           <p class="hint">Файл: <code>{draftId}__{draft.orientation}.mp4</code></p>
-          <p class="hint">Подготовьте его в папке шаблонных роликов. MP4 · {currentModel.minSeconds}–{currentModel.maxSeconds} с{currentModel.maxVideoMB ? ` · до ${currentModel.maxVideoMB} MB` : ''}.</p>
-          {#if draft.videoId}<video src={mediaUrl(draft.videoId)} aria-label="Исходный ролик сюжета" controls playsinline preload="metadata"><track kind="captions" /></video><p class="hint">Подключён этот исходник. Изменения файла применятся после повторного подключения и сохранения.</p>{/if}
-          <button type="button" class="quiet" disabled={sourceLoading} onclick={importSource}>{sourceLoading ? 'Проверяем исходник…' : draft.videoId ? 'Обновить исходник из файла' : 'Подключить исходник из файла'}</button>
-          {#if sourceError}<p class="error" role="alert">{sourceError}</p>{/if}
+          <p class="hint">Подготовьте его в папке шаблонных роликов. {sourceLimits}.</p>
+          <button type="button" class="small" disabled={sourceLoading} onclick={() => importSource()}>{sourceLoading && sourceFromFolder ? 'Проверяем исходник…' : draft.videoId ? 'Обновить исходник из файла' : 'Подключить исходник из файла'}</button>
+          {#if sourceError && sourceFromFolder}<p class="error" role="alert">{sourceError}</p>{/if}
+          {#if !draft.videoId}<p class="hint">Сюжет можно сохранить как черновик. Для запуска нужен исходный ролик.</p>{/if}
         </section>
-        {#if !draft.videoId}<p class="hint">Сюжет можно сохранить как черновик. Для запуска нужен исходный ролик.</p>{/if}
-        {#if sourceProblem}<p class="error" role="alert">{sourceProblem}</p>{/if}
-        {#if draft.model === recastId && draft.videoId}<label class="checkbox-label shot-confirmation"><input type="checkbox" bind:checked={draft.recastShotsConfirmed} />Подтверждаю: каждый непрерывный кадр длится не более 15 секунд</label>{/if}
-      {/if}
-      {#if variant && variant.additionalReferenceLimit > 0}
-        <div class="references-heading"><h4>Дополнительные фото</h4><p class="hint">До {variant.additionalReferenceLimit}. Фото камеры не нужно загружать сюда.</p></div>
-        <div class="references">
-          {#each Array.from({ length: Math.min(draft.referenceIds.length + 1, variant.additionalReferenceLimit) }, (_, index) => index) as index}
-            <MediaField label={`Референс ${index + 1}`} kind="image" id={draft.referenceIds[index]} optional hint="Сохраняйте исходные пропорции; рекомендуем 1024 px по длинной стороне. Не обрезайте лицо и важные детали." onUploaded={media => { const refs = [...draft.referenceIds]; refs[index] = media.id; changeReferences(refs); }} onRemove={() => changeReferences(draft.referenceIds.filter((_, position) => position !== index))} {onError} {onBusy} />
-          {/each}
-        </div>
-      {:else}<p class="hint">Дополнительные фото для этого набора не передаются.</p>{/if}
-      {#if draft.mode === 'P2V'}<MediaField label="Демовидео" kind="video" id={draft.demoId} optional hint="Показывается гостям как пример. В генерацию не передаётся." onUploaded={media => draft.demoId = media.id} onRemove={() => draft.demoId = undefined} {onError} {onBusy} />{/if}
+      {:else}<MediaField label="Демовидео" kind="video" id={draft.demoId} optional hint="Показывается гостям как пример. В генерацию не передаётся." onUploaded={media => draft.demoId = media.id} onRemove={() => draft.demoId = undefined} {onError} {onBusy} />{/if}
     </div>
     <label for="prompt">Промпт{#if draft.model === recastId}<span class="optional">необязательно</span>{/if}</label>
     {#if draft.model === recastId}<p class="hint recast-warning">РЕКОМЕНДУЕТСЯ ОСТАВИТЬ ПРОМПТ ПУСТЫМ!</p>{/if}
@@ -301,8 +334,15 @@
 </section>
 
 <style>
-  .template-video { margin-top:20px; overflow-wrap:anywhere; }
-  .template-video video { display:block; width:100%; max-height:360px; margin:16px 0; background:#17251c; }
+  .materials { display:grid; gap:24px; }
+  .template-video { padding-top:16px; border-top:1px solid var(--line); overflow-wrap:anywhere; color:var(--muted); }
+  .template-video h4 { font-size:13px; }
+  .template-video .hint { font-size:12px; margin-top:4px; }
+  .template-video button { margin:8px 0 0; padding-inline:12px; }
+  .reference-video .hint { margin:4px 0 12px; }
+  .references { margin:12px 0 0; padding:0; border:0; }
+
+  .reference-video video { display:block; width:100%; max-height:360px; margin:16px 0; background:var(--bg); }
   .capacity-note { margin-top:20px; padding:16px; border:1px solid var(--line); border-radius:6px; background:var(--bg); font-size:14px; overflow-wrap:anywhere; }
   .capacity-note p { margin-top:6px; }
   .setup-actions { margin-top:24px; }
@@ -317,7 +357,6 @@
   .setup-actions .hint { margin-top:12px; text-align:center; }
   @media(max-width:600px) { .generation-lock { gap:10px; } .generation-lock>span { font-size:13px; } }
   @media(prefers-reduced-motion:reduce) { .generation-lock>span,.lock-thumb { transition:none; } }
-  .references-heading { margin-top:22px; }
   .test-photos { display:grid; gap:24px; margin-top:24px; }
   .reference-notice,.recast-warning { padding:12px; border-left:3px solid var(--accent); background:var(--soft); }
   [hidden] { display:none; }

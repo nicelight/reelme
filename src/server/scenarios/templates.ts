@@ -1,10 +1,11 @@
-/** Module contract: imports a slot's named source into immutable media storage.
+/** Module contract: imports a browser upload or a slot's named source into immutable media storage.
  * Only UUID/orientation select the file; the client cannot supply paths. Imported
  * bytes are validated before publication and existing media are never overwritten.
  * Source: docs/slot-setup/matrix.md. */
 import { randomUUID } from 'node:crypto';
 import { copyFile, rm, stat } from 'node:fs/promises';
-import { constants } from 'node:fs';
+import { constants, createWriteStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
 import { join, resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -17,18 +18,30 @@ import { inspectMedia } from './media.js';
 export function registerTemplateVideos(app: FastifyInstance, db: DB, dataDir: string, access: Access, templateVideosDir = resolve('media/template-videos')) {
   app.post('/api/admin/slots/:id/template-video', { preHandler: [access.requireAdmin, access.requireOrigin] }, async (request, reply) => {
     const { id: slotId } = z.object({ id: z.string().uuid() }).parse(request.params);
-    const { orientation, model: modelId } = z.object({ orientation: z.enum(['landscape', 'portrait']), model: z.string() }).strict().parse(request.body);
+    const upload = request.isMultipart();
+    const { orientation, model: modelId } = z.object({ orientation: z.enum(['landscape', 'portrait']), model: z.string() }).strict().parse(upload ? request.query : request.body);
     const model = models.find(item => item.id === modelId && item.mode === 'V2V');
     if (!model) throw new HttpError(400, 'MODEL_LIMIT', 'Выберите модель Video2Video');
-    const source = join(templateVideosDir, `${slotId}__${orientation}.mp4`);
-    const sourceStat = await stat(source).catch(() => undefined);
-    if (!sourceStat?.isFile()) throw new HttpError(404, 'TEMPLATE_VIDEO_MISSING', 'Шаблонный ролик этой ориентации не найден. Подготовьте файл с указанным именем.');
-    if (sourceStat.size > 300_000_000) throw new HttpError(413, 'FILE_TOO_LARGE', 'Размер исходника превышает 300 MB');
-    const id = randomUUID(); const path = join(dataDir, 'media', id);
+    const maxMB = model.maxVideoMB ?? 300;
+    const limit = maxMB * 1_000_000;
+    const tooLarge = () => new HttpError(413, 'FILE_TOO_LARGE', `Размер исходника превышает ${maxMB} MB`);
+    const id = randomUUID();
+    const path = join(dataDir, 'media', id);
     try {
-      await copyFile(source, path, constants.COPYFILE_EXCL);
+      if (upload) {
+        // Read one byte over the inclusive limit so an exact-limit MP4 is valid.
+        const file = await request.file({ limits: { files: 1, fields: 0, parts: 1, fileSize: limit + 1 } });
+        if (!file || file.mimetype !== 'video/mp4') throw new HttpError(400, 'INVALID_MEDIA', 'Выберите видео в формате MP4.');
+        await pipeline(file.file, createWriteStream(path, { flags: 'wx', mode: 0o600 }));
+      } else {
+        const source = join(templateVideosDir, `${slotId}__${orientation}.mp4`);
+        const sourceStat = await stat(source).catch(() => undefined);
+        if (!sourceStat?.isFile()) throw new HttpError(404, 'TEMPLATE_VIDEO_MISSING', 'Шаблонный ролик этой ориентации не найден. Подготовьте файл с указанным именем.');
+        if (sourceStat.size > limit) throw tooLarge();
+        await copyFile(source, path, constants.COPYFILE_EXCL);
+      }
       const size = (await stat(path)).size;
-      if (size > 300_000_000) throw new HttpError(413, 'FILE_TOO_LARGE', 'Размер исходника превышает 300 MB');
+      if (size > limit) throw tooLarge();
       const meta = await inspectMedia(path, 'video/mp4', true);
       const media = { id, size, ...meta };
       if (!(orientation === 'portrait' ? media.height > media.width : media.width > media.height)) throw new HttpError(400, 'VIDEO_ORIENTATION', 'Ориентация файла не соответствует выбранному варианту');

@@ -72,7 +72,7 @@ export async function createApp(config: Config, options: { now?: () => number; l
   registerSessions(app, db, config.dataDir, access, options.now ?? Date.now);
   registerSlotResults(app, db, config.dataDir, access);
   registerProviderMedia(app, db, config.dataDir);
-  registerStatuses(app, db, access, options.now ?? Date.now);
+  registerStatuses(app, db, access, options.now ?? Date.now, config.falBillingKey);
   registerDisplay(app, db, config.dataDir, config.origin, access, options.now ?? Date.now);
   const cleanup = createEventCleanup(db, config.dataDir, app.log, options.now ?? Date.now, { ...options.cleanup, deleteOutput });
   registerEvents(app, db, config.dataDir, access, options.now ?? Date.now, cleanup);
@@ -101,6 +101,9 @@ export async function createApp(config: Config, options: { now?: () => number; l
   await app.register(fastifyStatic, { root: join(config.clientDir, 'slot-prompts'), prefix: '/slot-prompts/', decorateReply: false, immutable: false, maxAge: 0, index: false, setHeaders: response => { response.header('Cache-Control', 'no-cache'); } });
   app.get('/', async (request, reply) => {
     if (new URL(request.url, config.origin).searchParams.get('screen') === 'results') return reply.redirect('/results', 308);
+    if (['http://localhost:3000', 'http://127.0.0.1:3000'].includes(config.origin)) {
+      return reply.redirect('http://localhost:5513/reelme.html');
+    }
     return reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8'));
   });
   app.get('/admin', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));

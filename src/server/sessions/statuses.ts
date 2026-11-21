@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Access } from '../access/index.js';
 import type { DB } from '../db.js';
 import { HttpError } from '../errors.js';
+import { createBalanceReader } from './fal-balance.js';
 import { eventDate } from './index.js';
 import { isTestVideo } from '../../shared/scenarios.js';
 import type { HistoryEntry, SessionHistory, SessionStatus, StatusPage } from '../../shared/statuses.js';
@@ -129,11 +130,13 @@ function status(row: Row, latest?: EntryRow): SessionStatus {
     updatedAt: Math.max(row.created_at, latest?.last_at ?? 0, row.ready_at ?? 0, row.opened_at ?? 0, row.sent_at ?? 0, row.submitted_at ?? 0) };
 }
 
-export function registerStatuses(app: FastifyInstance, db: DB, access: Access, now: () => number) {
+export function registerStatuses(app: FastifyInstance, db: DB, access: Access, now: () => number, billingKey?: string) {
   async function account(request: FastifyRequest, reply: FastifyReply) {
     const role = access.context(request, reply);
     if (role !== 'admin' && role !== 'operator') throw new HttpError(403, 'FORBIDDEN', 'Нужен аккаунт сотрудника');
   }
+  const readBalance = createBalanceReader(billingKey);
+  app.get('/api/statuses/fal-balance', { preHandler: account }, () => readBalance());
   let latestQuery: ReturnType<typeof db.prepare<[string], EntryRow>>;
   const latest = (id: string) => (latestQuery ??= db.prepare<[string], EntryRow>("SELECT * FROM session_history WHERE session_id=? AND step<>'history' ORDER BY id DESC LIMIT 1")).get(id);
   // A missing diagnostics table can coexist with healthy capture/generation after a failed migration.

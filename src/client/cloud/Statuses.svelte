@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api, ApiError } from './api';
-  import type { SessionHistory, StatusPage } from '../../shared/statuses';
+  import { onMount } from 'svelte';
+  import { balanceIntervalMs, type FalBalance, type SessionHistory, type StatusPage } from '../../shared/statuses';
 
   let { onunauthorized }: { onunauthorized: () => void } = $props();
   let date = $state('');
@@ -21,6 +22,38 @@
     if (e instanceof ApiError && [401,403].includes(e.status)) { onunauthorized(); return true; }
     return false;
   }
+  let balance = $state<FalBalance>({ credits: null, error: null });
+  const amount = $derived(balance.credits && new Intl.NumberFormat('ru-RU', {
+    style: 'currency', currency: balance.credits.currency, currencyDisplay: 'code',
+  }).format(balance.credits.amount));
+
+  onMount(() => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    let due = 0;
+    async function refresh() {
+      clearTimeout(timer);
+      if (document.hidden || controller.signal.aborted) return;
+      const remaining = due - Date.now();
+      if (remaining > 0) {
+        timer = setTimeout(refresh, remaining);
+        return;
+      }
+      due = Date.now() + balanceIntervalMs;
+      timer = setTimeout(refresh, balanceIntervalMs);
+      try {
+        const result = await api<FalBalance>('/statuses/fal-balance', {
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12000)]),
+        });
+        if (!controller.signal.aborted) balance = result;
+      } catch (error) {
+        if (!controller.signal.aborted && !denied(error)) balance = { ...balance, error: 'Не удалось обновить баланс' };
+      }
+    }
+    void refresh();
+    document.addEventListener('visibilitychange', refresh);
+    return () => { controller.abort(); clearTimeout(timer); document.removeEventListener('visibilitychange', refresh); };
+  });
   function reset() { pages = [null]; opened = ''; page = undefined; }
   function toggleIssues() { issuesOnly = !issuesOnly; number = ''; reset(); }
   function expand(id: string) { opened = opened === id ? '' : id; historyPages = 1; copied = ''; detailError = ''; history = undefined; }
@@ -94,7 +127,11 @@
 </script>
 
 <main class="monitor">
-  <div class="heading"><a href="/operator">← Рабочий экран</a><h1>Статусы видео</h1></div>
+  <div class="heading"><a href="/operator">← Рабочий экран</a><div class="title-line"><h1>Статусы видео</h1>
+    <div class="balance"><span>Баланс fal</span> <strong>{amount ?? (balance.error ? '—' : '…')}</strong>
+      {#if balance.error}<small class="stale">{balance.error}</small>{/if}
+      {#if balance.credits}<small>Обновлено в {clock.format(balance.credits.checkedAt)} НСК</small>{/if}
+    </div></div></div>
   <div class="filters">
     <label>Дата мероприятия<input type="date" value={date || page?.date || ''} onchange={e => { date = e.currentTarget.value; reset(); }} /></label>
     <label>Номер посетителя<input placeholder="Все номера" type="search" inputmode="numeric" value={number} oninput={e => { number = e.currentTarget.value.replace(/\D/g,''); e.currentTarget.value = number; reset(); }} /></label>
@@ -147,7 +184,10 @@
 <style>
   .monitor {max-width:850px;margin:0 auto;padding:24px clamp(14px,4vw,36px) 64px}
   .heading a,small,.when,time {font-size:.81rem;color:var(--muted)}
-  h1 {margin:10px 0 14px}
+  .title-line {display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;margin:10px 0 18px}
+  h1 {margin:0}
+  .balance {font-variant-numeric:tabular-nums}
+  .balance span {color:var(--muted);font-size:.84rem}
   .filters {display:grid;grid-template-columns:1fr 1fr;gap:12px}
   label {min-width:0;margin:0;font-size:.84rem}
   input {margin-top:4px;min-width:0}

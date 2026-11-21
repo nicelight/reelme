@@ -44,6 +44,11 @@ async function upload(page: Page, label: string, file: string) {
   await expect(page.getByLabel('Заменить: ' + label, { exact: true })).toBeVisible();
   await expect(page.getByText('Загружаем и проверяем файл…')).toHaveCount(0);
 }
+async function chooseFile(page: Page, button: string, file: string) {
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: button, exact: true }).click();
+  await (await chooser).setFiles(file);
+}
 async function save(page: Page) {
   await page.getByRole('button', { name: 'Сохранить сюжет', exact: true }).click();
   await expect(page.getByText('Сюжет сохранён.', { exact: true })).toBeVisible();
@@ -95,19 +100,19 @@ test('sequential setup exposes real capacities, locks fields, saves both modes a
   await page.getByRole('button', { name: 'Сохранить сюжет', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Добавьте изображение');
   await upload(page, 'Изображение сюжета', app.image); await page.getByLabel('Описание', { exact: true }).fill('Групповой портрет для гостей');
-  await upload(page, 'Референс 1', app.image);
-  await expect(page.getByLabel('Референс 2', { exact: true })).toHaveCount(0);
+  await chooseFile(page, 'Добавить референс 1', app.image);
+  await expect(page.getByRole('button', { name: 'Добавить референс 2', exact: true })).toHaveCount(0);
   await expect(page.locator('#prompt')).toHaveValue(await readFile('public/slot-prompts/h3-reference/people-2__photos-4__refs-1.md', 'utf8'));
   await save(page); await expect(page.locator('.slot-list strong')).toHaveText('Групповой портрет для');
   await app.restart(); await page.reload(); await page.getByRole('button', { name: /Групповой портрет для/ }).click();
-  await expect(page.locator('#model')).toBeDisabled(); await expect(page.getByLabel('Заменить: Референс 1')).toBeVisible();
+  await expect(page.locator('#model')).toBeDisabled(); await expect(page.getByRole('button', { name: 'Заменить референс 1', exact: true })).toBeVisible();
   await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
   await expect(page.getByLabel('Описание', { exact: true })).toHaveValue('Групповой портрет для гостей');
   await expect(page.locator('#prompt')).toHaveCount(0);
   await page.getByLabel('Ориентация', { exact: true }).selectOption('portrait');
   expect(await page.locator('#aspect-ratio option').allTextContents()).toEqual(['Выберите соотношение', '9:16', '3:4']);
-  await lock(page); await expect(page.getByLabel('Референс 1', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('Заменить: Референс 1')).toHaveCount(0);
+  await lock(page); await expect(page.getByRole('button', { name: 'Добавить референс 1', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Заменить референс 1', exact: true })).toHaveCount(0);
   await save(page);
   // Recast's deliberately empty file is success; a missing source is a saved draft.
   await page.getByRole('button', { name: 'Новый сюжет', exact: true }).click();
@@ -132,7 +137,8 @@ test('sequential setup exposes real capacities, locks fields, saves both modes a
   await page.locator('#photos-per-person').selectOption('4');
   await expect(page.getByLabel('Распределение фотографий')).toContainText('Фото камеры: 8. Elements: 2. Дополнительные фото: 2');
   await expect(page.locator('#resolution')).toHaveCount(0); await lock(page);
-  await expect(page.locator('.materials video')).toHaveAttribute('src', source!); await upload(page, 'Референс 1', app.image); await save(page);
+  await expect(page.locator('.materials h4')).toHaveText(['Референсное видео', 'Референсные фото', 'Исходное видео']);
+  await expect(page.locator('.materials video')).toHaveAttribute('src', source!); await chooseFile(page, 'Добавить референс 1', app.image); await save(page);
   await page.screenshot({ path: join(artifacts, 'editor-desktop.png'), fullPage: true });
   await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
   await setup(page, 'P2V', 'kling/v4/flash/reference-to-video', '1', '2');
@@ -172,10 +178,10 @@ test('prompt text survives reference changes and stale fetches; real load failur
   await expect(page.getByRole('button', { name: 'Сохранить сюжет', exact: true })).toBeDisabled();
   await page.locator('#prompt').fill('My authored text with Image 1'); release!();
   await expect(page.locator('#prompt')).toHaveValue('My authored text with Image 1');
-  await upload(page, 'Референс 1', app.image);
+  await chooseFile(page, 'Добавить референс 1', app.image);
   await expect(page.getByText('Референсы изменены.', { exact: false })).toBeVisible();
   await expect(page.locator('#prompt')).toHaveValue('My authored text with Image 1');
-  await page.getByLabel('Заменить: Референс 1', { exact: true }).setInputFiles(app.jpeg);
+  await chooseFile(page, 'Заменить референс 1', app.jpeg);
   await expect(page.getByText('Загружаем и проверяем файл…')).toHaveCount(0);
   await expect(page.locator('#prompt')).toHaveValue('My authored text with Image 1');
   await page.locator('.references .media-field').first().getByRole('button', { name: 'Убрать', exact: true }).click();
@@ -289,11 +295,11 @@ test('draft source binding and five-guide page show actual immutable media on de
   const id = (await page.getByTestId('draft-slot-id').textContent())!;
   expect(id).toMatch(/^[0-9a-f-]{36}$/);
   await expect(page.getByText(`${id}__landscape.mp4`, { exact: true })).toBeVisible();
-  await expect(page.getByLabel('Исходное видео', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Добавить референсное видео' })).toBeVisible();
   const connect = page.getByRole('button', { name: 'Подключить исходник из файла', exact: true });
   await connect.click(); await expect(page.getByRole('alert')).toContainText('Шаблонный ролик этой ориентации не найден');
   await upload(page, 'Изображение сюжета', app.image); await page.getByLabel('Описание', { exact: true }).fill('Подготовленный исходник');
-  await app.prepareTemplate(id); await connect.click();
+  await chooseFile(page, 'Добавить референсное видео', app.video);
   const player = page.getByLabel('Исходный ролик сюжета', { exact: true }); await expect(player).toBeVisible();
   await expect.poll(() => player.evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
   await player.evaluate(node => (node as HTMLVideoElement).play()); await expect.poll(() => player.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(0.1); await player.evaluate(node => (node as HTMLVideoElement).pause());
@@ -301,12 +307,20 @@ test('draft source binding and five-guide page show actual immutable media on de
   const saved = await (await page.request.get(`${app.origin}/api/admin/slots/${id}`)).json();
   await expect(player).toHaveAttribute('src', `/api/admin/slot-media/${saved.videoId}`);
   const oldSource = saved.videoId;
+  await page.reload(); await page.getByRole('button', { name: /Подготовленный исходник/ }).click();
+  await expect(player).toHaveAttribute('src', `/api/admin/slot-media/${oldSource}`);
+  await chooseFile(page, 'Заменить референсное видео', app.image);
+  await expect(page.getByRole('alert')).toContainText('Выберите видео в формате MP4');
+  await expect(player).toHaveAttribute('src', `/api/admin/slot-media/${oldSource}`);
+  await app.prepareTemplate(id);
   await page.getByRole('button', { name: 'Обновить исходник из файла', exact: true }).click();
   await expect(player).not.toHaveAttribute('src', `/api/admin/slot-media/${oldSource}`);
   await page.getByLabel('Подтверждаю:', { exact: false }).check(); await save(page);
   await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
   await page.getByLabel('Ориентация', { exact: true }).selectOption('portrait'); await lock(page);
   await expect(player).toHaveCount(0); await expect(page.getByText(`${id}__portrait.mp4`, { exact: true })).toBeVisible();
+  await chooseFile(page, 'Добавить референсное видео', app.video);
+  await expect(page.getByRole('alert')).toContainText('Ориентация файла не соответствует');
   // Filename alone cannot disguise a landscape fixture as portrait.
   await app.prepareTemplate(id, 'portrait'); await connect.click(); await expect(page.getByRole('alert')).toContainText('Ориентация файла не соответствует');
   await save(page); // Save an honest not-ready draft, without the prior landscape source.

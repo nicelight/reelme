@@ -53,7 +53,7 @@ test('public promo is read-only and hides private, replaced and hidden materials
 test('page routes serve the client and old results links redirect to /results', async () => {
   const f = await fixture();
   try {
-    for (const url of ['/', '/admin', '/operator', '/results']) {
+    for (const url of ['/', '/admin', '/operator', '/results', '/statuses']) {
       const page = await f.app.inject(url);
       assert.equal(page.statusCode, 200);
       assert.equal(page.headers['cache-control'], 'no-cache');
@@ -61,5 +61,11 @@ test('page routes serve the client and old results links redirect to /results', 
     const legacy = await f.app.inject('/?screen=results');
     assert.equal(legacy.statusCode, 308);
     assert.equal(legacy.headers.location, '/results');
+
+    f.config.origin = 'http://localhost:3000';
+    await f.restart();
+    const camera = await f.app.inject('/');
+    assert.equal(camera.statusCode, 302);
+    assert.equal(camera.headers.location, 'http://localhost:5513/reelme.html');
   } finally { await f.close(); }
 });

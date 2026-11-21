@@ -49,3 +49,10 @@ export interface SessionHistory {
   entries: HistoryEntry[];
   nextAfter: number | null;
 }
+
+export interface FalBalance {
+  credits: { amount: number; currency: string; checkedAt: number } | null;
+  error: string | null;
+}
+
+export const balanceIntervalMs = 60_000;
