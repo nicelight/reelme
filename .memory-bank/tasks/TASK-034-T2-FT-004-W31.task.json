@@ -1,0 +1,62 @@
+{
+  "id": "TASK-034-T2-FT-004-W31",
+  "title": "Настроить почту Mail.ru в админке и сохранить второй профиль SMTP.BZ",
+  "status": "done",
+  "wave": "W31",
+  "feature": "FT-004",
+  "tier": "T2",
+  "reqs": [
+    "REQ-012",
+    "REQ-018"
+  ],
+  "depends_on": [
+    "TASK-009-T3-FT-004-W6"
+  ],
+  "touched_files": [
+    "src/client/cloud/EmailSettings.svelte",
+    "src/server/sessions/email-settings.ts",
+    "src/server/sessions/email.ts",
+    "src/server/db.ts",
+    "src/shared/email-settings.ts",
+    "src/server/app.ts",
+    "src/client/cloud/App.svelte"
+  ],
+  "gates": [],
+  "verify": [
+    {
+      "date": "2026-11-21",
+      "result": "PASS",
+      "summary": "npm run check и npm run build прошли. npm test — 131/131. Chromium проверил ввод и тест до сохранения, отказ авторизации, смену профилей и MP4 с адреса сохранённого ящика через локальный почтовый сервер.",
+      "evidence": [
+        "tests/email-settings.spec.ts",
+        "tests/email-settings.test.ts"
+      ],
+      "limitations": [
+        "Доставка через внешние аккаунты не проверялась."
+      ]
+    }
+  ],
+  "docs": [
+    "docs/MANUAL.md#отправка-писем",
+    ".memory-bank/contracts/http-api.md"
+  ],
+  "evidence_required": [
+    "Сохранение и повторное использование профилей, права администратора, проверка письма через интерфейс."
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-004-public-delivery.md"
+  ],
+  "normative_inputs": [
+    ".memory-bank/prd.md#получение-по-email",
+    ".memory-bank/contracts/integrations.md#почта"
+  ],
+  "constraints": [
+    "Для Mail.ru нужны только адрес ящика и пароль приложения. Сохраняется совместимость с переменными окружения."
+  ],
+  "invariants": [
+    "Тест не выбирает провайдера и не меняет состояние писем посетителей. Пароли отсутствуют в ответах и логах."
+  ],
+  "verification_targets": [
+    "Профили в SQLite, проверка и сохранение Mail.ru, отправка письма посетителю существующей очередью."
+  ]
+}

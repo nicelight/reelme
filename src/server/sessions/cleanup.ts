@@ -41,11 +41,14 @@ export function createEventCleanup(db: DB, dataDir: string, log: FastifyBaseLogg
       if (!await deleteKnownOutput(output.result_url, log, options.deleteOutput)) remoteErrors++;
     }
     for (const session of sessions) await rm(join(dataDir, 'media', 'sessions', session.id), { recursive: true, force: true });
-    removeUnusedMaterials(db, dataDir, sessions.flatMap(s => materialIds(JSON.parse(s.snapshot))), date);
+    const discardedUrls = removeUnusedMaterials(db, dataDir, sessions.flatMap(s => materialIds(JSON.parse(s.snapshot))), date);
     db.transaction(() => {
       db.prepare('DELETE FROM capture_sessions WHERE event_date=?').run(date);
       db.prepare('DELETE FROM events WHERE date=? AND deleting=1').run(date);
     }).immediate();
+    for (const url of discardedUrls) {
+      if (!await deleteKnownOutput(url, log, options.deleteOutput)) remoteErrors++;
+    }
     return remoteErrors;
   }
   function remove(date: string) {

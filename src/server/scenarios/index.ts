@@ -16,7 +16,7 @@ import { registerTemplateVideos } from './templates.js';
 import { registerCaptureGuides } from './guides.js';
 import { HttpError } from '../errors.js';
 import { readMedia, readTestPhoto, registerMedia } from './media.js';
-export function registerScenarios(app: FastifyInstance, db: DB, dataDir: string, access: Access, templateVideosDir?: string) {
+export function registerScenarios(app: FastifyInstance, db: DB, dataDir: string, access: Access, templateVideosDir?: string, warm?: (slot: SlotInput) => void) {
   registerMedia(app, db, dataDir, access);
   registerCatalog(app, db, dataDir, access);
   registerTemplateVideos(app, db, dataDir, access, templateVideosDir);
@@ -57,12 +57,14 @@ export function registerScenarios(app: FastifyInstance, db: DB, dataDir: string,
     if (db.prepare('SELECT 1 FROM slots WHERE id=?').get(id)) throw new HttpError(409, 'SLOT_EXISTS', 'Сюжет с этим ID уже существует');
     const slot = validate(body, id);
     db.prepare('INSERT INTO slots(id,config) VALUES (?,?)').run(id, JSON.stringify(slot));
+    if (!slot.simulateGeneration) warm?.(slot);
     return reply.code(201).send({ ...slot, id });
   });
   app.put<{ Params: { id: string } }>('/api/admin/slots/:id', { preHandler: [access.requireAdmin, access.requireOrigin] }, request => {
     const previous = readSlot(db, request.params.id);
     const slot = validate(request.body, request.params.id, previous);
     db.prepare('UPDATE slots SET config=? WHERE id=?').run(JSON.stringify(slot), request.params.id);
+    if (!slot.simulateGeneration) warm?.(slot);
     return { ...slot, id: request.params.id };
   });
 }

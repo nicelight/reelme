@@ -48,6 +48,9 @@ test('cleanup manual: permissions, owned files/capabilities gone, other-day snap
   const row = db.prepare('SELECT snapshot FROM capture_sessions WHERE id=?').get(seed.first.id) as {snapshot:string};
   const snapshot = JSON.parse(row.snapshot); snapshot.generation.referenceIds=[stale];
   db.prepare('UPDATE capture_sessions SET snapshot=? WHERE id=?').run(JSON.stringify(snapshot),seed.first.id);
+  for (const id of [stale, seed.thumbnailId, seed.changedId]) {
+    db.prepare('INSERT INTO fal_template_cache(media_id,url,expires_at) VALUES (?,?,?)').run(id, 'https://cdn.test/' + id, now + 86400_000);
+  }
   const staleUrl = new URL(slotProviderUrl(db,f.config.origin,stale)).pathname;
   const neighbor = db.prepare("SELECT id FROM capture_sessions WHERE event_date='2026-11-13'").get() as {id:string};
   await mkdir(join(f.config.dataDir,'media','sessions',neighbor.id));
@@ -58,6 +61,8 @@ test('cleanup manual: permissions, owned files/capabilities gone, other-day snap
     await assert.rejects(readdir(join(f.config.dataDir,'media','sessions',id)),{code:'ENOENT'});
   }
   for (const url of [target,`${target}/${seed.first.id}/video`,`${target}/${seed.first.id}/thumbnail`, `/receive/${delivery.receive_token}`,`/api/receive/${delivery.receive_token}`,`/download/${delivery.download_token}`,photoUrl,staleUrl]) assert.equal((await f.app.inject({url,headers:{cookie:admin}})).statusCode,404,url);
+  const retained = db.prepare('SELECT media_id FROM fal_template_cache ORDER BY media_id').pluck().all();
+  assert.deepEqual(retained, [seed.thumbnailId, seed.changedId].sort());
   for (const url of [sharedUrl,currentUrl]) assert.equal((await f.app.inject({url})).statusCode,200,url);
   assert.deepEqual(await readFile(join(f.config.dataDir,'media',seed.thumbnailId)),seed.thumb);
   assert.deepEqual(await readFile(join(f.config.dataDir,'media',seed.changedId)),seed.changed);

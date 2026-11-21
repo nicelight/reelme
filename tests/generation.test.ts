@@ -10,6 +10,7 @@ import sharp from 'sharp';
 import jsQR from 'jsqr';
 import { fixture, imageBytes, videoBytes, multipart } from './helpers.js';
 import { openDatabase } from '../src/server/db.js';
+import { createTemplateCache } from '../src/server/sessions/template-cache.js';
 import { createGenerationWorker } from '../src/server/sessions/generation.js';
 import { createFalTransport, falHeaders, type FalTransport } from '../src/server/sessions/fal.js';
 import { createApp } from '../src/server/app.js';
@@ -330,4 +331,91 @@ test('provider failure details stay server-side with credentials and capability 
   const publicStatus = await state(f, id);
   assert.doesNotMatch(JSON.stringify(publicStatus), /safe-request-id|private|Cannot fetch/);
   assert.doesNotMatch(JSON.stringify(publicStatus.error), /422/); // UUIDs may legitimately contain these digits.
+});
+
+test('save warms the CDN, sessions share uploads and a replacement can submit and poll while the original is uploading', async t => {
+  const { f, cookie, input, slotId, bytes } = await setup(t);
+  const gates = new Map<string, () => void>();
+  const calls: string[] = [];
+  const { client, calls: queue } = fake();
+  client.status = async (_model, id) => { queue.status.push(id); return { status: 'IN_PROGRESS' }; };
+  const upload = async (blob: Blob) => {
+    const content = createHash('sha256').update(Buffer.from(await blob.arrayBuffer())).digest('hex');
+    calls.push(content);
+    await new Promise<void>(resolve => gates.set(content, resolve));
+    return 'https://cdn.test/' + content;
+  };
+  const start = () => createApp(f.config, { now: () => Date.UTC(2026, 0, 1), templateUpload: upload,
+    generation: { client, intervalMs: 15 } });
+  let app = await start();
+  t.after(async () => { for (const release of gates.values()) release(); await app.close(); });
+  const save = async (changes: object) => {
+    const result = await app.inject({ method: 'PUT', url: '/api/admin/slots/' + slotId,
+      headers: { cookie, origin: f.config.origin }, payload: { ...input, ...changes } });
+    assert.equal(result.statusCode, 200, result.body);
+  };
+  await save({ simulateGeneration: true });
+  const simulated = await captured(f, slotId);
+  await eventually(async () => assert.equal((await state(f, simulated)).state, 'simulated'));
+  assert.deepEqual(calls, []);
+  await save({});
+  await eventually(() => assert.equal(calls.length, 1));
+  const a = await captured(f, slotId);
+  const other = await captured(f, slotId);
+  const bVideo = await f.importTemplate(cookie, await videoBytes(f.root, 6), slotId);
+  await save({ videoId: bVideo.id }); await save({ videoId: bVideo.id, prompt: 'Edited' });
+  const b = await captured(f, slotId);
+  await eventually(() => assert.equal(gates.size, 2));
+  const [oldHash, newHash] = calls;
+  assert.equal(oldHash, createHash('sha256').update(bytes).digest('hex'));
+  gates.get(newHash)!();
+  await eventually(() => assert.ok(queue.status.length > 0));
+  assert.equal((await state(f, a)).state, 'submit_pending');
+  assert.equal((await state(f, b)).state, 'observing');
+  assert.deepEqual(queue.submit.map(s => s.input.video_url), ['https://cdn.test/' + newHash]);
+  gates.get(oldHash)!();
+  await eventually(async () => assert.equal((await state(f, other)).state, 'observing'));
+  await eventually(async () => assert.equal((await state(f, a)).state, 'observing'));
+  assert.deepEqual(queue.submit.slice(1).map(s => s.input.video_url), Array(2).fill('https://cdn.test/' + oldHash));
+  await app.close(); app = await start(); await app.ready();
+  const c = await captured(f, slotId);
+  await eventually(async () => assert.equal((await state(f, c)).state, 'observing'));
+  assert.equal(queue.submit.length, 4);
+  assert.equal(queue.submit[3].input.video_url, 'https://cdn.test/' + newHash);
+  assert.match(String(queue.submit[3].input.reference_image_urls), /reelme.test\/provider-media\//);
+  assert.equal(calls.length, 2);
+});
+
+test('only confirmed CDN loss retries a refused submit; loss after acceptance repairs inputs for the next session', async t => {
+  const { f, slotId } = await setup(t);
+  const db = openDatabase(f.config.dataDir);
+  const { client, calls } = fake();
+  let uploads = 0, refused = false;
+  const cache = createTemplateCache(db, f.config.dataDir, async () => 'https://cdn.test/' + ++uploads,
+    { fetch: async () => new Response(null, { status: 404 }) });
+  const submit = client.submit;
+  client.submit = async (...args) => {
+    if (!refused) {
+      refused = true;
+      throw Object.assign(new Error('Rejected input'), { status: 422 });
+    }
+    return submit(...args);
+  };
+  client.status = async () => ({ status: 'FAILED' });
+  const w = createGenerationWorker(db, f.config.dataDir, f.config.origin, f.app.log, { client, templates: cache });
+  t.after(async () => { await w.stop(); await cache.stop(); db.close(); });
+  const first = await captured(f, slotId);
+  await eventually(async () => {
+    await w.runOnce();
+    assert.equal((await state(f, first)).state, 'observing');
+  });
+  assert.equal(calls.submit[0].input.video_url, 'https://cdn.test/2');
+  await w.runOnce();
+  assert.equal((await state(f, first)).state, 'failed');
+  const next = await captured(f, slotId);
+  await eventually(async () => {
+    await w.runOnce();
+    assert.equal((await state(f, next)).state, 'observing');
+  });
+  assert.deepEqual(calls.submit.map(s => s.input.video_url), ['https://cdn.test/2', 'https://cdn.test/3']);
 });

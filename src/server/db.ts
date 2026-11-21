@@ -5,6 +5,7 @@
  * preserve confirmed fal identity and verified files. Nullable submit/ready times
  * preserve unknown history; migrations never invent historical timestamps. Session issuance owns scoped
  * capabilities, first-open/confirmation times and the independent email state.
+ * Private mail profiles retain both sets of credentials with one active sender.
  * Events retain a deletion marker until restartable local cleanup finishes.
  * Event names/metadata persist independently of browser state; a durable counter
  * never reuses an automatic Session_N number after an event is deleted.
@@ -31,6 +32,10 @@ export function openDatabase(dataDir: string) {
       id TEXT PRIMARY KEY, path TEXT UNIQUE NOT NULL, kind TEXT NOT NULL,
       mime TEXT NOT NULL, size INTEGER NOT NULL, duration REAL, width INTEGER NOT NULL,
       height INTEGER NOT NULL, owner TEXT NOT NULL DEFAULT 'scenarios'
+    );
+    CREATE TABLE IF NOT EXISTS fal_template_cache (
+      media_id TEXT PRIMARY KEY REFERENCES slot_media(id) ON DELETE CASCADE,
+      url TEXT NOT NULL, expires_at INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS slots (id TEXT PRIMARY KEY, config TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS events (
@@ -123,6 +128,7 @@ export function openDatabase(dataDir: string) {
   for (const column of ['submitted_at', 'ready_at']) {
     if (!jobColumns.has(column)) db.exec(`ALTER TABLE generation_jobs ADD COLUMN ${column} INTEGER`);
   }
+  if (!jobColumns.has('template_repaired')) db.exec('ALTER TABLE generation_jobs ADD COLUMN template_repaired INTEGER NOT NULL DEFAULT 0');
   const mediaColumns = new Set((db.prepare('PRAGMA table_info(slot_media)').all() as { name: string }[]).map(column => column.name));
   for (const column of ['template_slot_id', 'template_orientation']) {
     if (!mediaColumns.has(column)) db.exec(`ALTER TABLE slot_media ADD COLUMN ${column} TEXT`);
@@ -152,7 +158,13 @@ export function openDatabase(dataDir: string) {
     PRIMARY KEY(session_id,report_id)
   );
   CREATE INDEX IF NOT EXISTS capture_reports_case ON capture_reports(case_id);`);
-  db.pragma('user_version = 14');
+  db.exec(`CREATE TABLE IF NOT EXISTS mail_profiles (
+    provider TEXT PRIMARY KEY CHECK(provider IN ('mailru','smtpbz')),
+    host TEXT NOT NULL, port INTEGER NOT NULL, user TEXT NOT NULL, password TEXT NOT NULL,
+    "from" TEXT NOT NULL, active INTEGER NOT NULL CHECK(active IN (0,1))
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS mail_active_profile ON mail_profiles(active) WHERE active=1;`);
+  db.pragma('user_version = 15');
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

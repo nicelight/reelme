@@ -1,6 +1,7 @@
 /** Public generation messages are fixed; provider details stay in server logs. */
 export const generationMessages = {
   INPUT_PREPARATION_FAILED: 'Не удалось подготовить фотографии или материалы сюжета. Обратитесь к сотруднику.',
+  TEMPLATE_UPLOAD_FAILED: 'Не удалось загрузить материал сюжета в сервис генерации после нескольких попыток. Обратитесь к сотруднику.',
   FAL_NOT_CONFIGURED: 'Сервис генерации не настроен. Обратитесь к сотруднику.',
   FAL_REJECTED: 'Сервис отклонил запрос генерации. Обратитесь к сотруднику.',
   FAL_FAILED: 'Не удалось создать видео. Обратитесь к сотруднику.',

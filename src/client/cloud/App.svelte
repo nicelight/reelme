@@ -16,6 +16,7 @@
   import CaptureGuides from './CaptureGuides.svelte';
   import CaptureSettingsForm from './CaptureSettingsForm.svelte';
   import EventPreparation from './EventPreparation.svelte';
+  import EmailSettings from './EmailSettings.svelte';
   import DisplaySettings from './DisplaySettings.svelte';
   import Photobooth from './Photobooth.svelte';
   import Login from './Login.svelte';
@@ -176,6 +177,7 @@
     <EventPreparation onunauthorized={() => role = null} />
     <CaptureSettingsForm onunauthorized={() => role = null} />
     <DisplaySettings onunauthorized={() => role = null} />
+    <EmailSettings onunauthorized={() => role = null} />
     <CaptureGuides onunauthorized={() => role = null} onBusy={uploadBusy} />
   </main>
 {:else if archive}

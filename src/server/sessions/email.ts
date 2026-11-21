@@ -1,5 +1,5 @@
 /** Module contract: Sessions owns the single-process email queue in session_delivery.
- * Claims pending before I/O; only SMTP acceptance marks sent. A file/size refusal
+ * Each claim holds one sender through any link fallback; only SMTP acceptance marks sent. A file/size refusal
  * permits one link fallback; connection/auth/unknown outcomes never auto-retry.
  * Restarted sending requires manual retry. No raw addresses/provider errors in logs.
  * Deletion blocks new sends/fallbacks and publication of in-flight outcomes.
@@ -15,7 +15,8 @@ export interface EmailTransport {
   sendMail(message: SendMailOptions): Promise<{ accepted?: unknown[]; rejected?: unknown[] }>;
   close?(): void;
 }
-export interface EmailOptions { transport: EmailTransport; from: string; intervalMs?: number }
+export interface EmailSender { transport: EmailTransport; from: string }
+export type EmailOptions = EmailSender & { intervalMs?: number };
 interface Job { session_id: string; number: number; email: string; download_token: string; video_path: string }
 interface MailError { code?: string; command?: string; responseCode?: number; response?: string; message?: string }
 
@@ -51,7 +52,7 @@ function failureCode(error: unknown) {
 export function recoverEmail(db: DB) {
   db.prepare("UPDATE session_delivery SET email_state='failed',email_error='EMAIL_UNCERTAIN' WHERE email_state='sending'").run();
 }
-export function createEmailWorker(db: DB, dataDir: string, origin: string, log: FastifyBaseLogger, options: EmailOptions, now = Date.now) {
+export function createEmailWorker(db: DB, dataDir: string, origin: string, log: FastifyBaseLogger, options: EmailOptions | { current: () => EmailSender | undefined; intervalMs?: number }, now = Date.now) {
   let stopped = false; let active: Promise<void> | undefined; let timer: ReturnType<typeof setTimeout> | undefined;
   const claim = db.transaction(() => {
     const job = db.prepare(`SELECT d.session_id,d.email,d.download_token,s.number,g.video_path FROM session_delivery d
@@ -60,10 +61,10 @@ export function createEmailWorker(db: DB, dataDir: string, origin: string, log: 
     if (job) db.prepare("UPDATE session_delivery SET email_state='sending',email_error=NULL WHERE session_id=? AND email_state='pending'").run(job.session_id);
     return job;
   });
-  async function send(job: Job, attachment: boolean) {
+  async function send(job: Job, attachment: boolean, sender: EmailSender) {
     if (!sessionAvailable(db, job.session_id)) return;
-    const info = await options.transport.sendMail({
-      from: { name: 'ReelMe', address: options.from }, to: { address: job.email, name: '' },
+    const info = await sender.transport.sendMail({
+      from: { name: 'ReelMe', address: sender.from }, to: { address: job.email, name: '' },
       subject: `Ваша видеоистория № ${job.number} — ReelMe`,
       text: attachment ? `Ваша видеоистория № ${job.number} готова. Видео — во вложении.\nСпасибо за участие!`
         : `Ваша видеоистория № ${job.number} готова.\nСкачать видео: ${origin}/download/${job.download_token}\nСсылка доступна до удаления мероприятия.`,
@@ -75,10 +76,12 @@ export function createEmailWorker(db: DB, dataDir: string, origin: string, log: 
   }
   async function pass() {
     while (!stopped) {
+      const sender = 'current' in options ? options.current() : options;
+      if (!sender) break;
       const job = claim.immediate(); if (!job) break;
       try {
-        try { await send(job, true); }
-        catch (error) { if (!attachmentRefused(error)) throw error; await send(job, false); }
+        try { await send(job, true, sender); }
+        catch (error) { if (!attachmentRefused(error)) throw error; await send(job, false, sender); }
         if (!sessionAvailable(db, job.session_id)) continue;
         db.prepare("UPDATE session_delivery SET email_state='sent',sent_at=?,email_error=NULL WHERE session_id=? AND email_state='sending'").run(now(), job.session_id);
       } catch (error) {
@@ -99,5 +102,5 @@ export function createEmailWorker(db: DB, dataDir: string, origin: string, log: 
     if (!stopped) { timer = setTimeout(loop, options.intervalMs ?? 1000); timer.unref(); }
   }
   return { runOnce, start() { if (!timer && !stopped) { timer = setTimeout(loop, 0); timer.unref(); } },
-    async stop() { stopped = true; clearTimeout(timer); await active; options.transport.close?.(); } };
+    async stop() { stopped = true; clearTimeout(timer); await active; if ('transport' in options) options.transport.close?.(); } };
 }

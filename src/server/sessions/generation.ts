@@ -9,6 +9,7 @@
  * Deletion blocks new work and publication; late local output is discarded.
  * Errors retain the session/photos; public errors are fixed safe messages.
  * Source: docs/slot-setup/matrix.md. Completeness follows the saved capture plan. */
+import type { TemplateCache } from './template-cache.js';
 import { snapshotPosePlan } from '../../shared/capture.js';
 import { open, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -26,8 +27,8 @@ import { GenerationFailure, generationMessages } from './generation-errors.js';
 import { isTestVideo } from '../../shared/scenarios.js';
 import { testVideoTransport } from './test-video.js';
 
-interface Job { request_id: string | null; result_url: string | null; video_path: string | null; frame_path: string | null; submitted_at: number | null }
-export interface GenerationOptions { deleteOutput?: CleanupOptions['deleteOutput']; client?: FalTransport; download?: typeof fetch; testVideoDir?: string; intervalMs?: number; now?: () => number; secret?: string; publishReady?: (id: string, freshlyPrepared: boolean) => Promise<void> }
+interface Job { template_repaired: number; request_id: string | null; result_url: string | null; video_path: string | null; frame_path: string | null; submitted_at: number | null }
+export interface GenerationOptions { templates?: TemplateCache; deleteOutput?: CleanupOptions['deleteOutput']; client?: FalTransport; download?: typeof fetch; testVideoDir?: string; intervalMs?: number; now?: () => number; secret?: string; publishReady?: (id: string, freshlyPrepared: boolean) => Promise<void> }
 function httpStatus(error: unknown): number | undefined {
   const status = (error as { status?: unknown })?.status;
   return typeof status === 'number' ? status : undefined;
@@ -66,6 +67,7 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
     const input = session.snapshot.generation;
     const testVideo = isTestVideo(input);
     const inputOnly = input.simulateGeneration && !testVideo;
+    const templates = input.simulateGeneration ? undefined : options.templates;
     const transport = testVideo
       ? testVideoTransport(id, options.testVideoDir ?? resolve('dist/client/test-videos'), input.orientation === 'portrait', job.submitted_at, options.now ?? Date.now)
       : options;
@@ -78,7 +80,15 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
         try {
           const plan = snapshotPosePlan(session.snapshot);
           if (photos.length !== plan.length || photos.some((photo, index) => photo.pose_index !== plan[index].index)) throw new Error('Incomplete or unordered photos');
-          const paths = [...photos.map(photo => photo.path), ...[input.videoId, ...input.referenceIds].filter((value): value is string => !!value).map(mediaId => readMedia(db, mediaId).path)];
+          const urls = templates?.resolveInputs(input);
+          if (templates && !urls) return;
+          const templateUrl = (mediaId: string) => urls ? urls.get(mediaId)! : slotProviderUrl(db, origin, mediaId);
+          const paths = photos.map(photo => photo.path);
+          if (!urls) {
+            for (const mediaId of [input.videoId, ...input.referenceIds]) {
+              if (mediaId) paths.push(readMedia(db, mediaId).path);
+            }
+          }
           for (const path of paths) {
             const file = await open(join(dataDir, 'media', path), 'r');
             try {
@@ -87,10 +97,13 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
           }
           payload = buildModelInput(session.snapshot, {
             photos: photos.map(photo => photoProviderUrl(db, origin, id, photo.pose_index)),
-            video: input.videoId ? slotProviderUrl(db, origin, input.videoId) : undefined,
-            references: input.referenceIds.map(mediaId => slotProviderUrl(db, origin, mediaId)),
+            video: input.videoId ? templateUrl(input.videoId) : undefined,
+            references: input.referenceIds.map(templateUrl),
           });
-        } catch (error) { throw new GenerationFailure('INPUT_PREPARATION_FAILED', 'Invalid generation snapshot/photos', { cause: error }); }
+        } catch (error) {
+          if (error instanceof GenerationFailure) throw error;
+          throw new GenerationFailure('INPUT_PREPARATION_FAILED', 'Invalid generation snapshot/photos', { cause: error });
+        }
         if (!sessionAvailable(db, id)) return;
         if (inputOnly) {
           db.transaction(() => {
@@ -158,6 +171,14 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
     } catch (error) {
       const code = error instanceof GenerationFailure ? error.code : error instanceof InvalidVideo ? 'INVALID_RESULT' : 'GENERATION_RETRY';
       const rejectedStatus = session.state === 'observing' && (httpStatus(error) ?? 0) >= 400 && (httpStatus(error) ?? 0) < 500 && ![408,429].includes(httpStatus(error)!);
+      if (templates && (code === 'FAL_REJECTED' || code === 'FAL_FAILED' || rejectedStatus)) {
+        const missing = await templates.invalidateMissing(input);
+        if (missing && !job.request_id && !job.template_repaired && sessionAvailable(db, id)) {
+          db.prepare('UPDATE generation_jobs SET template_repaired=1 WHERE session_id=?').run(id);
+          templates.warm(input);
+          return;
+        }
+      }
       failure(id, error, code !== 'GENERATION_RETRY' || rejectedStatus, rejectedStatus ? 'FAL_FAILED' : code);
     }
   }

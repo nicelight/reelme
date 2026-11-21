@@ -8,6 +8,7 @@ import { readConfig } from '../src/server/config.js';
 import nodemailer from 'nodemailer';
 const config = readConfig();
 const smtpPort = Number(process.env.EMAIL_TEST_SMTP_PORT);
+if (smtpPort) config.smtp = { host: '127.0.0.1', port: smtpPort, user: 'local-test', password: 'local-secret', from: 'sender@example.test' };
 const forbidden = () => { if (process.env.TEST_VIDEO_ONLY === 'true') throw new Error('Test-video scenario attempted a provider call'); };
 const app = await createApp(config, {
   now: () => process.env.FIXTURE_CLOCK && existsSync(process.env.FIXTURE_CLOCK) ? Number(readFileSync(process.env.FIXTURE_CLOCK, 'utf8')) : Date.now(),
@@ -24,9 +25,10 @@ const app = await createApp(config, {
   },
   download: async () => { forbidden(); return new Response(await readFile(process.env.FIXTURE_VIDEO!)); },
 } : false,
-  ...(smtpPort ? { email: { from: 'sender@example.test', intervalMs: 100,
-    transport: nodemailer.createTransport({ host: '127.0.0.1', port: smtpPort, secure: false, ignoreTLS: true, socketTimeout: 2000, connectionTimeout: 1000 }),
-  } } : {}),
+  smtpTransport: smtpPort ? profile => nodemailer.createTransport({
+    host: '127.0.0.1', port: smtpPort, secure: false, ignoreTLS: true, auth: { user: profile.user, pass: profile.password },
+    socketTimeout: 2000, connectionTimeout: 1000,
+  }) : undefined,
 });
 // Only the isolated fixture allows its dynamically bound capture origin.
 app.addHook('onSend', async (request, reply) => {

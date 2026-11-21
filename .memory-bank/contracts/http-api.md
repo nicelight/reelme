@@ -27,6 +27,9 @@ status: active
 | PATCH /admin/slots/:id/visibility | Администратор + разрешённый Origin | `{visible: boolean}` → 204. Меняет видимость в сохранённой конфигурации, в том числе у старых сюжетов |
 | POST /admin/slots/:id/template-video | Admin + разрешённый Origin | `{orientation,model}` → импортированный immutable `Media`, 201 |
 | GET /admin/capture-guides | Администратор | Пять `{number,instruction,mediaId?,caption?}` |
+| GET /admin/email-settings | Admin | Активный источник и сохранённые профили с признаком наличия пароля |
+| PUT /admin/email-settings | Admin + разрешённый Origin | Сохранить и выбрать профиль. Для mailru передаются provider, user и пароль при первом сохранении. Для smtpbz также host, port, from |
+| POST /admin/email-settings/test | Admin + разрешённый Origin | `{profile, to}` → 204 после принятия тестового письма сервисом. Настройки и очередь не меняются |
 | GET /admin/capture-settings | Admin | Настройки новых фотосессий |
 | PUT /admin/capture-settings | Admin + разрешённый Origin | `startMode` (manual/automatic), `countdownSeconds`, `reviewSeconds`, `receiptSeconds` (целые 1–60), `sendCaptureLogs` (boolean, по умолчанию false), `photoMaxEdge` (0, 1024 или 2048 пикселей по длинной стороне, по умолчанию 0 — исходный JPEG) → сохранённые значения |
 | PUT /admin/capture-guides/:number | Admin + разрешённый Origin | Обновляет переданные поля `mediaId` (UUID или null) и `caption` (до 120 символов, пустая строка очищает подпись) |
@@ -250,14 +253,14 @@ API не возвращает полные email, ключи и URLs fal. Отб
 
 Сервер проверяет email и состояние: во время отправки второе письмо не запускается,
 после успеха повтор запрещён, после ошибки возможен ручной повтор с исправлением адреса.
-Потерянное подтверждение SMTP.BZ не вызывает автоматическую повторную отправку.
+Потерянное подтверждение почтового сервиса не вызывает автоматическую повторную отправку.
 Первое подтверждение email запускает трёхминутный срок, повтор его не меняет.
 Состояние письма читается из той же формы; отдельного API истории попыток нет.
 Удаление мероприятия закрывает выдачу по ссылкам. Медиа не доступны открытым каталогом.
 
 ## Граница генерации и выдачи
 
-FT-003 создаёт provider-media URLs по [контракту файлов](integrations.md#файлы-и-срок-хранения),
+FT-003 подбирает URL шаблонов и снимков по [контракту файлов](integrations.md#файлы-и-срок-хранения),
 подготовленное видео/кадр и затем собственную download-ссылку и receive-форму.
 До готовности формы/ссылки сессия остаётся `preparing`; `ready` не означает отправку письма.
 Для новых результатов до ready записывается `media/sessions/<id>/qr.png`, кодирующий

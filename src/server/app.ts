@@ -16,17 +16,19 @@ import { openDatabase } from './db.js';
 import { createAccess } from './access/index.js';
 import { registerScenarios } from './scenarios/index.js';
 import { registerSessions } from './sessions/index.js';
+import { createTemplateCache, falTemplateUpload, type TemplateUpload } from './sessions/template-cache.js';
 import { registerProviderMedia } from './sessions/provider-media.js';
-import { createEventCleanup, type CleanupOptions } from './sessions/cleanup.js';
+import { createEventCleanup, deleteKnownOutput, type CleanupOptions } from './sessions/cleanup.js';
 import { createFalDelete, createFalTransport } from './sessions/fal.js';
 import { createGenerationWorker, type GenerationOptions } from './sessions/generation.js';
 import { registerReceive, publishReady } from './sessions/receive.js';
 import { registerEvents } from './sessions/events.js';
 import { registerSlotResults } from './sessions/slot-results.js';
 import { registerDisplay } from './sessions/display.js';
-import { createEmailWorker, createSmtpTransport, recoverEmail, type EmailOptions } from './sessions/email.js';
+import { createEmailWorker, recoverEmail, type EmailOptions, type createSmtpTransport } from './sessions/email.js';
+import { registerEmailSettings } from './sessions/email-settings.js';
 
-export async function createApp(config: Config, options: { now?: () => number; logger?: boolean; generation?: GenerationOptions | false; email?: EmailOptions; cleanup?: CleanupOptions } = {}) {
+export async function createApp(config: Config, options: { now?: () => number; logger?: boolean; generation?: Omit<GenerationOptions, 'templates'> | false; templateUpload?: TemplateUpload; email?: EmailOptions; smtpTransport?: typeof createSmtpTransport; cleanup?: CleanupOptions } = {}) {
   const app = Fastify({ logger: options.logger ? { redact: ['req.url', 'req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'] } : false, bodyLimit: 64 * 1024 });
   const db = openDatabase(config.dataDir);
   app.addHook('onClose', async () => { db.close(); });
@@ -46,12 +48,19 @@ export async function createApp(config: Config, options: { now?: () => number; l
   await app.register(multipart);
   await app.register(rateLimit, { global: false });
   const access = await createAccess(app, db, config, options.now ?? Date.now);
-  registerScenarios(app, db, config.dataDir, access, config.templateVideosDir);
+  const deleteOutput = options.cleanup?.deleteOutput ?? (config.falKey ? createFalDelete(config.falKey) : undefined);
+  const upload = options.templateUpload ?? (config.falKey ? falTemplateUpload(config.falKey) : undefined);
+  const templates = upload && options.generation !== false
+    ? createTemplateCache(db, config.dataDir, upload, {
+        discard: url => deleteKnownOutput(url, app.log, deleteOutput),
+        onFailure: mediaId => app.log.error({ mediaId }, 'Исчерпаны попытки загрузки материала в fal CDN'),
+      }) : undefined;
+  if (templates) app.addHook('onClose', () => templates.stop());
+  registerScenarios(app, db, config.dataDir, access, config.templateVideosDir, templates?.warm);
   registerSessions(app, db, config.dataDir, access, options.now ?? Date.now);
   registerSlotResults(app, db, config.dataDir, access);
   registerProviderMedia(app, db, config.dataDir);
   registerDisplay(app, db, config.dataDir, config.origin, access, options.now ?? Date.now);
-  const deleteOutput = options.cleanup?.deleteOutput ?? (config.falKey ? createFalDelete(config.falKey) : undefined);
   const cleanup = createEventCleanup(db, config.dataDir, app.log, options.now ?? Date.now, { ...options.cleanup, deleteOutput });
   registerEvents(app, db, config.dataDir, access, options.now ?? Date.now, cleanup);
   app.addHook('onReady', async () => { await cleanup.runOnce(); cleanup.start(); });
@@ -66,17 +75,14 @@ export async function createApp(config: Config, options: { now?: () => number; l
   });
   const generation = options.generation ?? (config.falKey ? { client: createFalTransport(config.falKey), secret: config.falKey } : {});
   if (generation !== false) {
-    const worker = createGenerationWorker(db, config.dataDir, config.origin, app.log, { testVideoDir: join(config.clientDir, 'test-videos'), ...generation, now: options.now ?? generation.now, publishReady: publish, deleteOutput });
+    const worker = createGenerationWorker(db, config.dataDir, config.origin, app.log, { templates, testVideoDir: join(config.clientDir, 'test-videos'), ...generation, now: options.now ?? generation.now, publishReady: publish, deleteOutput });
     app.addHook('onReady', async () => { worker.start(); });
     app.addHook('onClose', async () => { await worker.stop(); });
   }
-  const email = options.email ?? (config.smtp ? { transport: createSmtpTransport(config.smtp), from: config.smtp.from } : undefined);
-  app.addHook('onReady', async () => { recoverEmail(db); });
-  if (email) {
-    const worker = createEmailWorker(db, config.dataDir, config.origin, app.log, email, options.now ?? Date.now);
-    app.addHook('onReady', async () => { worker.start(); });
-    app.addHook('onClose', async () => { await worker.stop(); });
-  }
+  const current = registerEmailSettings(app, db, access, config.smtp, options.smtpTransport);
+  const emailWorker = createEmailWorker(db, config.dataDir, config.origin, app.log, options.email ?? { current }, options.now);
+  app.addHook('onReady', async () => { recoverEmail(db); emailWorker.start(); });
+  app.addHook('onClose', async () => { await emailWorker.stop(); });
   await app.register(fastifyStatic, { root: join(config.clientDir, 'assets'), prefix: '/assets/', decorateReply: false, immutable: true, maxAge: '1y', index: false });
   // Stable prompt filenames must revalidate; empty Recast files are valid assets.
   await app.register(fastifyStatic, { root: join(config.clientDir, 'slot-prompts'), prefix: '/slot-prompts/', decorateReply: false, immutable: false, maxAge: 0, index: false, setHeaders: response => { response.header('Cache-Control', 'no-cache'); } });

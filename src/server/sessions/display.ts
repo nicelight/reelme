@@ -35,7 +35,7 @@ function projection(row: Row): DisplaySession {
   const stage = row.state === 'ready' ? (row.email_state === 'sent' ? 6 : row.opened_at !== null ? 5 : 4)
     : ({ submit_pending: 1, observing: 2, preparing: 3 }[row.state] ?? 0);
   const failure = row.error_code === 'TEST_PREPARATION_FAILED' ? 'Не удалось подготовить тестовую фотографию. Сохраните JPEG и запустите новый тест.'
-    : row.error_code === 'INPUT_PREPARATION_FAILED' || row.error_code === 'FAL_NOT_CONFIGURED' || row.error_code === 'RESULT_GONE'
+    : row.error_code === 'INPUT_PREPARATION_FAILED' || row.error_code === 'TEMPLATE_UPLOAD_FAILED' || row.error_code === 'FAL_NOT_CONFIGURED' || row.error_code === 'RESULT_GONE'
       ? generationMessages[row.error_code] : generationMessages.FAL_FAILED;
   const generation = JSON.parse(row.snapshot).generation ?? {};
   const testVideo = isTestVideo(generation);
