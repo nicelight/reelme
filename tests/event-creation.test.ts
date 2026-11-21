@@ -69,8 +69,17 @@ test('first Save is atomic, validated and idempotent; subsequent visitors/restar
 test('admin tests do not consume first-visitor setup; Skip persists and automatic names are not reused after deletion', async t => {
   const f = await fixture(); t.after(() => f.close());
   const { slotId, cookie } = await prepare(f);
+  const today = async () => (await f.app.inject({ url: '/api/statuses', headers: { cookie } })).json();
+  const empty = await today();
+  assert.equal(empty.date, '2026-01-01');
+  assert.equal(empty.eventName, null);
+  assert.deepEqual(empty.sessions, []);
+  assert.deepEqual(rows(f), []);
   const manual = await f.app.inject({ method: 'POST', url: `/api/admin/slots/${slotId}/test-generations`, headers: { cookie, origin: f.config.origin }, payload: { startRequestId: randomUUID() } });
   assert.equal(manual.statusCode, 201, manual.body);
+  const started = await today();
+  assert.equal(started.eventName, 'Session_1');
+  assert.deepEqual(started.sessions.map((s: { id: string; number: number }) => [s.id, s.number]), [[manual.json().sessionId, 1]]);
   await f.restart();
   assert.equal((await send(f, slotId, { action: 'check' })).json().code, 'EVENT_SETUP_REQUIRED');
   const skipped = await send(f, slotId, { action: 'skip' });

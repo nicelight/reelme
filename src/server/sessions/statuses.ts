@@ -155,7 +155,8 @@ export function registerStatuses(app: FastifyInstance, db: DB, access: Access, n
     if (q.before) { where.push('s.number<?'); values.push(q.before); }
     const rows = db.prepare(`${selection} WHERE ${where.join(' AND ')} ORDER BY s.number DESC LIMIT 31`).all(...values) as Row[];
     const count = db.prepare(`SELECT COUNT(*) n ${join} WHERE s.event_date=? AND ${issue}`).get(date) as { n: number };
-    return { date, serverNow: time, issues: count.n, sessions: rows.slice(0,30).map(row => status(row, available ? latest(row.id) : undefined)), nextBefore: rows.length > 30 ? rows[29].number : null };
+    const event = db.prepare<[string], { name: string | null }>('SELECT name FROM events WHERE date=? AND deleting=0').get(date);
+    return { date, eventName: event?.name ?? null, serverNow: time, issues: count.n, sessions: rows.slice(0,30).map(row => status(row, available ? latest(row.id) : undefined)), nextBefore: rows.length > 30 ? rows[29].number : null };
   });
   app.get<{ Params: { id: string } }>('/api/statuses/:id', { preHandler: account }, (request): SessionHistory => {
     const { after } = z.object({ after: z.coerce.number().int().nonnegative().default(0) }).strict().parse(request.query);

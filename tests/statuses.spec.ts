@@ -12,24 +12,15 @@ test('телефон оператора видит сбой за предела�
   const origin = 'http://127.0.0.1:3197';
   execFileSync(process.execPath, ['--import','tsx','src/server/setup.ts'], {env:{...process.env,DATA_DIR:dataDir,OPERATOR_PASSWORD:'test-password', ADMIN_PASSWORD:'test-password'}});
   const db = openDatabase(dataDir);
-  const time = Date.parse('2026-11-21T12:00:00Z'), date = '2026-11-21';
+  const time = Date.parse('2026-11-20T19:00:00Z'), date = '2026-11-21';
   await writeFile(join(dataDir,'display-control.json'),JSON.stringify({now:time,fail:false}));
   const server = spawn(process.execPath,['--import','tsx','tests/display-browser-server.ts'],{env:{...process.env,DATA_DIR:dataDir},stdio:'pipe'});
   try {
-    db.prepare('INSERT INTO events(date,next_number) VALUES (?,36)').run(date);
-    db.prepare("INSERT INTO slots(id,config) VALUES ('slot','{}')").run();
-    const session = db.prepare("INSERT INTO capture_sessions(id,start_request_id,event_date,number,slot_id,snapshot,state,created_at) VALUES (?,?,?,?,'slot',?,'observing',?)");
-    const job = db.prepare('INSERT INTO generation_jobs(session_id,request_id,error_code) VALUES (?,?,?)');
-    for (let n=1;n<=35;n++) {
-      session.run('id-'+n, randomUUID(), date, n, JSON.stringify({expectedPhotos:2,generation:{model:'test-model'}}), time + n);
-      job.run('id-'+n, n===2 ? 'https://secret.test/token' : 'test-job-'+n, n===1 ? 'GENERATION_RETRY' : null);
-    }
-    db.prepare("UPDATE capture_sessions SET state='failed' WHERE number=2").run();
-    db.prepare("UPDATE generation_jobs SET error_code='FAL_FAILED' WHERE session_id='id-2'").run();
     await expect.poll(async () => {
       if (server.exitCode !== null) throw new Error('Сервер фикстуры завершился');
       return (await fetch(origin).catch(() => null))?.status;
     }).toBe(200);
+    db.prepare("INSERT INTO slots(id,config) VALUES ('slot','{}')").run();
     // The visitor number restarts each day. The day filter must isolate both rows and issues.
     db.prepare("INSERT INTO events(date,next_number) VALUES ('2026-11-20',2)").run();
     db.prepare("INSERT INTO capture_sessions(id,start_request_id,event_date,number,slot_id,snapshot,state,created_at) VALUES ('previous',?,'2026-11-20',1,'slot','{}','failed',?)").run(randomUUID(),time-86400000);
@@ -52,6 +43,18 @@ test('телефон оператора видит сбой за предела�
     await page.getByLabel('Пароль',{exact:true}).fill('test-password');
     await page.getByRole('button',{name:'Войти',exact:true}).click();
     await expect(page.getByRole('heading',{name:'Статусы видео'})).toBeVisible();
+    await expect(page.getByLabel('Дата мероприятия')).toHaveValue(date);
+    await expect(page.getByText('Сегодня сессий пока нет.', {exact:false})).toBeVisible();
+    db.prepare('INSERT INTO events(date,next_number,name) VALUES (?,36,?)').run(date, 'Вечер кино');
+    const session = db.prepare("INSERT INTO capture_sessions(id,start_request_id,event_date,number,slot_id,snapshot,state,created_at) VALUES (?,?,?,?,'slot',?,'observing',?)");
+    const job = db.prepare('INSERT INTO generation_jobs(session_id,request_id,error_code) VALUES (?,?,?)');
+    for (let n=1;n<=35;n++) {
+      session.run('id-'+n, randomUUID(), date, n, JSON.stringify({expectedPhotos:2,generation:{model:'test-model'}}), time + n);
+      job.run('id-'+n, n===2 ? 'https://secret.test/token' : 'test-job-'+n, n===1 ? 'GENERATION_RETRY' : null);
+    }
+    db.prepare("UPDATE capture_sessions SET state='failed' WHERE number=2").run();
+    db.prepare("UPDATE generation_jobs SET error_code='FAL_FAILED' WHERE session_id='id-2'").run();
+    await expect(page.getByRole('heading',{name:'Вечер кино'})).toBeVisible({timeout:8000});
     const issues = page.getByRole('button',{name:'Проблемы · 2'});
     await expect(issues).toBeVisible();
     expect(await page.locator('.row').count()).toBe(30);

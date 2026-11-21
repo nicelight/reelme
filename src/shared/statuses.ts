@@ -12,6 +12,7 @@ export interface SessionStatus {
 
 export interface StatusPage {
   date: string;
+  eventName: string | null;
   serverNow: number;
   issues: number;
   sessions: SessionStatus[];

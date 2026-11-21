@@ -136,6 +136,7 @@
     <label>Дата мероприятия<input type="date" value={date || page?.date || ''} onchange={e => { date = e.currentTarget.value; reset(); }} /></label>
     <label>Номер посетителя<input placeholder="Все номера" type="search" inputmode="numeric" value={number} oninput={e => { number = e.currentTarget.value.replace(/\D/g,''); e.currentTarget.value = number; reset(); }} /></label>
   </div>
+  {#if page?.eventName}<h2>{page.eventName}</h2>{/if}
   <div class="summary">
     <button class:alarm={!!page?.issues} aria-pressed={issuesOnly} onclick={toggleIssues}>{issuesOnly ? 'Все сессии' : 'Проблемы'}{page ? ' · ' + page.issues : ''}</button>
     <small role="status" class:stale={!!listError}>{listError || 'Обновление'}{page ? ' · ' + clock.format(page.serverNow) + ' НСК' : '…'}</small>
@@ -173,7 +174,9 @@
           </section>
         {/if}
       </article>
-    {:else}<p class="empty">{issuesOnly ? 'Активных проблем нет' : 'Сессий не найдено'}</p>{/each}
+    {:else}
+      <p class="empty">{#if issuesOnly}Активных проблем нет{:else if !date && !number && pages.length === 1}Сегодня сессий пока нет. Здесь появится первая съёмка или тест из редактора.{:else}Сессий не найдено{/if}</p>
+    {/each}
     <div class="paging">
       {#if pages.length > 1}<button onclick={() => { pages = pages.slice(0,-1); opened = ''; }}>← Новее</button>{/if}
       {#if page.nextBefore !== null}<button onclick={() => { pages = [...pages, page!.nextBefore]; opened = ''; }}>Старее →</button>{/if}
@@ -186,6 +189,7 @@
   .heading a,small,.when,time {font-size:.81rem;color:var(--muted)}
   .title-line {display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;margin:10px 0 18px}
   h1 {margin:0}
+  h2 {font-size:1.15rem;margin:16px 0 0;overflow-wrap:anywhere}
   .balance {font-variant-numeric:tabular-nums}
   .balance span {color:var(--muted);font-size:.84rem}
   .filters {display:grid;grid-template-columns:1fr 1fr;gap:12px}
