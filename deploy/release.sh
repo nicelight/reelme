@@ -14,7 +14,8 @@ work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 ssh_cmd=(ssh -o BatchMode=yes -o ConnectTimeout=15 nskserver)
 image_files=(Dockerfile .dockerignore package.json package-lock.json 'tsconfig*.json'
-  vite.config.ts index.html src WebServer/reelme.html public/slot-prompts public/test-videos deploy/compose.yaml)
+  vite.config.ts index.html cam-test-web.html src WebServer/reelme.html
+  public/slot-prompts public/test-videos public/cam-test-web-assets deploy/compose.yaml)
 
 echo "Разворачиваем коммит $commit на nskserver"
 git archive --format=tar.gz --output="$work/source.tar.gz" "$commit" -- "${image_files[@]}"

@@ -19,14 +19,14 @@
   import brand from '../story/assets/reelme-mark.webp';
   import '../story/assets/fonts.css';
   import './session.css';
-  let { receipt, installationKey, position, phase, countdown, preview, previewEnabled, confirmed, confirming, thumbnails,
-    error, caseCode, pendingCapture, cameraLocked, pauseAfterCapture, automatic, settings, ontoggle, onrun, onpause, onretake, onrestart, onfinish, onscenario, onstoppreview }: {
+  let { receipt, installationKey, position, phase, countdown, preview, previewEnabled, previewRetrying, confirmed, confirming, thumbnails,
+    error, caseCode, pendingCapture, cameraLocked, pauseAfterCapture, automatic, settings, ontoggle, onrun, onpause, onretake, onrestart, onfinish, onscenario, onstoppreview, onpreviewerror }: {
     receipt: StartReceipt; installationKey: string; position: number; phase: CapturePhase;
-    countdown: number; preview: string; previewEnabled: boolean; confirmed: string; confirming: boolean; thumbnails: PhotoThumbnail[];
+    countdown: number; preview: string; previewEnabled: boolean; previewRetrying: boolean; confirmed: string; confirming: boolean; thumbnails: PhotoThumbnail[];
     error: string; caseCode?: string; pendingCapture: boolean; cameraLocked: boolean; pauseAfterCapture: boolean;
     automatic: boolean; settings: CaptureSettings; ontoggle: () => void;
     onrun: () => void; onpause: () => void; onretake: () => void; onrestart: () => void; onfinish: () => void;
-    onscenario: () => void; onstoppreview: () => void;
+    onscenario: () => void; onstoppreview: () => void; onpreviewerror: (url: string) => void;
   } = $props();
   const paths = ['M410 -60 C650 190 870 70 1080 -60', 'M-80 720 C180 535 340 700 600 890', 'M550 980 C960 670 1110 1030 1670 630'];
   const pose = $derived(receipt.posePlan[position]!);
@@ -110,8 +110,8 @@
       <div class="live-surface">
         {#if phase==='camera'}<div class="capture-white" aria-hidden="true"></div>
         {:else if confirmed && confirming}<img class="captured-frame" src={confirmed} alt="Снятый кадр"/>
-        {:else if preview}<img class="live-preview" src={preview} alt="Зеркальное превью камеры" onerror={onstoppreview}/>
-        {:else}<div class="fallback preview-fallback">{@render icon('person')}<h2>{previewEnabled?'Подключаем превью…':'Съёмка без превью'}</h2><p>Повторите образец позы и смотрите в камеру</p></div>{/if}
+        {:else if preview}<img class="live-preview" src={preview} alt="Зеркальное превью камеры" onerror={event => onpreviewerror(event.currentTarget.getAttribute('src') ?? '')}/>
+        {:else}<div class="fallback preview-fallback">{@render icon('person')}<h2>{previewEnabled && !previewRetrying?'Подключаем превью…':'Съёмка без превью'}</h2><p>Повторите образец позы и смотрите в камеру</p></div>{/if}
         {@render corners()}
         {#if phase==='ready' || phase==='paused'}<div class="live-note" role="status">{pose.participant===2?'Подготовьте второго человека. ':''}Коснитесь экрана для одного кадра или нажмите Play для автоматической серии.</div>{/if}
         {#if !automatic && (phase==='ready' || phase==='paused')}<button class="manual-shutter" aria-label="Снять один кадр" onclick={onrun}></button>{/if}

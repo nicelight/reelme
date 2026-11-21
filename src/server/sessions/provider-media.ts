@@ -17,7 +17,7 @@ export function slotProviderUrl(db: DB, origin: string, mediaId: string): string
 }
 export function photoProviderUrl(db: DB, origin: string, sessionId: string, poseIndex: number): string {
   if (!sessionAvailable(db, sessionId)) throw new HttpError(404, 'NOT_FOUND', 'Файл не найден');
-  const photo = db.prepare("SELECT p.path FROM capture_photos p JOIN capture_sessions s ON s.id=p.session_id WHERE p.session_id=? AND p.pose_index=? AND s.state<>'capturing'").get(sessionId, poseIndex);
+  const photo = db.prepare("SELECT p.path FROM capture_photos p JOIN capture_sessions s ON s.id=p.session_id WHERE p.session_id=? AND p.pose_index=? AND s.state NOT IN ('capturing','cancelled')").get(sessionId, poseIndex);
   if (!photo) throw new HttpError(400, 'INVALID_PHOTO', 'Нет принятого снимка');
   db.prepare('INSERT INTO provider_media(token,session_id,pose_index) VALUES (?,?,?) ON CONFLICT(session_id,pose_index) DO NOTHING').run(randomBytes(32).toString('base64url'), sessionId, poseIndex);
   const { token } = db.prepare('SELECT token FROM provider_media WHERE session_id=? AND pose_index=?').get(sessionId, poseIndex) as { token: string };

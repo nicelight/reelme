@@ -4,6 +4,7 @@
 !tsconfig*.json
 !vite.config.ts
 !index.html
+!cam-test-web.html
 !src/
 !src/**
 !public/
@@ -11,6 +12,8 @@
 !public/slot-prompts/**
 !public/test-videos/
 !public/test-videos/**
+!public/cam-test-web-assets/
+!public/cam-test-web-assets/**
 
 !WebServer/
 !WebServer/reelme.html

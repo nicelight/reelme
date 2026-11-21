@@ -192,7 +192,7 @@ test('group uses guide 5; lost local transfer after reload stops even before fir
   await admin.dispose();
 });
 
-test('production session view: pending pause, dialog person boundary, confirmed scenario switch and real-media layout', async ({ page, app }) => {
+test('production session view: pending pause, dialog person boundary, confirmed scenario switch and real-media layout', async ({ page, context, app }) => {
   test.setTimeout(120_000); await mkdir(artifacts, { recursive: true });
   const admin = await apiRequest.newContext({ baseURL: app.origin, extraHTTPHeaders: { Origin: app.origin } });
   await admin.post('/api/auth/login', { data: { username: 'admin', password: app.password } });
@@ -282,11 +282,30 @@ test('production session view: pending pause, dialog person boundary, confirmed 
   await page.getByRole('button', { name: 'Переснять предыдущий кадр', exact: true }).click();
   await expect(page.locator('.thumbnail.filled')).toHaveCount(1); await expect(page.locator('.progress strong')).toHaveText('2 из 4');
   await page.getByRole('button', { name: 'Выбрать другой сценарий', exact: true }).click();
+  const beforeCancel = await admin.get('/api/statuses/' + receipt.sessionId);
+  expect((await beforeCancel.json()).session.state).toBe('capturing');
+  await page.route(app.origin + '/api/capture/sessions/' + receipt.sessionId + '/cancel', async route => {
+    expect((await route.fetch()).status()).toBe(204);
+    await route.abort('failed'); // Server saved the cancellation but the installation missed the reply.
+  }, { times: 1 });
   await page.getByRole('button', { name: 'Выбрать сценарий', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Не удалось подтвердить отмену');
+  await page.reload();
   await expect(page.getByRole('heading', { name: 'Выберите историю', exact: true })).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem('reelme.captureStart'))).toBeNull();
   await page.clock.runFor(5000); expect(shutters).toBe(2); expect(writes).toEqual([]); expect(await app.photos(receipt.sessionId)).toEqual([]);
   expect(app.sessionCount()).toBe(1); expect(errors).toEqual([]);
+  await app.advanceTime(65_000);
+  await page.close();
+  const monitor = await context.newPage();
+  const login = await context.request.post(app.origin + '/api/auth/login', {
+    headers: { Origin: app.origin }, data: { username: 'admin', password: app.password },
+  });
+  expect(login.ok()).toBe(true);
+  await monitor.goto(app.origin + '/statuses');
+  await expect(monitor.locator('.row .step')).toHaveText('отменено оператором');
+  await expect(monitor.locator('.row .track i')).toHaveCSS('background-color', 'rgb(138, 138, 138)');
+  await expect(monitor.getByRole('button', { name: 'Проблемы · 0' })).toBeVisible();
   await writeFile(`${artifacts}/production-session-observations.json`, JSON.stringify({ geometry, order, stagger, twoCountdowns: true, pausePendingPreservesOneJPEG: true, personBoundaryCancelDoesNotResume: true, retakeRemovesThumbnail: true, confirmedScenarioSwitch: true, noServerDeletion: true, noUploadBeforeFinish: true, shutters, pageErrors: errors, media: reference ? 'provided reference crops, fixture only' : 'synthetic test fixtures', hardware: 'controlled HTTP; no Canon/Windows' }, null, 2));
   await admin.dispose();
 });

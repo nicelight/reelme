@@ -255,3 +255,33 @@ test('existing capture pages and sessions with stored photos stop being monitore
   assert.equal(monitor.issues, 0);
   assert.equal(monitor.sessions[0].label, 'Принято 1 из 4 фото');
 });
+
+test('operator cancellation persists, rejects transfer and never cancels queued generation', async t => {
+  const f = await fixture(); t.after(() => f.close());
+  const { cookie, ids } = await setup(f);
+  const { sessionId } = await start(f, ids[0]);
+  const cancel = (id: string, headers: Record<string, string> = installation) =>
+    f.app.inject({ method: 'POST', url: path(id) + '/cancel', headers });
+  assert.equal((await cancel(sessionId, {})).statusCode, 401);
+  f.advance(60_001);
+  assert.equal((await cancel(sessionId)).statusCode, 204);
+  await f.restart();
+  assert.equal((await cancel(sessionId)).statusCode, 204);
+  assert.equal((await f.app.inject({ method: 'POST', url: path(sessionId) + '/heartbeat', headers: installation })).statusCode, 204);
+  const image = await jpeg('blue');
+  assert.equal((await upload(f, sessionId, 0, image)).json().code, 'CAPTURE_CANCELLED');
+  assert.equal((await finalize(f, sessionId)).json().code, 'CAPTURE_CANCELLED');
+  assert.equal((await status(f, sessionId)).finalized, false);
+  f.advance(60_001);
+  const detail = (await f.app.inject({ url: '/api/statuses/' + sessionId, headers: { cookie } })).json();
+  assert.equal(detail.session.state, 'cancelled');
+  assert.equal(detail.session.label, 'отменено оператором');
+  assert.equal(detail.session.issue, null);
+  assert.equal(detail.entries.filter((entry: { event: string }) => entry.event === 'operator_cancelled').length, 1);
+  assert.equal((await f.app.inject({ url: '/api/statuses?issues=1', headers: { cookie } })).json().issues, 0);
+  const next = await start(f, ids[0]);
+  assert.equal((await upload(f, next.sessionId, 0, image)).statusCode, 200);
+  assert.equal((await finalize(f, next.sessionId)).statusCode, 200);
+  assert.equal((await cancel(next.sessionId)).statusCode, 409);
+  assert.equal((await status(f, next.sessionId)).state, 'submit_pending');
+});

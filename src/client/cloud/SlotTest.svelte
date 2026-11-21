@@ -23,7 +23,7 @@
     return ms >= 60_000 ? `${Math.floor(ms / 60_000)} мин ${Math.floor(ms % 60_000 / 1000)} с` : `${(ms / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} с`;
   }
   const labels: Record<SessionState, string> = {
-    capturing: 'Подготовка тестовых фотографий', submit_pending: 'Ожидает обработки', observing: 'Генерация видео',
+    cancelled: 'Отменено оператором', capturing: 'Подготовка тестовых фотографий', submit_pending: 'Ожидает обработки', observing: 'Генерация видео',
     preparing: 'Подготовка видео', ready: 'Видео готово', failed: 'Тест не завершён', simulated: 'Проверка входных данных пройдена',
   };
   function remember(nextRequestId: string | null, nextSessionId: string | null) {
@@ -49,7 +49,7 @@
         try {
           const value = await api<CaptureStatus>(`/admin/slots/${currentSlot}/sessions/${currentSession}`);
           if (stopped) return;
-          status = value; error = ''; keepPolling = !['ready', 'simulated', 'failed'].includes(value.state);
+          status = value; error = ''; keepPolling = !['ready', 'simulated', 'failed', 'cancelled'].includes(value.state);
         } catch (value) {
           if (stopped) return;
           error = value instanceof Error ? value.message : 'Не удалось прочитать состояние теста.';

@@ -1,0 +1,8 @@
+web-gphoto2 0.4.1 (LGPL-2.1-or-later)
+https://github.com/GoogleChromeLabs/web-gphoto2/tree/ec3f4462b1f4c58ecb0e9411bbddb2ab8a5ccea8
+
+The three files in build/ are unmodified copies of the upstream build/ directory's runtime assets.
+The corresponding JS, C++, Dockerfile, Makefile, build instructions and source dependencies are available at the revision above.
+libgphoto2 source: https://github.com/RReverser/libgphoto2/tree/90bf9143d7b35b3c1a7eb72f287c7e425e5dc2cb
+libusb 1.0.27: https://github.com/libusb/libusb/tree/v1.0.27
+GNU libtool 2.4.6: https://ftp.gnu.org/gnu/libtool/libtool-2.4.6.tar.gz

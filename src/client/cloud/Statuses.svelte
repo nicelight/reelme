@@ -145,9 +145,9 @@
   {#if page}
     {#each page.sessions as row (row.id)}
       <article>
-        <button class="row" class:problem={!!row.issue} data-stage={row.stage} aria-expanded={opened === row.id} onclick={() => expand(row.id)}>
+        <button class="row" class:problem={!!row.issue} class:cancelled={row.state === 'cancelled'} data-stage={row.stage} aria-expanded={opened === row.id} onclick={() => expand(row.id)}>
           <span class="num">№ {row.number}{#if !page.eventName && row.eventName}<small>{row.eventName}</small>{/if}</span><span class="when">{clock.format(row.updatedAt)}</span>
-          <span class="track" aria-hidden="true"><i style:width={(row.issue ? 100 : Math.min(100,(row.stage+1)*16)) + '%'}></i></span>
+          <span class="track" aria-hidden="true"><i style:width={(row.issue || row.state === 'cancelled' ? 100 : Math.min(100,(row.stage+1)*16)) + '%'}></i></span>
           <span class="step">{#if row.issue}<b>{row.issue === 'retry' ? 'Сбой · повторяем' : 'Ошибка'}</b>{row.issue === 'retry' ? ' · ' : ': '}{/if}{row.label}{#if row.mode} · {row.mode}{/if}
             {#if row.costUsd !== undefined}{' · '}<span title="Стоимость генерации в USD">{row.costUsd === null ? '..$' : formatUsd(row.costUsd)}</span>{/if}
           </span>
@@ -208,6 +208,7 @@
   .row {width:100%;display:grid;grid-template-columns:1fr auto auto;gap:6px 12px;align-items:center;text-align:left;border:0;border-radius:0;padding:13px 14px;background:transparent;--stage:#db779e}
   .row[data-stage='2'] {--stage:#9862c5}.row[data-stage='3'] {--stage:#7dc6df}
   .row[data-stage='4'],.row[data-stage='5'],.row[data-stage='6'] {--stage:#afd88c}
+  .row.cancelled {--stage:#8a8a8a}
   .num {font-size:1.2rem;font-variant-numeric:tabular-nums}
   .track {grid-area:2 / 1 / 3 / 4;height:4px;background:var(--line);border-radius:6px;overflow:hidden}
   .track i {display:block;height:100%;background:var(--stage);border-radius:inherit}

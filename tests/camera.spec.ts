@@ -7,11 +7,12 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { request as apiRequest } from '@playwright/test';
 import sharp from 'sharp';
 const artifacts = process.env.REELME_BROWSER_ARTIFACTS || '.tasks/TASK-004-T2-FT-002-W3';
-const local = 'http://localhost:5513/reelme.html';
+test.use({ capturePort: 0 });
 type Observations = { beeps: number; countdowns: string[]; poses: string[]; frames: { bytes: number[]; transform: string; step: string }[] };
 
 test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and preview fallback', async ({ page, app }) => {
   test.setTimeout(120_000);
+  const local = app.captureOrigin + '/reelme.html';
   await mkdir(artifacts, { recursive: true });
   const admin = await apiRequest.newContext({ baseURL: app.origin, extraHTTPHeaders: { Origin: app.origin } });
   expect((await admin.post('/api/auth/login', { data: { username: 'admin', password: app.password } })).status()).toBe(200);
@@ -41,7 +42,7 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
   let sequence = 0; let pendingPolls = 0; let fallback = false; let previewFails = false; let failedDownload = false;
   const names = ['/image/old.jpg'];
   const commands: string[] = []; const downloads: string[] = []; const localAuthorization: string[] = [];
-  await page.route('http://localhost:5513/**', async route => {
+  await page.route(app.captureOrigin + '/**', async route => {
     const url = new URL(route.request().url());
     if (url.pathname === '/reelme.html') return route.continue();
     const authorization = route.request().headers().authorization;

@@ -30,7 +30,9 @@
   let confirming = $state(false);
   let confirmationUntil = 0;
   let confirmationTimer: ReturnType<typeof setTimeout> | undefined;
-  let liveView = $state(false);
+  let liveView = false; // A successful Show selects the Live View shutter, even if preview reads fail.
+  let needsLiveViewOpen = true;
+  let previewRetryAt = $state(0);
   let hidden = $state(document.hidden);
   let audio: AudioContext | undefined;
   let sequence: AbortController | undefined;
@@ -47,7 +49,7 @@
   let previewRun: AbortController | undefined;
   const pose = $derived(receipt.posePlan[position]);
   const cameraLocked = $derived(phase === 'camera' || pendingCapture);
-  const shouldPreview = $derived(previewEnabled && liveView && !hidden && !confirming && !['camera', 'confirmation', 'complete'].includes(phase));
+  const shouldPreview = $derived(previewEnabled && !hidden && !confirming && !['camera', 'confirmation', 'complete'].includes(phase));
   function clearConfirmed() {
     clearTimeout(confirmationTimer); confirming = false; confirmationUntil = 0;
     if (confirmed) URL.revokeObjectURL(confirmed); confirmed = '';
@@ -58,13 +60,33 @@
     preview = '';
   }
   function stopPreview() { diagnostics?.stopPreview('operator'); previewEnabled = false; pausePreview(); }
+  function previewFailed(error: unknown) {
+    diagnostics?.stopPreview('error', error, error instanceof CameraError ? error.status : undefined);
+    needsLiveViewOpen = true;
+    previewRetryAt = performance.now() + 1000;
+  }
+  function previewImageFailed(url: string) {
+    if (url === preview && previewRun && !previewRun.signal.aborted) {
+      previewFailed(new CameraError('Не удалось отобразить кадр Live View.'));
+    }
+  }
   function cancelSequence() { sequence?.abort(); sequence = undefined; running = false; pauseAfterCapture = false; }
   function clearThumbnails() { thumbnails.forEach(photo => URL.revokeObjectURL(photo.url)); thumbnails = []; }
   $effect(() => {
-    if (!shouldPreview) return;
+    if (!shouldPreview || (pendingCapture && needsLiveViewOpen)) return;
+    if (previewRetryAt) {
+      const timer = setTimeout(() => { previewRetryAt = 0; }, Math.max(0, previewRetryAt - performance.now()));
+      return () => clearTimeout(timer);
+    }
     const controller = previewRun = new AbortController();
     void (async () => {
       try {
+        if (needsLiveViewOpen) {
+          await camera.startLiveView(controller.signal);
+          controller.signal.throwIfAborted();
+          liveView = true;
+          needsLiveViewOpen = false;
+        }
         while (!controller.signal.aborted) {
           const frame = await camera.preview(controller.signal);
           controller.signal.throwIfAborted();
@@ -75,10 +97,7 @@
           await pause(200, controller.signal);
         }
       } catch (error) {
-        if (!controller.signal.aborted) {
-          diagnostics?.stopPreview('error', error, error instanceof CameraError ? error.status : undefined);
-          stopPreview();
-        }
+        if (!controller.signal.aborted) previewFailed(error);
       }
     })();
     return () => { controller.abort(); if (previewRun === controller) { pausePreview(); previewRun = undefined; } };
@@ -87,8 +106,6 @@
     diagnostics?.start();
     if (automatic && !document.hidden) void run();
     else if (document.hidden) automatic = false;
-    void camera.startLiveView(lifecycle.signal).then(() => { if (!lifecycle.signal.aborted) liveView = true; })
-      .catch(() => { if (!lifecycle.signal.aborted) stopPreview(); });
     const visibility = () => { hidden = document.hidden; diagnostics?.visibilityChanged(); if (hidden) { diagnostics?.stopPreview('hidden'); automatic = false; pauseCapture(); pausePreview(); } };
     const pageHide = () => diagnostics?.pageHidden(camera.hasPendingCapture);
     window.addEventListener('pagehide', pageHide);
@@ -192,6 +209,6 @@
     cancelSequence(); phase = 'complete'; stopPreview(); oncomplete([...photos]);
   }
 </script>
-<PhotoSessionView {receipt} {installationKey} {position} {phase} {countdown} {preview} {previewEnabled} {confirmed} {confirming} {thumbnails}
+<PhotoSessionView {receipt} {installationKey} {position} {phase} {countdown} {preview} {previewEnabled} previewRetrying={!!previewRetryAt} {confirmed} {confirming} {thumbnails}
   {error} {caseCode} {pendingCapture} {cameraLocked} {pauseAfterCapture} {automatic} {settings} ontoggle={toggleMode} onrun={() => void run()} onpause={pauseCapture}
-  onretake={retake} onrestart={restart} onfinish={finish} {onscenario} onstoppreview={stopPreview}/>
+  onretake={retake} onrestart={restart} onfinish={finish} {onscenario} onstoppreview={stopPreview} onpreviewerror={previewImageFailed}/>

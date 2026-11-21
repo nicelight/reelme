@@ -66,7 +66,7 @@ export interface StartReceipt {
   /** Session-pinned visitor artwork; optional for receipts saved by older clients. */
   story?: { description: string; thumbnailId: string; slotId?: string };
 }
-export type SessionState = 'capturing' | 'submit_pending' | 'observing' | 'preparing' | 'ready' | 'failed' | 'simulated';
+export type SessionState = 'capturing' | 'cancelled' | 'submit_pending' | 'observing' | 'preparing' | 'ready' | 'failed' | 'simulated';
 /** complete means every position is stored; finalized additionally confirms
  * handoff for processing. Only finalized permits displaying the visitor number. */
 export interface CaptureStatus extends StartReceipt {

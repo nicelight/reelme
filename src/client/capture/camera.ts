@@ -59,7 +59,7 @@ export class DigiCamControl {
       const response = await this.get('/liveview.html?CMD=LiveViewWnd_Show', AbortSignal.any([signal, AbortSignal.timeout(5000)]));
       this.diagnostics?.openPreview(started, response.status);
     } catch (error) {
-      this.diagnostics?.openPreview(started, error instanceof CameraError ? error.status : undefined, error);
+      if (!signal.aborted) this.diagnostics?.openPreview(started, error instanceof CameraError ? error.status : undefined, error);
       throw error;
     }
   }

@@ -44,13 +44,13 @@ function projection(row: Row): DisplaySession {
       ? generationMessages[row.error_code] : generationMessages.FAL_FAILED;
   const generation = JSON.parse(row.snapshot).generation ?? {};
   const testVideo = isTestVideo(generation);
-  const simulation: DisplaySession['simulation'] = generation.simulateGeneration === true && row.state !== 'capturing'
+  const simulation: DisplaySession['simulation'] = generation.simulateGeneration === true && row.state !== 'capturing' && row.state !== 'cancelled'
     ? { status: row.state === 'simulated' || row.state === 'ready' ? 'passed' : row.state === 'failed' ? 'failed' : 'pending',
       message: testVideo ? row.state === 'ready' ? 'Тестовое видео готово' : row.state === 'failed' ? 'Тестовое видео не подготовлено' : 'Подготовка тестового видео'
         : row.state === 'simulated' ? 'Проверка входных данных пройдена' : row.state === 'failed' ? 'Проверка входных данных не пройдена' : 'Проверка входных данных',
       detail: row.state === 'failed' ? failure : 'Тестовый режим: fal не вызывался' } : null;
   return { id: row.id, number: row.number, stage, simulation, readyAt: row.state === 'ready' ? row.ready_at : null,
-    label: stage === 6 ? `Видео отправлено на ${maskEmail(row.email ?? '')}` : row.state === 'failed' ? 'Генерация не завершена'
+    label: row.state === 'cancelled' ? 'отменено оператором' : stage === 6 ? `Видео отправлено на ${maskEmail(row.email ?? '')}` : row.state === 'failed' ? 'Генерация не завершена'
       : testVideo && (stage === 1 || stage === 2) ? 'Подготовка тестового видео' : stageLabels[stage as 0 | 1 | 2 | 3 | 4 | 5],
     error: row.state === 'failed' ? failure
       : row.email_state === 'failed' ? 'Письмо не подтверждено. Откройте форму и повторите отправку.' : null,

@@ -4,11 +4,12 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 RUN npm ci
-COPY tsconfig*.json vite.config.ts index.html ./
+COPY tsconfig*.json vite.config.ts index.html cam-test-web.html ./
 COPY src ./src
 COPY WebServer/reelme.html ./WebServer/reelme.html
 COPY public/slot-prompts ./public/slot-prompts
 COPY public/test-videos ./public/test-videos
+COPY public/cam-test-web-assets ./public/cam-test-web-assets
 RUN npm run check && npm run build && npm prune --omit=dev
 
 FROM node:22.23.5-bookworm-slim AS runtime

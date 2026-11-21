@@ -56,6 +56,7 @@ const businessIssue = `(s.page_offline OR s.state='failed' OR (s.state IN ('subm
 const iso = (time: number | null) => time === null ? null : new Date(time).toISOString();
 
 const eventLabels: Record<string, string> = {
+  operator_cancelled: 'отменено оператором',
   page_reconnected: 'Связь со страницей фотосессии восстановлена после перерыва более 60 секунд',
   number_assigned: 'Присвоен номер посетителя', queued: 'Передано в очередь', prepared: 'Входные данные проверены',
   available: 'Материалы доступны в fal CDN', repair: 'Повторная подготовка материалов CDN',
@@ -127,6 +128,7 @@ function status(row: Row, latest?: EntryRow): SessionStatus {
   if (stage === 2 && isTestVideo(inputs)) label = 'Подготовка тестового видео';
   if (row.state === 'capturing') label = `Принято ${row.photos} из ${snapshot.expectedPhotos ?? '?'} фото`;
   if (row.state === 'capturing' && issue && last) label = last.label;
+  if (row.state === 'cancelled') label = eventLabels.operator_cancelled;
   if (row.page_offline) label = 'потеряна связь со страницей фотосессии';
   if (detailFits && last) label = last.label;
   if (row.state === 'failed') label = last && last.detail.code === row.error_code && ['failed','unknown'].includes(last.outcome) ? last.label : failures[row.error_code ?? ''] ?? 'Обработка остановлена';

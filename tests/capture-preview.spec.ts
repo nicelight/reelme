@@ -55,7 +55,7 @@ const test = base.extend<{ camera: {
   },
 });
 
-async function open(page: Page, origin: string, query = '') {
+async function open(page: Page, origin: string, query = '', expectFrame = true) {
   await page.clock.install({ time: new Date('2026-11-17T12:00:00Z') });
   await page.clock.pauseAt(new Date('2026-11-17T12:01:00Z'));
   await page.addInitScript(() => {
@@ -71,7 +71,7 @@ async function open(page: Page, origin: string, query = '') {
     };
   });
   await page.goto(origin + '/preview-fixture' + query);
-  await expect(page.locator('.live-preview')).toBeVisible();
+  if (expectFrame) await expect(page.locator('.live-preview')).toBeVisible();
 }
 
 test('preview stops before shutter, photo holds one second, countdowns are five seconds before and after a mode change', async ({ page, camera }) => {
@@ -337,4 +337,58 @@ test('manual Live View takes one shot per tap and Play continues the series', as
   await page.clock.runFor(6000);
   expect(camera.shutters).toBe(2);
   await expect(shutter).toBeEnabled();
+});
+
+test('Live View retries opening and reading after each one-second delay until a frame arrives', async ({ page, camera }) => {
+  let opens = 0;
+  let frames = 0;
+  await page.route('**/liveview.html?*', route => route.fulfill({ status: ++opens < 3 ? 503 : 200, body: 'OK' }));
+  await page.route('**/liveview.jpg', route => ++frames === 1 ? route.fulfill({ status: 503 }) : route.continue());
+  await open(page, camera.origin, '', false);
+  const fallback = page.getByText('Съёмка без превью', { exact: true });
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await expect.poll(() => opens).toBe(attempt);
+    await expect(fallback).toBeVisible();
+    await page.clock.runFor(999);
+    expect(opens).toBe(attempt);
+    await page.clock.runFor(1);
+  }
+  await expect(page.locator('.live-preview')).toBeVisible();
+  expect(opens).toBe(4);
+  expect(frames).toBe(2);
+  await page.locator('.live-preview').dispatchEvent('error');
+  await expect(fallback).toBeVisible();
+  await page.clock.runFor(1000);
+  await expect(page.locator('.live-preview')).toBeVisible();
+  expect(opens).toBe(5);
+  expect(camera.shutters).toBe(0);
+
+  await page.locator('.live-preview').dispatchEvent('error');
+  await page.getByRole('button', { name: 'Продолжить без превью' }).click();
+  await page.clock.runFor(3000);
+  expect(opens).toBe(5);
+  await expect(fallback).toBeVisible();
+});
+
+test('a retry due during the shutter waits for the original and the photo confirmation', async ({ page, camera }) => {
+  let opens = 0;
+  await page.route('**/liveview.html?*', route => { opens++; return route.continue(); });
+  await open(page, camera.origin);
+  await page.getByRole('button', { name: 'Снять один кадр' }).click();
+  await page.clock.runFor(4200);
+  await page.locator('.live-preview').dispatchEvent('error', { bubbles: false });
+  await expect(page.getByText('Съёмка без превью')).toBeVisible();
+  await page.clock.runFor(800);
+  await expect.poll(() => camera.photoWaiters.size).toBe(1);
+  await page.clock.runFor(2500);
+  expect(opens).toBe(1);
+  camera.releasePhoto();
+  await expect(page.locator('.captured-frame')).toBeVisible();
+  await page.clock.runFor(999);
+  expect(opens).toBe(1);
+  // Confirmation ends at 1000 ms. Run the already-due retry timer on the next tick.
+  await page.clock.runFor(2);
+  await expect(page.locator('.live-preview')).toBeVisible();
+  expect(opens).toBe(2);
+  expect(camera.shutters).toBe(1);
 });

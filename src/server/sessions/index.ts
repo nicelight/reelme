@@ -6,7 +6,7 @@
  * including across edits, hidden slots and midnight. Manual admin tests alone use
  * saved test JPEGs, copied by position through the same intake/finalize. Legacy
  * tests retain their single-source retry; new plans never duplicate it.
- * Page contact is diagnostic only and stops at handoff to generation.
+ * Page contact is diagnostic only and stops on transfer or confirmed cancellation.
  * Test retries retain their original source; concurrent preparation is rejected. Photo bytes are written and
  * decoded without image statistics before a short DB transaction publishes one position. Finalize changes
  * capturing to submit_pending once, only for a complete set; later photo writes
@@ -68,10 +68,11 @@ export function captureStatus(db: DB, sessionId: string): CaptureStatus {
   const posePlan = snapshotPosePlan(session.snapshot);
   const complete = acceptedPoseIndices.length === posePlan.length && posePlan.every(pose => acceptedPoseIndices.includes(pose.index));
   const error = db.prepare('SELECT error_code,error_message FROM generation_jobs WHERE session_id=?').get(sessionId) as { error_code: string | null; error_message: string | null } | undefined;
-  return { ...(error?.error_code ? { error: { code: error.error_code, message: error.error_message! } } : {}), sessionId, date: session.event_date, number: session.number, state: session.state, captureSettings: { ...defaultCaptureSettings, ...session.snapshot.captureSettings }, posePlan, story: sessionStory(session.snapshot), acceptedPoseIndices, complete, finalized: complete && session.state !== 'capturing' };
+  return { ...(error?.error_code ? { error: { code: error.error_code, message: error.error_message! } } : {}), sessionId, date: session.event_date, number: session.number, state: session.state, captureSettings: { ...defaultCaptureSettings, ...session.snapshot.captureSettings }, posePlan, story: sessionStory(session.snapshot), acceptedPoseIndices, complete, finalized: complete && session.state !== 'capturing' && session.state !== 'cancelled' };
 }
 function requireCapturing(db: DB, sessionId: string, poseIndex: number) {
   const session = readSession(db, sessionId);
+  if (session.state === 'cancelled') throw new HttpError(409, 'CAPTURE_CANCELLED', 'Фотосессия отменена оператором');
   if (session.state !== 'capturing') throw new HttpError(409, 'CAPTURE_CLOSED', 'Фотографии уже переданы на обработку');
   if (!snapshotPosePlan(session.snapshot).some(pose => pose.index === poseIndex)) throw new HttpError(400, 'INVALID_POSE', 'Эта позиция не входит в план съёмки');
 }
@@ -185,6 +186,15 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     const { id } = sessionParams.parse(request.params);
     return captureStatus(db, id);
   });
+  app.post('/api/capture/sessions/:id/cancel', { preHandler: access.requireInstallation }, (request, reply) => {
+    const { id } = sessionParams.parse(request.params);
+    const session = readSession(db, id);
+    if (session.state === 'cancelled') return reply.code(204).send();
+    const changed = db.prepare("UPDATE capture_sessions SET state='cancelled', page_seen_at=NULL WHERE id=? AND state='capturing'").run(id);
+    if (!changed.changes) throw new HttpError(409, 'CAPTURE_CLOSED', 'Фотосессия уже завершена');
+    recordHistory(db, id, 'capture', 'capture.cancel', 'operator_cancelled', 'cancelled', {}, now);
+    return reply.code(204).send();
+  });
   // NULL disables page monitoring durably. A late heartbeat cannot re-enable it.
   const stopPageMonitoring = db.prepare("UPDATE capture_sessions SET page_seen_at=NULL WHERE id=? AND state='capturing' AND page_seen_at IS NOT NULL");
   app.post('/api/capture/sessions/:id/transfer', { preHandler: access.requireInstallation }, request => {
@@ -243,6 +253,7 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
   });
   const finalize = db.transaction((sessionId: string) => {
     const status = captureStatus(db, sessionId);
+    if (status.state === 'cancelled') throw new HttpError(409, 'CAPTURE_CANCELLED', 'Фотосессия отменена оператором');
     if (!status.complete) throw new HttpError(409, 'INCOMPLETE_PHOTOS', 'Получены не все фотографии');
     if (status.state === 'capturing') db.prepare("UPDATE capture_sessions SET state='submit_pending' WHERE id=? AND state='capturing'").run(sessionId);
     return { advanced: status.state === 'capturing', value: captureStatus(db, sessionId) };

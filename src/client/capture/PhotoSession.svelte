@@ -2,7 +2,7 @@
   /** Module contract: coordinates one server-issued session through local capture,
    * JPEG upload and finalize. Retries retain original Blobs/positions and never
    * call the camera again. Server status is authoritative, including after reload
-   * or a lost acknowledgement. Only finalized=true permits the number and release.
+   * or a lost acknowledgement. Only finalized=true permits displaying the number.
    * Heartbeats run during shooting, including camera waits, until transfer starts.
    * Request deadlines include response bodies; timeout preserves manual recovery.
    * Finish records only a session marker, never JPEG bytes. Reload with missing
@@ -15,12 +15,13 @@
   import { ApiError, request } from './api';
   let { receipt, installationKey, onnext, onrepeat }: { receipt: StartReceipt; installationKey: string; onnext: () => void; onrepeat: () => void } = $props();
   let status = $state<CaptureStatus>();
-  let phase = $state<'loading' | 'capture' | 'transfer' | 'done' | 'error' | 'lost'>('loading');
+  let phase = $state<'loading' | 'capture' | 'transfer' | 'done' | 'error' | 'lost' | 'cancelling'>('loading');
   let error = $state('');
   let busy = false;
   let photos: (CapturedPhoto & { uploadBlob?: Blob })[] = [];
   const lifecycle = new AbortController();
   const transferStorage = 'reelme.captureTransfer';
+  const cancelStorage = 'reelme.captureCancel';
   function clearTransferMarker() { if (sessionStorage.getItem(transferStorage) === receipt.sessionId) sessionStorage.removeItem(transferStorage); }
   function next() { clearTransferMarker(); onnext(); }
   $effect(() => {
@@ -57,6 +58,27 @@
     if (value.sessionId !== receipt.sessionId) throw new Error('Неверное подтверждение сессии');
     return value;
   }
+  async function cancelCapture() {
+    if (busy) return;
+    busy = true; error = ''; phase = 'cancelling';
+    try {
+      sessionStorage.setItem(cancelStorage, receipt.sessionId);
+      await request(path() + '/cancel', installationKey, {
+        method: 'POST', signal: AbortSignal.any([lifecycle.signal, AbortSignal.timeout(15_000)]),
+      });
+      sessionStorage.removeItem(cancelStorage);
+      next();
+    } catch (cause) {
+      if (lifecycle.signal.aborted) return;
+      if (cause instanceof ApiError && cause.code === 'CAPTURE_CLOSED') {
+        // Another page already completed this session.
+        sessionStorage.removeItem(cancelStorage);
+        next();
+      } else {
+        error = 'Не удалось подтвердить отмену фотосессии. Проверьте соединение и повторите.';
+      }
+    } finally { busy = false; }
+  }
   async function proceed() {
     if (busy) return;
     busy = true; error = ''; phase = 'loading';
@@ -66,6 +88,7 @@
       status = await readResponse(await request(transferring ? path() + '/transfer' : path(), installationKey, {
         method: transferring ? 'POST' : 'GET', signal: AbortSignal.any([lifecycle.signal, AbortSignal.timeout(15_000)]),
       }));
+      if (status.state === 'cancelled') { next(); return; }
       if (status.finalized) { clearTransferMarker(); photos = []; phase = 'done'; return; }
       if (!status.complete && photos.length === 0 && status.acceptedPoseIndices.length === 0 && !transferring) { phase = 'capture'; return; }
       const missing = status.posePlan.filter(pose => !status!.acceptedPoseIndices.includes(pose.index));
@@ -98,7 +121,11 @@
     } finally { busy = false; }
   }
   function captured(value: CapturedPhoto[]) { photos = value; void proceed(); }
-  onMount(() => { void proceed(); return () => lifecycle.abort(); });
+  onMount(() => {
+    if (sessionStorage.getItem(cancelStorage) === receipt.sessionId) void cancelCapture();
+    else void proceed();
+    return () => lifecycle.abort();
+  });
 </script>
 <svelte:element this={phase === 'capture' ? 'div' : 'main'} class:session-state={phase !== 'capture'} class:receipt-state={phase === 'done'}>
 {#if phase === 'done' && status?.complete && status.finalized}
@@ -111,7 +138,12 @@
     <button class="receipt-next" onclick={next} aria-label="Следующий посетитель"></button>
   </section>
 {:else if phase === 'capture' && status}
-  <Capture receipt={status} {installationKey} oncomplete={captured} onscenario={() => { if (phase === 'capture') next(); }} />
+  <Capture receipt={status} {installationKey} oncomplete={captured} onscenario={cancelCapture} />
+{:else if phase === 'cancelling'}
+  <section class="narrow" aria-live="polite">
+    <h1>{error ? 'Отмена не подтверждена' : 'Отменяем фотосессию…'}</h1>
+    {#if error}<div class="error" role="alert"><p>{error}</p><button class="primary" onclick={cancelCapture}>Повторить</button></div>{/if}
+  </section>
 {:else if phase === 'lost'}
   <section class="narrow" aria-live="polite">
     <p class="eyebrow">ПЕРЕДАЧА ОСТАНОВЛЕНА</p><h1>Недостающие кадры потеряны после перезагрузки</h1>
