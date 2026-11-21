@@ -8,6 +8,8 @@ import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import rateLimit from '@fastify/rate-limit';
+import { randomUUID } from 'node:crypto';
+import type { TemplateUploadStatus } from '../shared/template-upload.js';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ZodError } from 'zod';
@@ -24,6 +26,7 @@ import { createGenerationWorker, type GenerationOptions } from './sessions/gener
 import { registerReceive, publishReady } from './sessions/receive.js';
 import { registerEvents } from './sessions/events.js';
 import { registerSlotResults } from './sessions/slot-results.js';
+import { registerStatuses } from './sessions/statuses.js';
 import { registerDisplay } from './sessions/display.js';
 import { createEmailWorker, recoverEmail, type EmailOptions, type createSmtpTransport } from './sessions/email.js';
 import { registerEmailSettings } from './sessions/email-settings.js';
@@ -50,22 +53,32 @@ export async function createApp(config: Config, options: { now?: () => number; l
   const access = await createAccess(app, db, config, options.now ?? Date.now);
   const deleteOutput = options.cleanup?.deleteOutput ?? (config.falKey ? createFalDelete(config.falKey) : undefined);
   const upload = options.templateUpload ?? (config.falKey ? falTemplateUpload(config.falKey) : undefined);
+  const discard = (url: string) => deleteKnownOutput(url, app.log, deleteOutput);
   const templates = upload && options.generation !== false
     ? createTemplateCache(db, config.dataDir, upload, {
-        discard: url => deleteKnownOutput(url, app.log, deleteOutput),
+        discard,
         onFailure: mediaId => app.log.error({ mediaId }, 'Исчерпаны попытки загрузки материала в fal CDN'),
       }) : undefined;
   if (templates) app.addHook('onClose', () => templates.stop());
-  registerScenarios(app, db, config.dataDir, access, config.templateVideosDir, templates?.warm);
+  let configurationError: TemplateUploadStatus | null = null;
+  app.get('/api/admin/template-uploads', { preHandler: access.requireAdmin }, () => ({ status: templates?.status() ?? configurationError }));
+  registerScenarios(app, db, config.dataDir, access, config.templateVideosDir, slot => {
+    if (templates) templates.warm(slot);
+    else if (options.generation === undefined && (slot.videoId || slot.referenceIds.length)) {
+      configurationError = { batch: randomUUID(), pending: false, totalFiles: slot.referenceIds.length + Number(!!slot.videoId),
+        readyFiles: 0, totalBytes: 0, sentBytes: 0, error: 'Сюжет сохранён. Для загрузки материалов задайте FAL_KEY на сервере и сохраните сюжет ещё раз.' };
+    }
+  }, discard);
   registerSessions(app, db, config.dataDir, access, options.now ?? Date.now);
   registerSlotResults(app, db, config.dataDir, access);
   registerProviderMedia(app, db, config.dataDir);
+  registerStatuses(app, db, access, options.now ?? Date.now);
   registerDisplay(app, db, config.dataDir, config.origin, access, options.now ?? Date.now);
   const cleanup = createEventCleanup(db, config.dataDir, app.log, options.now ?? Date.now, { ...options.cleanup, deleteOutput });
   registerEvents(app, db, config.dataDir, access, options.now ?? Date.now, cleanup);
   app.addHook('onReady', async () => { await cleanup.runOnce(); cleanup.start(); });
   app.addHook('onClose', async () => { await cleanup.stop(); });
-  registerReceive(app, db, config.dataDir, config.clientDir, options.now ?? Date.now);
+  registerReceive(app, db, config.dataDir, config.clientDir, options.now ?? Date.now, access.requireOrigin);
   const publish = (id: string, freshlyPrepared = false) => publishReady(db, config.dataDir, id, config.origin, options.now, freshlyPrepared);
   app.addHook('onReady', async () => {
     // A serving client entrypoint is part of ready, also when fal is disabled.
@@ -81,7 +94,7 @@ export async function createApp(config: Config, options: { now?: () => number; l
   }
   const current = registerEmailSettings(app, db, access, config.smtp, options.smtpTransport);
   const emailWorker = createEmailWorker(db, config.dataDir, config.origin, app.log, options.email ?? { current }, options.now);
-  app.addHook('onReady', async () => { recoverEmail(db); emailWorker.start(); });
+  app.addHook('onReady', async () => { recoverEmail(db, options.now); emailWorker.start(); });
   app.addHook('onClose', async () => { await emailWorker.stop(); });
   await app.register(fastifyStatic, { root: join(config.clientDir, 'assets'), prefix: '/assets/', decorateReply: false, immutable: true, maxAge: '1y', index: false });
   // Stable prompt filenames must revalidate; empty Recast files are valid assets.
@@ -91,6 +104,7 @@ export async function createApp(config: Config, options: { now?: () => number; l
     return reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8'));
   });
   app.get('/admin', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
+  app.get('/statuses', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
   app.get('/operator', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
   app.get('/results', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
   app.get('/capture-loader.js', async (_request, reply) => {

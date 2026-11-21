@@ -10,8 +10,10 @@
   import type { Media, Slot, SlotInput } from '../../shared/scenarios';
   import { api, ApiError, mediaUrl } from './api';
   import Archive from './Archive.svelte';
+  import Statuses from './Statuses.svelte';
   import Display from './Display.svelte';
   import MediaField from './MediaField.svelte';
+  import TemplateUploadDialog from './TemplateUploadDialog.svelte';
   import SlotEditor from './SlotEditor.svelte';
   import CaptureGuides from './CaptureGuides.svelte';
   import CaptureSettingsForm from './CaptureSettingsForm.svelte';
@@ -26,6 +28,7 @@
   let archive = $state(false);
   let parameters = $state(false);
   let photobooth = $state(false);
+  const statusRoute = location.pathname === '/statuses';
   const dedicatedScreen = location.pathname === '/results';
   let ready = $state(false);
   let role = $state<'admin' | 'operator' | null>(null);
@@ -36,6 +39,7 @@
   let username = $state('');
   let password = $state('');
   let busy = $state(false);
+  let saving = $state(false);
   let uploads = $state(0);
   let error = $state('');
   let notice = $state('');
@@ -90,8 +94,8 @@
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
-  function fresh() {
-    if (!canLeave()) return;
+  function fresh() { if (canLeave()) resetDraft(); }
+  function resetDraft() {
     selectedId = null; draftId = crypto.randomUUID(); slotSelection++; draft = blankSlot(); baseline = JSON.stringify(draft); videoMedia = undefined; error = ''; notice = '';
   }
   async function openSlot(id: string) {
@@ -111,12 +115,24 @@
     const result = slotSchema.safeParse(draft);
     if (!result.success) { error = result.error.issues.map(issue => issue.message).join('. '); return; }
     if (sourceProblem) { error = sourceProblem; return; }
-    busy = true;
+    saving = true; busy = true;
     try {
       const saved = await api<Slot>(selectedId ? `/admin/slots/${selectedId}` : '/admin/slots', { method: selectedId ? 'PUT' : 'POST', body: JSON.stringify(selectedId ? result.data : { ...result.data, id: draftId }) });
       const { id, ...config } = saved;
       selectedId = id; draft = config; baseline = JSON.stringify(config);
       await loadSlots(); notice = 'Сюжет сохранён.';
+    } catch (value) { fail(value); }
+    finally { busy = false; saving = false; }
+  }
+  async function deleteSlot(slot: Slot) {
+    if (!confirm(`Удалить сюжет «${titleFrom(slot.description)}»? Он исчезнет из списка и каталога гостей. Уже начатые сессии сохранятся.`)) return;
+    busy = true; error = '';
+    try {
+      await api<void>(`/admin/slots/${slot.id}`, { method: 'DELETE' });
+      slots = slots.filter(item => item.id !== slot.id);
+      photoCaches.delete(slot.id);
+      if (selectedId === slot.id) resetDraft();
+      notice = 'Сюжет удалён.';
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
@@ -138,9 +154,10 @@
 </script>
 
 <svelte:window onbeforeunload={beforeUnload} />
-<svelte:head><title>ReelMe — {photobooth ? 'Фотобудка' : dedicatedScreen ? 'Экран результатов' : parameters ? 'Параметры' : archive ? 'Архив' : adminWorkspace ? 'Сюжеты' : role ? 'Ваши видео' : 'Вход'}</title></svelte:head>
+<svelte:head><title>ReelMe — {statusRoute ? 'Статусы видео' : photobooth ? 'Фотобудка' : dedicatedScreen ? 'Экран результатов' : parameters ? 'Параметры' : archive ? 'Архив' : adminWorkspace ? 'Сюжеты' : role ? 'Ваши видео' : 'Вход'}</title></svelte:head>
 
 <div class:admin-shell={adminWorkspace} data-admin-theme={theme}>
+{#if adminWorkspace}<TemplateUploadDialog {saving} onunauthorized={() => role = null} />{/if}
 {#if role && !publicScreen}
 <header class="app-header">
   <a class="brand" href="/" aria-label="ReelMe — главная">{#if adminWorkspace}<img src={brandMark} alt="" /><span class="admin-wordmark">REELME</span>{:else}Reel<span>Me</span><span class="brand-caption">STUDIO</span>{/if}</a>
@@ -150,12 +167,13 @@
   </div>
 </header>
 
-{#if ready && role && !adminDenied}
-  <nav class="surface-nav" aria-label="Разделы">
+{#if ready && role && !adminDenied && !statusRoute}
+  <nav style="flex-wrap:wrap" class="surface-nav" aria-label="Разделы">
     <button class="quiet" aria-current={!archive && !parameters && !photobooth ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = false; parameters = false; photobooth = false; }}>{adminWorkspace ? 'Сюжеты' : 'Сегодня'}</button>
     {#if adminWorkspace}<button class="quiet" aria-current={parameters ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { parameters = true; photobooth = false; archive = false; } }}>Параметры</button>{/if}
     {#if adminWorkspace}<button class="quiet" aria-current={photobooth ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { photobooth = true; archive = false; parameters = false; } }}>Фотобудка</button>{/if}
     {#if adminWorkspace}<a class="button" href="/operator">Сегодня / Архив</a>{:else}<button class="quiet" aria-current={archive ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = true; parameters = false; photobooth = false; }}>Архив</button>{/if}
+    <a class="button" href="/statuses" target="_blank" rel="noopener">Статусы видео</a>
     <a class="button" href="/results" target="_blank" rel="noopener">Открыть экран</a>
   </nav>
 {/if}
@@ -165,6 +183,8 @@
   <main class="centered"><p role="status">Открываем ReelMe…</p></main>
 {:else if !role}
   <Login bind:username bind:password {busy} {error} onsubmit={login} />
+{:else if statusRoute}
+  <Statuses onunauthorized={() => role = null} />
 {:else if publicScreen}
   <Display onunauthorized={() => role = null} />
 {:else if adminDenied}
@@ -196,7 +216,11 @@
             <button class="slot-open" onclick={() => openSlot(slot.id)} disabled={formDisabled} aria-pressed={selectedId === slot.id}>
               <img src={mediaUrl(slot.thumbnailId)} alt="" /><span><strong>{titleFrom(slot.description)}</strong><small>{slot.mode} · {models.find(model => model.id === slot.model)?.name}</small></span>
             </button>
-            <label class="visibility-toggle"><input type="checkbox" checked={slot.visible} disabled={formDisabled} onchange={event => toggleVisibility(slot, event.currentTarget)} /><span>Отображать клиенту</span></label>
+            <div class="slot-actions"><label class="visibility-toggle"><input type="checkbox" checked={slot.visible} disabled={formDisabled} onchange={event => toggleVisibility(slot, event.currentTarget)} /><span>Отображать клиенту</span></label>
+              <button type="button" class="delete-slot quiet" aria-label="Удалить сюжет" title={`Удалить сюжет «${titleFrom(slot.description)}»`} disabled={formDisabled} onclick={() => deleteSlot(slot)}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v7m4-7v7"/></svg>
+              </button>
+            </div>
           </li>
         {/each}
       </ul>

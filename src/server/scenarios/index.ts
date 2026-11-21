@@ -4,6 +4,7 @@
  * separate installation-only projection; no provider submission.
  * Source: docs/slot-setup/matrix.md. Editor defaults never rewrite raw legacy slots.
  */
+import { materialIds, removeUnusedMaterials } from './cleanup.js';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
@@ -16,7 +17,7 @@ import { registerTemplateVideos } from './templates.js';
 import { registerCaptureGuides } from './guides.js';
 import { HttpError } from '../errors.js';
 import { readMedia, readTestPhoto, registerMedia } from './media.js';
-export function registerScenarios(app: FastifyInstance, db: DB, dataDir: string, access: Access, templateVideosDir?: string, warm?: (slot: SlotInput) => void) {
+export function registerScenarios(app: FastifyInstance, db: DB, dataDir: string, access: Access, templateVideosDir?: string, warm?: (slot: SlotInput) => void, discard?: (url: string) => Promise<boolean>) {
   registerMedia(app, db, dataDir, access);
   registerCatalog(app, db, dataDir, access);
   registerTemplateVideos(app, db, dataDir, access, templateVideosDir);
@@ -41,13 +42,22 @@ export function registerScenarios(app: FastifyInstance, db: DB, dataDir: string,
   }
   app.get('/api/admin/models', { preHandler: access.requireAdmin }, () => models);
   app.get('/api/admin/slots', { preHandler: access.requireAdmin }, () => {
-    const rows = db.prepare('SELECT id,config FROM slots ORDER BY rowid').all() as { id: string; config: string }[];
+    const rows = db.prepare('SELECT id,config FROM slots WHERE deleted=0 ORDER BY rowid').all() as { id: string; config: string }[];
     return rows.map(row => editorSlot(db, { simulateGeneration: false, ...JSON.parse(row.config), id: row.id }));
   });
   app.get<{ Params: { id: string } }>('/api/admin/slots/:id', { preHandler: access.requireAdmin }, request => editorSlot(db, readSlot(db, request.params.id)));
+  app.delete<{ Params: { id: string } }>('/api/admin/slots/:id', { preHandler: [access.requireAdmin, access.requireOrigin] }, async (request, reply) => {
+    const row = db.prepare('SELECT config FROM slots WHERE id=?').pluck().get(request.params.id) as string | undefined;
+    if (!row) throw new HttpError(404, 'NOT_FOUND', 'Сюжет не найден');
+    // Keep the parent ID of historical sessions. Their snapshots own their media.
+    db.prepare('UPDATE slots SET deleted=1 WHERE id=?').run(request.params.id);
+    const urls = removeUnusedMaterials(db, dataDir, materialIds(JSON.parse(row)));
+    for (const url of urls) await discard?.(url);
+    return reply.code(204).send();
+  });
   app.patch<{ Params: { id: string } }>('/api/admin/slots/:id/visibility', { preHandler: [access.requireAdmin, access.requireOrigin] }, (request, reply) => {
     const { visible } = z.object({ visible: z.boolean() }).strict().parse(request.body);
-    const updated = db.prepare("UPDATE slots SET config=json_set(config, '$.visible', json(?)) WHERE id=?")
+    const updated = db.prepare("UPDATE slots SET config=json_set(config, '$.visible', json(?)) WHERE deleted=0 AND id=?")
       .run(JSON.stringify(visible), request.params.id);
     if (!updated.changes) throw new HttpError(404, 'NOT_FOUND', 'Сюжет не найден');
     return reply.code(204).send();

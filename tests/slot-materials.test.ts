@@ -91,6 +91,19 @@ test('already saved upload sources remain usable; arbitrary replacements need na
   assert.equal((await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: admin, payload: config })).json().code, 'TEMPLATE_VIDEO_MISMATCH');
   const started = await f.app.inject({ method: 'POST', url: '/api/capture/sessions', headers: installation, payload: { slotId: id, startRequestId: randomUUID() } });
   assert.equal(started.statusCode, 201, started.body);
+  const url = `/api/admin/slots/${id}`;
+  const operator = await f.login('operator');
+  for (const [headers, expected] of [[{}, 401], [{ cookie: operator, origin: f.config.origin }, 403], [{ cookie }, 403]] as const) {
+    assert.equal((await f.app.inject({ method: 'DELETE', url, headers })).statusCode, expected);
+  }
+  assert.equal((await f.app.inject({ method: 'DELETE', url, headers: admin })).statusCode, 204);
+  assert.equal((await f.app.inject({ url, headers: admin })).statusCode, 404);
+  assert.deepEqual((await f.app.inject({ url: '/api/admin/slots', headers: admin })).json(), []);
+  assert.equal((await f.app.inject('/api/public/catalog')).json().total, 0);
+  assert.equal((await save()).statusCode, 404);
+  const snapshot = readSession(db, started.json().sessionId).snapshot;
+  assert.equal(snapshot.generation.videoId, old.id);
+  assert.deepEqual(await readFile(join(f.config.dataDir, 'media', old.id)), bytes);
 });
 
 test('five admin guides are pinned to sessions, protected from cleanup and absent from fal inputs', async t => {

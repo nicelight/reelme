@@ -11,6 +11,7 @@ import jsQR from 'jsqr';
 import { fixture, imageBytes, videoBytes, multipart } from './helpers.js';
 import { openDatabase } from '../src/server/db.js';
 import { createTemplateCache } from '../src/server/sessions/template-cache.js';
+import { publishReady } from '../src/server/sessions/receive.js';
 import { createGenerationWorker } from '../src/server/sessions/generation.js';
 import { createFalTransport, falHeaders, type FalTransport } from '../src/server/sessions/fal.js';
 import { createApp } from '../src/server/app.js';
@@ -147,6 +148,35 @@ test('missing submit acknowledgement retries, confirmed ID resumes after restart
   await w.runOnce(); assert.equal((await state(f, id)).state, 'observing');
   await w.runOnce(); assert.equal((await state(f, id)).state, 'preparing');
   assert.deepEqual(calls.status, ['request-2']); assert.deepEqual(calls.result, ['request-2']); assert.equal(calls.submit.length, 2);
+  const history = w.db.prepare("SELECT event, outcome, json_extract(detail,'$.attempt') attempt, json_extract(detail,'$.requestId') requestId FROM session_history WHERE session_id=? AND step='fal.submit' ORDER BY id").all(id);
+  assert.deepEqual(history, [
+    { event: 'submit_started', outcome: 'started', attempt: 1, requestId: null },
+    { event: 'ack_missing', outcome: 'unknown', attempt: 1, requestId: null },
+    { event: 'submit_started', outcome: 'started', attempt: 2, requestId: null },
+    { event: 'acknowledged', outcome: 'succeeded', attempt: 2, requestId: 'request-2' },
+  ]);
+});
+
+test('history write failure cannot roll back capture, resubmit a confirmed job or suppress download', async t => {
+  const { f, slotId, bytes } = await setup(t);
+  const { calls, client } = fake();
+  const w = worker(f, client, async () => new Response(bytes)); t.after(() => w.close());
+  for (const broken of [false, true]) {
+    if (broken) w.db.exec("CREATE TRIGGER broken_history BEFORE INSERT ON session_history BEGIN SELECT RAISE(ABORT,'write failed'); END");
+    const prev = calls.submit.length;
+    const id = await captured(f, slotId);
+    for (let pass = 0; pass < 3; pass++) await w.runOnce();
+    await publishReady(w.db, f.config.dataDir, id, f.config.origin);
+    const { download_token } = w.db.prepare('SELECT download_token FROM session_delivery WHERE session_id=?').get(id) as {download_token:string};
+    assert.deepEqual((await f.app.inject('/download/' + download_token)).rawPayload, bytes);
+    assert.equal((await state(f,id)).state, 'ready');
+    assert.equal(calls.submit.length - prev, 1);
+    const steps = w.db.prepare('SELECT DISTINCT step FROM session_history WHERE session_id=?').all(id) as {step:string}[];
+    if (broken) assert.equal(steps.length, 0);
+    else for (const step of ['capture.start','capture.photo','capture.finalize','fal.submit','fal.result','video.download','video.probe','video.frame','delivery.publish']) {
+      assert.ok(steps.some(row => row.step === step), step);
+    }
+  }
 });
 
 test('explicit submit refusals and terminal COMPLETED errors never resubmit or erase photos', async t => {
@@ -190,6 +220,25 @@ test('HTTP 503 retries the saved result URL; HTTP 410 permanently stops download
   assert.deepEqual(calls.download, Array(2).fill('https://cdn.fal.test/request-1.mp4'));
   assert.equal(calls.submit.length, 1);
   assert.deepEqual(calls.result, ['request-1']);
+});
+
+test('frame extraction failure names the local step and preserves the confirmed job', async t => {
+  const { f, slotId, bytes } = await setup(t);
+  const id = await captured(f, slotId);
+  const { calls, client } = fake();
+  const w = worker(f, client, async () => new Response(bytes)); t.after(() => w.close());
+  await w.runOnce(); await w.runOnce();
+  const bin = join(f.root, 'broken-frame-extractor');
+  await mkdir(bin);
+  await writeFile(join(bin, 'ffmpeg'), '#!/bin/sh\nexit 1\n', { mode: 0o700 });
+  const previousPath = process.env.PATH;
+  process.env.PATH = bin + ':' + previousPath;
+  try { await w.runOnce(); } finally { process.env.PATH = previousPath; }
+  await w.runOnce();
+  assert.equal(calls.submit.length, 1);
+  assert.equal((await state(f,id)).state, 'failed');
+  const error = w.db.prepare("SELECT step, json_extract(detail,'$.requestId') requestId FROM session_history WHERE session_id=? AND outcome='failed'").get(id);
+  assert.deepEqual(error, {step:'video.frame', requestId:'request-1'});
 });
 
 test('download retry and preparing restart reuse saved result; empty/corrupt video never becomes ready', async t => {
@@ -366,6 +415,10 @@ test('save warms the CDN, sessions share uploads and a replacement can submit an
   await save({ videoId: bVideo.id }); await save({ videoId: bVideo.id, prompt: 'Edited' });
   const b = await captured(f, slotId);
   await eventually(() => assert.equal(gates.size, 2));
+  assert.equal((await app.inject('/api/admin/template-uploads')).statusCode, 401);
+  const progress = async () => (await app.inject({ url: '/api/admin/template-uploads', headers: { cookie } })).json().status;
+  const waiting = await progress();
+  assert.equal(waiting.totalFiles, 2); assert.equal(waiting.readyFiles, 0); assert.ok(waiting.pending);
   const [oldHash, newHash] = calls;
   assert.equal(oldHash, createHash('sha256').update(bytes).digest('hex'));
   gates.get(newHash)!();
@@ -373,6 +426,8 @@ test('save warms the CDN, sessions share uploads and a replacement can submit an
   assert.equal((await state(f, a)).state, 'submit_pending');
   assert.equal((await state(f, b)).state, 'observing');
   assert.deepEqual(queue.submit.map(s => s.input.video_url), ['https://cdn.test/' + newHash]);
+  const partial = await progress();
+  assert.equal(partial.readyFiles, 1); assert.equal(partial.sentBytes, bVideo.size);
   gates.get(oldHash)!();
   await eventually(async () => assert.equal((await state(f, other)).state, 'observing'));
   await eventually(async () => assert.equal((await state(f, a)).state, 'observing'));
@@ -384,6 +439,7 @@ test('save warms the CDN, sessions share uploads and a replacement can submit an
   assert.equal(queue.submit[3].input.video_url, 'https://cdn.test/' + newHash);
   assert.match(String(queue.submit[3].input.reference_image_urls), /reelme.test\/provider-media\//);
   assert.equal(calls.length, 2);
+  assert.equal(await progress(), null);
 });
 
 test('only confirmed CDN loss retries a refused submit; loss after acceptance repairs inputs for the next session', async t => {

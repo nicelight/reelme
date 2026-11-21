@@ -11,6 +11,7 @@
  * capturing to submit_pending once, only for a complete set; later photo writes
  * are refused, including uploads that started before finalize or event deletion. No camera/fal calls; generation errors are a safe projection from Sessions.
  * Source: docs/slot-setup/matrix.md. New session plans are immutable snapshots. */
+import { recordHistory } from './history.js';
 import { captureReportSchema } from '../../shared/capture-report.js';
 import { randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
@@ -136,6 +137,7 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
   app.post('/api/capture/sessions', { preHandler: access.requireInstallation }, (request, reply) => {
     const { startRequestId, slotId, eventSetup } = startSchema.parse(request.body);
     const result = start.immediate(startRequestId, slotId, false, eventSetup);
+    if (result.created) recordHistory(db, result.value.sessionId, 'capture', 'capture.start', 'number_assigned', 'succeeded', { total: result.value.posePlan.length }, now);
     return reply.code(result.created ? 201 : 200).send(result.value);
   });
   app.post('/api/capture/sessions/:id/capture-reports', { preHandler: access.requireInstallation, bodyLimit: 32 * 1024 }, (request, reply) => {
@@ -186,32 +188,49 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
       }).immediate();
     } catch (error) { await rm(path, { force: true }); throw error; }
     if (previous) await rm(join(dataDir, 'media', previous.path), { force: true }).catch(() => app.log.warn({ code: 'PHOTO_CLEANUP_FAILED' }, 'Не удалён заменённый снимок'));
-    return captureStatus(db, id);
+    const status = captureStatus(db, id);
+    recordHistory(db, id, 'capture', 'capture.photo', previous ? 'replaced' : 'accepted', 'succeeded', { pose: poseIndex, accepted: status.acceptedPoseIndices.length, total: status.posePlan.length }, now);
+    return status;
   }
   app.put('/api/capture/sessions/:id/photos/:poseIndex', { preHandler: access.requireInstallation }, async request => {
     const { id, poseIndex } = photoParams.parse(request.params);
-    requireCapturing(db, id, poseIndex);
-    if (!request.isMultipart()) throw new HttpError(415, 'INVALID_PHOTO', 'Передайте JPEG в multipart-поле file');
-    return storePhoto(id, poseIndex, async path => {
-      let received = false;
-      for await (const part of request.parts({ limits: { files: 1, fields: 0, parts: 1, fileSize: MAX_PHOTO_BYTES } })) {
-        if (part.type !== 'file' || part.fieldname !== 'file' || part.mimetype !== 'image/jpeg') throw new HttpError(400, 'INVALID_PHOTO', 'Передайте один JPEG в поле file');
-        await pipeline(part.file, createWriteStream(path, { flags: 'wx', mode: 0o600 }));
-        if (part.file.truncated) throw new HttpError(413, 'PHOTO_TOO_LARGE', 'JPEG превышает 20 MiB');
-        received = true;
-      }
-      if (!received) throw new HttpError(400, 'INVALID_PHOTO', 'Не получен JPEG');
-    });
+    try {
+      requireCapturing(db, id, poseIndex);
+      if (!request.isMultipart()) throw new HttpError(415, 'INVALID_PHOTO', 'Передайте JPEG в multipart-поле file');
+      return await storePhoto(id, poseIndex, async path => {
+        let received = false;
+        for await (const part of request.parts({ limits: { files: 1, fields: 0, parts: 1, fileSize: MAX_PHOTO_BYTES } })) {
+          if (part.type !== 'file' || part.fieldname !== 'file' || part.mimetype !== 'image/jpeg') throw new HttpError(400, 'INVALID_PHOTO', 'Передайте один JPEG в поле file');
+          await pipeline(part.file, createWriteStream(path, { flags: 'wx', mode: 0o600 }));
+          if (part.file.truncated) throw new HttpError(413, 'PHOTO_TOO_LARGE', 'JPEG превышает 20 MiB');
+          received = true;
+        }
+        if (!received) throw new HttpError(400, 'INVALID_PHOTO', 'Не получен JPEG');
+      });
+    } catch (error) {
+      recordHistory(db, id, 'capture', 'capture.photo', 'rejected', 'failed', { pose: poseIndex, code: error instanceof HttpError ? error.code : 'PHOTO_TRANSFER_FAILED' }, now);
+      throw error;
+    }
   });
   const finalize = db.transaction((sessionId: string) => {
     const status = captureStatus(db, sessionId);
     if (!status.complete) throw new HttpError(409, 'INCOMPLETE_PHOTOS', 'Получены не все фотографии');
     if (status.state === 'capturing') db.prepare("UPDATE capture_sessions SET state='submit_pending' WHERE id=? AND state='capturing'").run(sessionId);
-    return captureStatus(db, sessionId);
+    return { advanced: status.state === 'capturing', value: captureStatus(db, sessionId) };
   });
+  function finishCapture(id: string) {
+    try {
+      const result = finalize.immediate(id);
+      if (result.advanced) recordHistory(db, id, 'capture', 'capture.finalize', 'queued', 'succeeded', {}, now);
+      return result.value;
+    } catch (error) {
+      if (error instanceof HttpError) recordHistory(db, id, 'capture', 'capture.finalize', 'rejected', 'failed', { code: error.code }, now);
+      throw error;
+    }
+  }
   app.post('/api/capture/sessions/:id/finalize', { preHandler: access.requireInstallation }, request => {
     const { id } = sessionParams.parse(request.params);
-    return finalize.immediate(id);
+    return finishCapture(id);
   });
   const preparingTests = new Set<string>();
   const testBody = z.object({ startRequestId: z.string().uuid() }).strict();
@@ -220,6 +239,7 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     const { startRequestId } = testBody.parse(request.body);
     const started = start.immediate(startRequestId, slotId, true);
     const id = started.value.sessionId;
+    if (started.created) recordHistory(db, id, 'capture', 'capture.start', 'number_assigned', 'succeeded', { mode: 'manual_test', total: started.value.posePlan.length }, now);
     if (preparingTests.has(id)) throw new HttpError(409, 'TEST_IN_PROGRESS', 'Тестовые фотографии ещё подготавливаются. Повторите запрос.');
     if (started.value.state !== 'capturing') return captureStatus(db, id);
     preparingTests.add(id);
@@ -234,7 +254,7 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
         const bytes = await readFile(join(dataDir, 'media', media.path));
         await storePhoto(id, pose.index, path => writeFile(path, bytes, { flag: 'wx', mode: 0o600 }));
       }
-      const status = finalize.immediate(id);
+      const status = finishCapture(id);
       return reply.code(started.created ? 201 : 200).send(status);
     } catch {
       // No paths or decoder details in a public test result. Never queue partial input.
@@ -245,6 +265,7 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
             .run(id, 'Не удалось подготовить тестовую фотографию. Сохраните JPEG и запустите новый тест.');
         }
       })();
+      recordHistory(db, id, 'capture', 'capture.photo', 'rejected', 'failed', { code: 'TEST_PREPARATION_FAILED' }, now);
       return captureStatus(db, id);
     } finally { preparingTests.delete(id); }
   });

@@ -122,7 +122,7 @@
     void (async () => {
       try {
         const file = await bounded(async signal => {
-          const response = await fetch(url, { signal });
+          const response = await fetch(`${url}?purpose=share`, { signal });
           if (!response.ok) throw new Error('Download failed');
           return new File([await response.blob()], filename, { type: 'video/mp4' });
         }, 120_000, controller.signal);
@@ -137,11 +137,24 @@
     })();
     return () => { controller.abort(); shareFile = undefined; };
   });
+  function report(action: string, operationId?: string) {
+    try {
+      const id = operationId ?? crypto.randomUUID();
+      void api(`${path}/activity`, { method: 'POST', keepalive: true, body: JSON.stringify({ id, action }) }).catch(() => {});
+      return id;
+    } catch { return undefined; }
+  }
   async function share() {
     if (!shareFile || sharing) return;
     sharing = true; shareMessage = '';
-    try { await navigator.share({ files: [shareFile] }); }
-    catch (e) {
+    let operationId: string | undefined;
+    try {
+      const shared = navigator.share({ files: [shareFile] });
+      operationId = report('share_started');
+      await shared;
+      report('share_returned', operationId);
+    } catch (e) {
+      report(e instanceof DOMException && e.name === 'AbortError' ? 'share_cancelled' : 'share_failed', operationId);
       if (active && !(e instanceof DOMException && e.name === 'AbortError')) shareMessage = 'Не удалось открыть отправку. Попробуйте ещё раз или скачайте видео.';
     } finally { if (active) sharing = false; }
   }
@@ -175,7 +188,7 @@
           <button class="receive-submit" onclick={() => { if (shareState === 'failed') shareAttempt += 1; else void share(); }} disabled={!['ready', 'failed'].includes(shareState) || sharing}>{sharing ? 'Открываем отправку…' : shareState === 'preparing' ? 'Подготавливаем видео…' : shareState === 'failed' ? 'Подготовить видео снова' : 'Поделиться видео'}</button>
           <p class="receive-hint">можно поделиться сразу в инсте, телеге, etc</p>
           {#if shareMessage}<p class="receive-hint" role="status">{shareMessage}</p>{/if}
-          <a class="receive-submit receive-download" href={view.downloadUrl} download={`reelme-${view.number}.mp4`}>Скачать видео</a>
+          <a class="receive-submit receive-download" href={view.downloadUrl} onclick={() => { report('download_clicked'); }} download={`reelme-${view.number}.mp4`}>Скачать видео</a>
           <p class="receive-hint receive-retention-note">видео будет доступно для скачивания 1-2 дня, рекомендую отправить его на почту</p>
           {#if view.emailState !== 'not_requested'}<p class:receive-failed={view.emailState === 'failed'} class:receive-sent={view.emailState === 'sent'} class="receive-status" role="status">{#if view.emailState === 'sent'}<span class="receive-sent-light" aria-hidden="true"></span><span class="receive-check" aria-hidden="true">✓</span>{/if}{messages[view.emailState]}</p>{/if}
           {#if view.canSubmit}

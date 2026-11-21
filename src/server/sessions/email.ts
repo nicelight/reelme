@@ -4,6 +4,7 @@
  * Restarted sending requires manual retry. No raw addresses/provider errors in logs.
  * Deletion blocks new sends/fallbacks and publication of in-flight outcomes.
  * Generation, capabilities, files and first confirmation times remain unchanged. */
+import { recordHistory } from './history.js';
 import { sessionAvailable } from './availability.js';
 import nodemailer, { type SendMailOptions } from 'nodemailer';
 import { join } from 'node:path';
@@ -49,8 +50,9 @@ function failureCode(error: unknown) {
   return e.responseCode && e.responseCode >= 400 && e.responseCode <= 599 || ['EAUTH', 'EDNS', 'EENVELOPE'].includes(e.code ?? '')
     ? 'EMAIL_FAILED' : 'EMAIL_UNCERTAIN';
 }
-export function recoverEmail(db: DB) {
-  db.prepare("UPDATE session_delivery SET email_state='failed',email_error='EMAIL_UNCERTAIN' WHERE email_state='sending'").run();
+export function recoverEmail(db: DB, now = Date.now) {
+  const interrupted = db.prepare("UPDATE session_delivery SET email_state='failed',email_error='EMAIL_UNCERTAIN' WHERE email_state='sending' RETURNING session_id").all() as { session_id: string }[];
+  for (const row of interrupted) recordHistory(db, row.session_id, 'smtp', 'smtp.send', 'interrupted', 'unknown', { code: 'EMAIL_UNCERTAIN' }, now);
 }
 export function createEmailWorker(db: DB, dataDir: string, origin: string, log: FastifyBaseLogger, options: EmailOptions | { current: () => EmailSender | undefined; intervalMs?: number }, now = Date.now) {
   let stopped = false; let active: Promise<void> | undefined; let timer: ReturnType<typeof setTimeout> | undefined;
@@ -63,6 +65,7 @@ export function createEmailWorker(db: DB, dataDir: string, origin: string, log: 
   });
   async function send(job: Job, attachment: boolean, sender: EmailSender) {
     if (!sessionAvailable(db, job.session_id)) return;
+    recordHistory(db, job.session_id, 'smtp', 'smtp.send', 'sending', 'started', { method: attachment ? 'attachment' : 'link' }, now);
     const info = await sender.transport.sendMail({
       from: { name: 'ReelMe', address: sender.from }, to: { address: job.email, name: '' },
       subject: `Ваша видеоистория № ${job.number} — ReelMe`,
@@ -79,15 +82,23 @@ export function createEmailWorker(db: DB, dataDir: string, origin: string, log: 
       const sender = 'current' in options ? options.current() : options;
       if (!sender) break;
       const job = claim.immediate(); if (!job) break;
+      let method = 'attachment';
       try {
         try { await send(job, true, sender); }
-        catch (error) { if (!attachmentRefused(error)) throw error; await send(job, false, sender); }
+        catch (error) {
+          if (!attachmentRefused(error)) throw error;
+          recordHistory(db, job.session_id, 'smtp', 'smtp.send', 'attachment_refused', 'retry', { method }, now);
+          method = 'link';
+          await send(job, false, sender);
+        }
         if (!sessionAvailable(db, job.session_id)) continue;
         db.prepare("UPDATE session_delivery SET email_state='sent',sent_at=?,email_error=NULL WHERE session_id=? AND email_state='sending'").run(now(), job.session_id);
+        recordHistory(db, job.session_id, 'smtp', 'smtp.send', 'accepted', 'succeeded', { method }, now);
       } catch (error) {
         if (!sessionAvailable(db, job.session_id)) continue;
         const code = failureCode(error);
         db.prepare("UPDATE session_delivery SET email_state='failed',email_error=?,sent_at=NULL WHERE session_id=? AND email_state='sending'").run(code, job.session_id);
+        recordHistory(db, job.session_id, 'smtp', 'smtp.send', 'error', code === 'EMAIL_UNCERTAIN' ? 'unknown' : 'failed', { method, code }, now);
         log.warn({ sessionId: job.session_id, code }, 'Не удалось подтвердить отправку письма');
       }
     }

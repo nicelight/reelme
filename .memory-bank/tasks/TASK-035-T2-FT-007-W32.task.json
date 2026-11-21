@@ -1,0 +1,105 @@
+{
+  "id": "TASK-035-T2-FT-007-W32",
+  "title": "Показать этап каждого видео и историю сбоев и выдачи на /statuses",
+  "status": "done",
+  "wave": "W32",
+  "feature": "FT-007",
+  "tier": "T2",
+  "reqs": [
+    "REQ-023"
+  ],
+  "depends_on": [
+    "TASK-008-T3-FT-003-W5",
+    "TASK-010-T2-FT-004-W7"
+  ],
+  "purpose": "При разборе по номеру посетителя установить последнее подтверждённое действие, состояние платного задания и факты выдачи.",
+  "success_outcome": "Сотрудник раскрывает строку посетителя и копирует структурированную историю. Даже при отказе диагностики завершается тот же рабочий сценарий.",
+  "source_artifacts": [
+    ".memory-bank/features/FT-007-session-statuses.md#FT-007-AC-001",
+    ".memory-bank/features/FT-007-session-statuses.md#FT-007-AC-002",
+    ".memory-bank/features/FT-007-session-statuses.md#FT-007-AC-003",
+    ".memory-bank/features/FT-007-session-statuses.md#FT-007-AC-004",
+    ".memory-bank/features/FT-007-session-statuses.md#FT-007-AC-005",
+    ".memory-bank/features/FT-007-session-statuses.md#FT-007-AC-006"
+  ],
+  "normative_inputs": [
+    ".memory-bank/states/lifecycle-map.md#диагностика-сессии",
+    ".memory-bank/contracts/access.md",
+    ".memory-bank/features/FT-003-video-generation.md#FT-003-AC-003"
+  ],
+  "docs": [
+    ".memory-bank/contracts/http-api.md",
+    "docs/MANUAL.md"
+  ],
+  "touched_files": [
+    "src/server/db.ts",
+    "src/server/sessions/index.ts",
+    "src/server/sessions/generation.ts",
+    "src/server/sessions/video.ts",
+    "src/server/sessions/receive.ts",
+    "src/server/sessions/email.ts",
+    "src/server/app.ts",
+    "src/client/cloud/App.svelte",
+    "src/client/cloud/Receive.svelte",
+    "src/shared/display.ts"
+  ],
+  "constraints": [
+    "Проверять на локальных управляемых fal/SMTP и тестовых данных. Реальные платные запросы для этой задачи не требуются.",
+    "Учитывать существующую общую загрузку шаблонов на fal CDN, кеш и штатное восстановление. Посетительская сессия читает доступные сведения об используемых входах."
+  ],
+  "invariants": [
+    "Только штатные переходы меняют рабочие состояния, файлы, QR, очереди и политику повторов.",
+    "Список доступен после исчезновения карточки с /results до удаления мероприятия. Чтение не меняет opened_at или таймеры."
+  ],
+  "anti_goals": [
+    "Ручной перезапуск или отмена генерации, подсчёт списаний fal, обязательное распознавание физических устройств."
+  ],
+  "verification_targets": [
+    "На фиктивном транспорте отдельно оборвать submit до подтверждения, poll после сохранения ID, скачивание и извлечение кадра. Перезапустить worker, сравнить реальные вызовы с историей и правилами штатного повтора.",
+    "Инъекцией отказа только диагностической записи пройти capture → ready → выдача. Закрытие receive-страницы и сбой отчёта о Share допускают потерю сообщения.",
+    "Проверить прямой GET и переход из приложения, обе рабочие роли и отказ гостю, ключу установки и receive-ссылке на API. Два мероприятия с одинаковым номером, старая БД, удаление во время чтения, пагинация, раскрытая строка при обновлении.",
+    "В браузере воспроизвести предзагрузку Share, отмену и успешный возврат Web Share, скачивание, Range и открытие формы повторно. Для почты проверить успех, отказ и переход на резервную ссылку.",
+    "На мобильной ширине 360 px одновременно показать очередь, временный сбой и терминальную ошибку; найти сбой вне первой страницы одним касанием, проверить снятие подсветки и обновление после возврата на вкладку."
+  ],
+  "evidence_required": [
+    "Хронология и JSON для успешной сессии и потерянного подтверждения. Для сбоя после submit — сохранённый request_id и счётчик вызовов fake fal до и после рестарта.",
+    "При ошибке журналирования и при обычном ходе совпадают бизнес-исходы и число внешних вызовов. После сбоя SMTP файл доступен; после удаления нет истории через API и записей SQLite.",
+    "Наблюдение в браузере: нужная строка и шаг видны, предзагрузка MP4 не отображается как действие «Скачать». В безопасную выгрузку не попали подставленные в фикстуре адрес и токены."
+  ],
+  "gates": [
+    {
+      "name": "Типы",
+      "command": "npm run check",
+      "required": true
+    },
+    {
+      "name": "Сборка",
+      "command": "npm run build",
+      "required": true
+    },
+    {
+      "name": "Серверные проверки",
+      "command": "npm test",
+      "required": true
+    }
+  ],
+  "verify": [
+    {
+      "date": "2026-11-21",
+      "result": "PASS",
+      "summary": "npm run check без ошибок и предупреждений. npm run build прошёл, npm test — 133/133. В Chromium прошли статусы при 360 px, выдача по email и скачивание, отдельные действия Share и Download. Проверены отбор ошибок вне первой страницы, восстановление, потеря связи, обе роли, частичная история и JSON на 102 события. При отказе всех вставок журнала сервер выдал тот же MP4 с одним submit.",
+      "evidence": [
+        "tests/statuses.spec.ts",
+        "tests/generation.test.ts",
+        "tests/history.test.ts",
+        "tests/receive-history.spec.ts",
+        "tests/receive.spec.ts",
+        "tests/receive.test.ts",
+        "tests/email.test.ts"
+      ],
+      "limitations": [
+        "Локальные транспорт fal и SMTP; системный Web Share имитирован в Chromium. Проверок на физическом телефоне и выкладки на VPS не проводилось."
+      ]
+    }
+  ]
+}

@@ -62,7 +62,7 @@ test('SDK upload passes a deadline to the stalled PUT, backs off, then reports e
       assert.equal(new Headers(init?.headers).get('x-fal-object-lifecycle'), JSON.stringify({ expiration_duration_seconds: 31536000 }));
       return Response.json({ file_url: 'https://cdn.test/file', upload_url: 'https://cdn.test/put' });
     }
-    assert.equal(init?.method, 'PUT'); assert.ok(init?.body instanceof Blob);
+    assert.equal(init?.method, 'PUT'); assert.ok(init?.body instanceof ReadableStream);
     const signal = init?.signal!;
     return new Promise<Response>((_resolve, reject) => {
       const abort = () => { aborts++; reject(signal.reason); };
@@ -75,6 +75,7 @@ test('SDK upload passes a deadline to the stalled PUT, backs off, then reports e
   cache.warm(inputs);
   await until(() => failures > 0);
   assert.equal(starts, 3); assert.equal(aborts, 3);
+  assert.match(cache.status()!.error!, /Не удалось загрузить/); assert.equal(cache.status()!.pending, false);
   assert.throws(() => cache.resolveInputs(inputs), { code: 'TEMPLATE_UPLOAD_FAILED' });
   assert.deepEqual(f.db.prepare('SELECT * FROM fal_template_cache').all(), []);
 });
@@ -104,11 +105,15 @@ test('shutdown closes the HTTP connection of a stalled upload and restart can pr
   const inputs = { videoId: 'video', referenceIds: [] };
   cache.warm(inputs);
   await until(() => receiving);
+  assert.deepEqual(cache.status(), { batch: cache.status()!.batch, pending: true, error: null,
+    readyFiles: 0, totalFiles: 1, sentBytes: 5, totalBytes: 5 });
   await cache.stop();
   await until(() => disconnected);
   assert.deepEqual(f.db.prepare('SELECT url FROM fal_template_cache').all(), []);
   const restarted = createTemplateCache(f.db, f.dir, async () => 'https://cdn.test/recovered');
   try {
-    await until(() => restarted.resolveInputs(inputs)?.get('video') === 'https://cdn.test/recovered');
+    await until(() => restarted.status() === null);
+    assert.equal(restarted.resolveInputs(inputs)?.get('video'), 'https://cdn.test/recovered');
+    assert.deepEqual(f.db.prepare('SELECT * FROM fal_template_pending').all(), []);
   } finally { await restarted.stop(); }
 });

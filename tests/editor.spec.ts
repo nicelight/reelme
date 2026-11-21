@@ -380,3 +380,47 @@ test('simulation warning persists on reopen and reload and keeps tests expanded'
   // Normal generation may again hide its test tools.
   await openTests(page); await collapse.click(); await expect(mode).toBeHidden();
 });
+
+test('CDN progress locks the workspace across reload, shows errors, and card deletion requires confirmation', async ({ page, app }) => {
+  let state: 'idle' | 'upload' | 'error' = 'idle';
+  await page.route('**/api/admin/template-uploads', route => route.fulfill({ json: { status: state === 'idle' ? null : {
+    batch: 'test-batch', totalFiles: 3, readyFiles: 1, totalBytes: 100, sentBytes: 47, pending: state === 'upload',
+    error: state === 'error' ? 'Не удалось загрузить файлы (1).' : null,
+  } } }));
+  await login(page, app.origin, app.password);
+  await setup(page, 'P2V', h3, '1', '4'); await lock(page);
+  await upload(page, 'Изображение сюжета', app.image);
+  await page.getByLabel('Описание', { exact: true }).fill('Тест удаления сюжета');
+  page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/admin/slots')) state = 'upload'; });
+  await page.getByRole('button', { name: 'Сохранить сюжет' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('47%')).toBeVisible();
+  await expect(dialog.getByText('Файлов готово: 1 из 3')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Tab');
+  expect(await page.locator('#description').evaluate(el => { el.focus(); return el === document.activeElement; })).toBe(false);
+  await page.reload();
+  await expect(dialog.getByText('47%')).toBeVisible();
+  if (process.env.REELME_UPLOAD_SCREENSHOTS) await page.screenshot({ path: process.env.REELME_UPLOAD_SCREENSHOTS + '/progress.png' });
+  state = 'idle';
+  await expect(dialog).toBeHidden();
+  const card = page.locator('.slot-list li').filter({ hasText: 'Тест удаления сюжета' });
+  await card.locator('.slot-open').click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  if (process.env.REELME_UPLOAD_SCREENSHOTS) await card.screenshot({ path: process.env.REELME_UPLOAD_SCREENSHOTS + '/card.png' });
+  state = 'error';
+  await expect(dialog.getByRole('alert')).toContainText('Не удалось загрузить');
+  await dialog.getByRole('button', { name: 'Вернуться в админку' }).click();
+  await expect(dialog).toBeHidden();
+  page.once('dialog', async confirmation => { expect(confirmation.message()).toContain('Тест удаления сюжета'); await confirmation.dismiss(); });
+  await card.getByRole('button', { name: 'Удалить сюжет' }).click();
+  await expect(card).toHaveCount(1);
+  page.once('dialog', confirmation => confirmation.accept());
+  await card.getByRole('button', { name: 'Удалить сюжет' }).click();
+  await expect(card).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Новый сюжет' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Первый сюжет' })).toBeVisible();
+  await expect(dialog).toBeHidden();
+});

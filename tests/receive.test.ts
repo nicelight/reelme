@@ -2,7 +2,7 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { subscribe, unsubscribe } from 'node:diagnostics_channel';
 import type { ChildProcess } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fixture, videoBytes } from './helpers.js';
@@ -77,6 +77,21 @@ test('restart publishes saved media without FFmpeg and preserves scoped guest li
   const file = await f.app.inject(download);
   assert.equal(file.statusCode, 200); assert.match(String(file.headers['content-disposition']), /attachment.*reelme-1.mp4/);
   assert.deepEqual(file.rawPayload, bytes); assert.equal(file.headers['referrer-policy'], 'no-referrer');
+  await f.app.inject(view.downloadUrl + '?purpose=share');
+  await f.app.inject({ method: 'HEAD', url: view.downloadUrl });
+  const transfers = db.prepare("SELECT event, json_extract(detail,'$.method') method FROM session_history WHERE session_id=? AND step='delivery.download' ORDER BY id").all(first.id);
+  assert.deepEqual(transfers, [
+    {event:'range_served',method:'player'}, {event:'range_served',method:'attachment'},
+    {event:'transfer_error',method:'player'}, {event:'response_finished',method:'attachment'},
+    {event:'response_finished',method:'share_preload'}, {event:'headers_served',method:'head'},
+  ]);
+  const signal = {id:randomUUID(),action:'share_cancelled'};
+  const report = (origin: string, payload: object) => f.app.inject({method:'POST',url:api+'/activity',headers:{origin},payload});
+  assert.equal((await report('https://elsewhere.test',signal)).statusCode,403);
+  assert.equal((await report(f.config.origin,{...signal,extra:'private'})).statusCode,400);
+  for (let i=0;i<2;i++) assert.equal((await report(f.config.origin,signal)).statusCode,204);
+  assert.deepEqual(db.prepare("SELECT outcome FROM session_history WHERE session_id=? AND source='browser'").all(first.id), [{outcome:'cancelled'}]);
+  assert.deepEqual(db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(first.id), a);
   for (const url of [`/download/${a.receive_token}`, `/download/${a.receive_token}?inline=1`, `/api/receive/${a.download_token}`, '/receive/1', '/api/receive/' + 'x'.repeat(43), '/download/1', '/media/', `/api/receive/${a.receive_token}/../../media/`, `/api/receive/${a.receive_token}/photo/1`]) assert.equal((await f.app.inject(url)).statusCode, 404, url);
   for (const url of ['/api/admin/slots', '/api/auth/session', `/api/capture/sessions/${first.id}`]) assert.equal((await f.app.inject({ url, headers: { authorization: `Bearer ${a.receive_token}` } })).statusCode, 401, url);
   assert.equal((await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: { authorization: `Bearer ${a.receive_token}`, origin: f.config.origin }, payload: {} })).statusCode, 401);

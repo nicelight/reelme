@@ -12,7 +12,7 @@ import { readMedia, readTestPhoto } from './media.js';
 import { readCaptureGuides } from './guides.js';
 
 export function readSlot(db: DB, id: string): Slot {
-  const row = db.prepare('SELECT config FROM slots WHERE id=?').get(id) as { config: string } | undefined;
+  const row = db.prepare('SELECT config FROM slots WHERE deleted=0 AND id=?').get(id) as { config: string } | undefined;
   if (!row) throw new HttpError(404, 'NOT_FOUND', 'Сюжет не найден');
   return { simulateGeneration: false, ...JSON.parse(row.config), id };
 }

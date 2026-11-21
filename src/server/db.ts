@@ -37,6 +37,9 @@ export function openDatabase(dataDir: string) {
       media_id TEXT PRIMARY KEY REFERENCES slot_media(id) ON DELETE CASCADE,
       url TEXT NOT NULL, expires_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS fal_template_pending (
+      media_id TEXT PRIMARY KEY REFERENCES slot_media(id) ON DELETE CASCADE
+    );
     CREATE TABLE IF NOT EXISTS slots (id TEXT PRIMARY KEY, config TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS events (
       date TEXT PRIMARY KEY, next_number INTEGER NOT NULL CHECK(next_number >= 1)
@@ -80,6 +83,9 @@ export function openDatabase(dataDir: string) {
       email_error TEXT, sent_at INTEGER
     );
   `);
+  if (!db.prepare("SELECT 1 FROM pragma_table_info('slots') WHERE name='deleted'").get()) {
+    db.exec('ALTER TABLE slots ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0');
+  }
   const photosSql = (db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='capture_photos'").get() as { sql: string }).sql;
   if (/BETWEEN\s+0\s+AND\s+3/i.test(photosSql)) {
     // Keep the original table name in dependent FK definitions. Renaming the old
@@ -164,7 +170,19 @@ export function openDatabase(dataDir: string) {
     "from" TEXT NOT NULL, active INTEGER NOT NULL CHECK(active IN (0,1))
   );
   CREATE UNIQUE INDEX IF NOT EXISTS mail_active_profile ON mail_profiles(active) WHERE active=1;`);
-  db.pragma('user_version = 15');
+  // History is observational. A diagnostic schema failure must not prevent startup.
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS session_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL REFERENCES capture_sessions(id) ON DELETE CASCADE,
+      at INTEGER NOT NULL, last_at INTEGER NOT NULL, source TEXT NOT NULL, step TEXT NOT NULL,
+      event TEXT NOT NULL, outcome TEXT NOT NULL, detail TEXT NOT NULL, repeats INTEGER NOT NULL DEFAULT 1,
+      bucket TEXT NOT NULL, report_key TEXT, UNIQUE(session_id, report_key)
+    );
+    CREATE INDEX IF NOT EXISTS session_history_session ON session_history(session_id,id);
+    CREATE INDEX IF NOT EXISTS session_history_bucket ON session_history(session_id,bucket,id);`);
+  } catch { console.warn('SESSION_HISTORY_SCHEMA_UNAVAILABLE'); }
+  db.pragma('user_version = 16');
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

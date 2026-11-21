@@ -67,6 +67,8 @@ test('size/type refusals send exactly one link fallback for the same result; gen
       f.smtp.setAction(async () => ++calls === 1 ? response : '250 Accepted');
       await f.post(); await f.worker.runOnce();
       assert.equal(f.attempts(), fallback ? 2 : 1); assert.equal(f.row().email_state, fallback ? 'sent' : 'failed');
+      const terminal = f.db.prepare("SELECT event,outcome,json_extract(detail,'$.method') method FROM session_history WHERE step='smtp.send' AND session_id=? ORDER BY id DESC LIMIT 1").get(f.session.id);
+      assert.deepEqual(terminal, fallback ? {event:'accepted',outcome:'succeeded',method:'link'} : {event:'error',outcome:'failed',method:'attachment'});
       if (fallback) {
         const raw = f.smtp.messages[1].raw; assert.doesNotMatch(raw, /video\/mp4/);
         const text = mailText(raw); assert.ok(text.includes(`${f.config.origin}/download/${f.row().download_token}`));

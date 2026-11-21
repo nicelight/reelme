@@ -15,7 +15,7 @@ import { catalogItem, visibleSlot } from './store.js';
 import { readMedia, sendMedia } from './media.js';
 import { HttpError } from '../errors.js';
 const pageQuery = z.object({ page: z.coerce.number().int().min(1).max(1_000_000).default(1) }).strict();
-const available = "json_extract(config,'$.visible')=1 AND (json_extract(config,'$.mode')<>'V2V' OR json_extract(config,'$.videoId') IS NOT NULL)";
+const available = "deleted=0 AND json_extract(config,'$.visible')=1 AND (json_extract(config,'$.mode')<>'V2V' OR json_extract(config,'$.videoId') IS NOT NULL)";
 export function registerCatalog(app: FastifyInstance, db: DB, dataDir: string, access: Access) {
   function list(request: FastifyRequest): CatalogPage {
     const { page } = pageQuery.parse(request.query);

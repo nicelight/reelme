@@ -9,6 +9,7 @@
  * Deletion blocks new work and publication; late local output is discarded.
  * Errors retain the session/photos; public errors are fixed safe messages.
  * Source: docs/slot-setup/matrix.md. Completeness follows the saved capture plan. */
+import { nextSubmitAttempt, recordHistory, type HistoryDetail, type HistoryOutcome } from './history.js';
 import type { TemplateCache } from './template-cache.js';
 import { snapshotPosePlan } from '../../shared/capture.js';
 import { open, rm } from 'node:fs/promises';
@@ -68,6 +69,12 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
     const testVideo = isTestVideo(input);
     const inputOnly = input.simulateGeneration && !testVideo;
     const templates = input.simulateGeneration ? undefined : options.templates;
+    let step = session.state === 'observing' ? 'fal.status' : session.state === 'preparing' ? 'video.download' : 'generation.inputs';
+    const mode = testVideo ? 'test_video' : inputOnly ? 'simulation' : session.snapshot.testPhotoIds || session.snapshot.testPhotoId ? 'manual_test' : 'live';
+    let submitting = false;
+    const context: HistoryDetail = { mode, model: input.model, requestId: job.request_id ?? undefined };
+    const observe = (event: string, outcome: HistoryOutcome, detail: HistoryDetail = {}) =>
+      recordHistory(db, id, 'worker', step, event, outcome, { ...context, ...detail }, options.now);
     const transport = testVideo
       ? testVideoTransport(id, options.testVideoDir ?? resolve('dist/client/test-videos'), input.orientation === 'portrait', job.submitted_at, options.now ?? Date.now)
       : options;
@@ -80,8 +87,11 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
         try {
           const plan = snapshotPosePlan(session.snapshot);
           if (photos.length !== plan.length || photos.some((photo, index) => photo.pose_index !== plan[index].index)) throw new Error('Incomplete or unordered photos');
+          if (templates) step = 'template.cdn';
           const urls = templates?.resolveInputs(input);
-          if (templates && !urls) return;
+          if (templates && !urls) { observe('waiting', 'waiting'); return; }
+          if (urls && urls.size) observe('available', 'succeeded');
+          step = 'generation.inputs';
           const templateUrl = (mediaId: string) => urls ? urls.get(mediaId)! : slotProviderUrl(db, origin, mediaId);
           const paths = photos.map(photo => photo.path);
           if (!urls) {
@@ -105,6 +115,7 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
           throw new GenerationFailure('INPUT_PREPARATION_FAILED', 'Invalid generation snapshot/photos', { cause: error });
         }
         if (!sessionAvailable(db, id)) return;
+        observe('prepared', 'succeeded');
         if (inputOnly) {
           db.transaction(() => {
             clearError(id);
@@ -112,10 +123,14 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
           })();
           return;
         }
+        step = 'fal.submit';
         if (!transport.client) throw new GenerationFailure('FAL_NOT_CONFIGURED', 'Missing fal transport');
         let accepted;
         try {
           db.prepare('UPDATE generation_jobs SET submitted_at=? WHERE session_id=?').run((options.now ?? Date.now)(), id);
+          context.attempt = nextSubmitAttempt(db, id);
+          observe('submit_started', 'started');
+          submitting = true;
           accepted = await transport.client.submit(input.model, payload);
         }
         catch (error) {
@@ -126,10 +141,12 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
         }
         if (!sessionAvailable(db, id)) return;
         if (!accepted.request_id) throw new Error('Missing submit acknowledgement');
+        context.requestId = accepted.request_id;
         db.transaction(() => {
           db.prepare('UPDATE generation_jobs SET request_id=?,status_url=?,response_url=?,cancel_url=?,error_code=NULL,error_message=NULL WHERE session_id=?').run(accepted.request_id, accepted.status_url ?? null, accepted.response_url ?? null, accepted.cancel_url ?? null, id);
           db.prepare("UPDATE capture_sessions SET state='observing' WHERE id=?").run(id);
         })();
+        observe('acknowledged', 'succeeded');
         return;
       }
       if (session.state === 'observing') {
@@ -138,7 +155,11 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
         const status = await transport.client.status(input.model, job.request_id);
         if (!sessionAvailable(db, id)) return;
         if (status.error || status.status === 'FAILED') throw new GenerationFailure('FAL_FAILED', 'fal terminal status', { cause: status });
+        const providerStatus = ['IN_QUEUE', 'IN_PROGRESS', 'COMPLETED'].includes(status.status) ? status.status : 'UNKNOWN';
+        observe('provider_status', status.status === 'COMPLETED' ? 'succeeded' : 'waiting', { providerStatus });
         if (status.status !== 'COMPLETED') { clearError(id); return; }
+        step = 'fal.result';
+        observe('retrieving', 'started');
         let result: unknown;
         try { result = await transport.client.result(input.model, job.request_id); }
         catch (error) {
@@ -156,18 +177,25 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
           db.prepare('UPDATE generation_jobs SET result_url=?,error_code=NULL,error_message=NULL WHERE session_id=?').run(url.href, id);
           db.prepare("UPDATE capture_sessions SET state='preparing' WHERE id=?").run(id);
         })();
+        observe('result_received', 'succeeded');
         return;
       }
       if (session.state === 'preparing' && !job.video_path) {
         if (!job.result_url) throw new GenerationFailure('INVALID_RESULT', 'Missing result URL');
-        const prepared = await prepareVideo(dataDir, id, job.result_url, transport.download);
+        const prepared = await prepareVideo(dataDir, id, job.result_url, transport.download, (current, outcome, httpStatus) => {
+          step = current;
+          observe(outcome, outcome, { httpStatus });
+        });
         if (!sessionAvailable(db, id)) {
           await rm(join(dataDir, 'media', 'sessions', id), { recursive: true, force: true });
           return;
         }
         db.prepare(`UPDATE generation_jobs SET video_path=@video_path,frame_path=@frame_path,video_size=@video_size,frame_size=@frame_size,width=@width,height=@height,duration=@duration,error_code=NULL,error_message=NULL WHERE session_id=@id`).run({ ...prepared, id });
       }
-      if (session.state === 'preparing') await options.publishReady?.(id, !job.video_path);
+      if (session.state === 'preparing') {
+        step = 'delivery.publish';
+        await options.publishReady?.(id, !job.video_path);
+      }
     } catch (error) {
       const code = error instanceof GenerationFailure ? error.code : error instanceof InvalidVideo ? 'INVALID_RESULT' : 'GENERATION_RETRY';
       const rejectedStatus = session.state === 'observing' && (httpStatus(error) ?? 0) >= 400 && (httpStatus(error) ?? 0) < 500 && ![408,429].includes(httpStatus(error)!);
@@ -175,11 +203,21 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
         const missing = await templates.invalidateMissing(input);
         if (missing && !job.request_id && !job.template_repaired && sessionAvailable(db, id)) {
           db.prepare('UPDATE generation_jobs SET template_repaired=1 WHERE session_id=?').run(id);
+          observe('rejected', 'retry', { code });
+          step = 'template.cdn';
+          observe('repair', 'retry');
           templates.warm(input);
           return;
         }
       }
-      failure(id, error, code !== 'GENERATION_RETRY' || rejectedStatus, rejectedStatus ? 'FAL_FAILED' : code);
+      const terminal = code !== 'GENERATION_RETRY' || rejectedStatus;
+      const errorCode = rejectedStatus ? 'FAL_FAILED' : code;
+      failure(id, error, terminal, errorCode);
+      const missingAck = submitting && !context.requestId && !terminal;
+      const event = missingAck ? 'ack_missing' : submitting && context.requestId ? 'ack_not_saved' : 'error';
+      observe(event, missingAck ? 'unknown' : terminal ? 'failed' : 'retry', {
+        code: errorCode, httpStatus: code === 'RESULT_GONE' ? 410 : httpStatus(error) ?? httpStatus((error as Error | null)?.cause),
+      });
     }
   }
   function createLoop(condition: string) {
