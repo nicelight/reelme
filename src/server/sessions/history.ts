@@ -8,6 +8,7 @@ export interface HistoryDetail {
   code?: string; httpStatus?: number; pose?: number; accepted?: number; total?: number;
   model?: string; requestId?: string; attempt?: number; method?: string;
   providerStatus?: string; bytes?: number; mode?: string; profile?: string; operationId?: string;
+  providerReason?: string; providerField?: string;
 }
 let warnedAt = 0;
 function warn() {

@@ -51,6 +51,13 @@ test('setup uses accepted Element/group/flat budgets and API-only output setting
   assert.equal(slotSchema.safeParse({ ...config(o1), resolution: '720p' }).success, false);
   assert.equal(slotSchema.safeParse({ ...config('kling/v4/flash/reference-to-video'), resolution: '1080p' }).success, false);
   assert.equal(slotSchema.safeParse({ ...config('minimax/h3-max/recast'), participants: 'group' }).success, false);
+  for (const [id, max] of [['kling/v4/video-to-video/edit', 30], ['kling/v4/flash/video-to-video', 20]] as const) {
+    for (const duration of [undefined, 3, max]) assert.ok(slotSchema.safeParse({ ...config(id), duration }).success);
+    for (const duration of [2, 3.5, max + 1]) assert.equal(slotSchema.safeParse({ ...config(id), duration }).success, false);
+  }
+  for (const id of [o1, 'fal-ai/kling-video/o3/pro/video-to-video/edit', 'minimax/h3-max/recast']) {
+    assert.equal(slotSchema.safeParse({ ...config(id), duration: 5 }).success, false);
+  }
   const plan = buildPosePlan({ ...valid, participants: 2, photosPerParticipant: 4 });
   assert.deepEqual(plan.map(pose => [pose.index, pose.participant, pose.guideNumber]), [[0,1,1],[1,1,2],[2,1,3],[3,1,4],[4,2,1],[5,2,2],[6,2,3],[7,2,4]]);
   assert.ok(buildPosePlan({ ...valid, participants: 'group', photosPerParticipant: 3 }).every(pose => pose.guideNumber === 5 && pose.participant === 'group'));
@@ -74,6 +81,7 @@ test('all eleven endpoints receive ordered new plans through real intake and moc
       referenceIds: model.id.includes('recast') ? [] : [thumbnail.id],
       ...(model.mode === 'V2V' ? { videoId: video.id } : {}),
       ...(model.id.includes('recast') ? { prompt: 'Replace two people from left to right.' } : {}) };
+    if (model.editableVideoDuration) input.duration = 8;
     const slotId = randomUUID();
     if (model.mode === 'V2V') input.videoId = (await f.importTemplate(cookie, await videoBytes(f.root, 5), slotId, model.id)).id;
     const saved = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: admin, payload: { ...input, id: slotId } });
@@ -110,7 +118,7 @@ test('all eleven endpoints receive ordered new plans through real intake and moc
     assert.equal(payload.prompt, input.prompt);
     assert.equal(payload.aspect_ratio, model.orientationMode === 'aspect-ratio' ? '16:9' : undefined);
     assert.equal(payload.resolution, input.resolution);
-    assert.equal(payload.duration, model.mode === 'P2V' ? model.id === o3 ? '5' : 5 : undefined);
+    assert.equal(payload.duration, model.id === o3 ? '5' : input.duration);
     assert.equal(!!payload.video_url, model.mode === 'V2V');
     let photos: string[];
     if (model.referenceStrategy === 'elements') {

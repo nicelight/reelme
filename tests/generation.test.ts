@@ -13,6 +13,7 @@ import { openDatabase } from '../src/server/db.js';
 import { createTemplateCache, falTemplateUpload } from '../src/server/sessions/template-cache.js';
 import { publishReady } from '../src/server/sessions/receive.js';
 import { createGenerationWorker } from '../src/server/sessions/generation.js';
+import { falHistoryReason } from '../src/server/sessions/generation-errors.js';
 import { createFalTransport, falHeaders, type FalTransport } from '../src/server/sessions/fal.js';
 import { createApp } from '../src/server/app.js';
 import type { CaptureStatus } from '../src/shared/capture.js';
@@ -191,12 +192,26 @@ test('explicit submit refusals and terminal COMPLETED errors never resubmit or e
     if (kind === 'refusal') client.submit = async (...args) => { calls.submit.push({ endpoint: args[0], input: args[1] }); throw Object.assign(new Error('private provider detail'), { status: 422 }); };
     if (kind === 'result-error') client.result = async () => ({ error: 'private model error', video: { url: 'https://cdn.fal.test/no.mp4' } });
     if (kind === 'status-error') client.status = async () => ({ status: 'COMPLETED', error: 'terminal provider failure' });
-    if (kind === 'result-http') client.result = async () => { throw Object.assign(new Error('validation error'), { status: 422 }); };
+    if (kind === 'result-http') client.result = async () => { throw Object.assign(new Error('Unprocessable Entity'), {
+      status: 422, body: { detail: [{ loc: ['body', 'video_url'], msg: 'Every shot must be at most 15 seconds long.', type: 'value_error', input: 'https://private.test/media', url: 'https://private.test/error' }] },
+    }); };
     const w = worker(f, client, async () => new Response(bytes));
     for (let i = 0; i < 4; i++) await w.runOnce();
     assert.equal(calls.submit.length, 1, kind);
     const value = await state(f, id); assert.equal(value.state, 'failed', kind); assert.equal(value.complete, true);
     assert.ok(value.error); assert.doesNotMatch(JSON.stringify(value), /private|provider failure|validation error/);
+    const event = w.db.prepare("SELECT detail FROM session_history WHERE session_id=? AND event='error' AND outcome='failed'").get(id) as {detail:string};
+    const detail = JSON.parse(event.detail);
+    if (kind === 'result-http') {
+      assert.equal(detail.providerField, 'video_url');
+      assert.equal(detail.providerReason, 'Every shot must be at most 15 seconds long.');
+      assert.equal(detail.httpStatus, 422);
+      assert.doesNotMatch(event.detail, /private\.test|value_error|Unprocessable Entity/);
+      assert.doesNotMatch(JSON.stringify(value), /Every shot/);
+    }
+    if (kind === 'refusal') assert.equal(detail.providerReason, undefined);
+    if (kind === 'result-error') assert.equal(detail.providerReason, 'private model error');
+    if (kind === 'status-error') assert.equal(detail.providerReason, 'terminal provider failure');
     assert.equal((w.db.prepare('SELECT COUNT(*) AS n FROM capture_photos WHERE session_id=?').get(id) as { n: number }).n, 1);
     await w.close();
   }
@@ -382,9 +397,21 @@ test('provider failure details stay server-side with credentials and capability 
   await w.runOnce();
   const logged = JSON.stringify(logs); assert.match(logged, /safe-request-id/); assert.match(logged, /422/);
   assert.doesNotMatch(logged, /test-private-fal-key|private-capability|private-token/);
+  const staff = db.prepare('SELECT detail FROM session_history WHERE session_id=?').all(id);
+  assert.doesNotMatch(JSON.stringify(staff), /test-private-fal-key|private-capability|private-token|Cannot fetch/);
   const publicStatus = await state(f, id);
   assert.doesNotMatch(JSON.stringify(publicStatus), /safe-request-id|private|Cannot fetch/);
   assert.doesNotMatch(JSON.stringify(publicStatus.error), /422/); // UUIDs may legitimately contain these digits.
+});
+
+test('staff history accepts bounded provider explanations and omits echoed input', () => {
+  const message = 'Choose 768P/1080P and a duration of at least 0.5 seconds.';
+  assert.equal(falHistoryReason({ body: { detail: message } }).providerReason, message);
+  const error = (msg: string) => ({ body: { detail: [{ loc: ['body', 'prompt'], msg, input: 'a private scene' }] } });
+  for (const msg of ['Rejected: a private scene', 'Cannot fetch https://test.invalid/a', 'Bearer credential',
+    'Contact user@example.com', 'Input was my private prompt', 'Failure at 192.0.2.1', 'x'.repeat(321)]) {
+    assert.deepEqual(falHistoryReason(error(msg), undefined, 'my private prompt'), {});
+  }
 });
 
 test('two visitors reuse the saved video and reference without further fal storage uploads', async t => {

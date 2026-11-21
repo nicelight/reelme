@@ -38,15 +38,16 @@ export function buildModelInput(snapshot: SlotSnapshot, media: GenerationMedia):
   const kling = group ? { prompt, image_urls: [...media.photos, ...media.references] }
     : { prompt, elements, image_urls: media.references };
   const referenceImages = [...media.photos, ...media.references];
+  const editDuration = input.duration === undefined ? {} : { duration: input.duration };
   const aspect = configured?.aspectRatio ? { aspect_ratio: configured.aspectRatio } : {};
   switch (input.model) {
     case 'fal-ai/kling-video/o1/video-to-video/edit':
     case 'fal-ai/kling-video/o3/pro/video-to-video/edit':
       return { ...kling, video_url: media.video };
     case 'kling/v4/video-to-video/edit':
-      return { ...kling, video_url: media.video, resolution: input.resolution, ...aspect };
+      return { ...kling, video_url: media.video, resolution: input.resolution, ...editDuration, ...aspect };
     case 'kling/v4/flash/video-to-video':
-      return { ...kling, video_url: media.video, resolution: input.resolution };
+      return { ...kling, video_url: media.video, resolution: input.resolution, ...editDuration };
     case 'fal-ai/kling-video/o3/pro/reference-to-video':
       return { ...kling, duration: String(input.duration), ...aspect };
     case 'kling/v4/reference-to-video':

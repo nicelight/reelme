@@ -16,10 +16,11 @@ test('browser reports explicit download and Web Share outcomes separately from p
     const count = (event: string) => (db.prepare('SELECT COUNT(*) AS n FROM session_history WHERE session_id=? AND event=?').get(session.id,event) as { n: number }).n;
     await page.addInitScript(() => {
       let attempts = 0;
-      Object.defineProperty(navigator, 'canShare', { value: () => true });
+      Object.defineProperty(navigator, 'canShare', { value: (data: ShareData) => !!data.files?.[0]?.size });
       Object.defineProperty(navigator, 'share', { value: async (data: ShareData) => {
         if (!navigator.userActivation.isActive || !data.files?.[0]?.size) throw new Error('Missing file or user gesture');
         if (++attempts === 1) throw new DOMException('Cancelled', 'AbortError');
+        if (attempts === 3) throw new DOMException('File sharing blocked', 'NotAllowedError');
       } });
     });
     await page.goto(url);
@@ -35,6 +36,9 @@ test('browser reports explicit download and Web Share outcomes separately from p
     await page.getByRole('link', {name:'Скачать видео'}).click();
     expect((await download).suggestedFilename()).toBe('reelme-1.mp4');
     await expect.poll(() => count('download_clicked')).toBe(1);
+    await share.click();
+    await expect.poll(() => count('share_failed')).toBe(1);
+    await expect(page.getByRole('button', { name: 'Скопировать ссылку на видео' })).toBeEnabled();
 
     const second = await browser.newContext();
     try {
@@ -47,5 +51,40 @@ test('browser reports explicit download and Web Share outcomes separately from p
     const history = JSON.stringify(db.prepare('SELECT step,event,outcome,detail FROM session_history WHERE session_id=?').all(session.id));
     expect(history).not.toContain(receive_token);
     expect(history).not.toContain(app.origin);
+  } finally { db.close(); }
+});
+
+test('QR visitor can share or copy a direct video link when file sharing is unavailable', async ({ page, app }) => {
+  const session = await preparedSession(app.dataDir, await readFile(app.video));
+  const db = openDatabase(app.dataDir);
+  try {
+    await publishReady(db, app.dataDir, session.id, app.origin);
+    const { receive_token, download_token } = db.prepare('SELECT receive_token,download_token FROM session_delivery WHERE session_id=?').get(session.id) as { receive_token: string; download_token: string };
+    const inlineUrl = `${app.origin}/download/${download_token}?inline=1`;
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'canShare', { value: (data: ShareData) => !!data.url });
+      Object.defineProperty(navigator, 'share', { value: async (data: ShareData) => {
+        if (!navigator.userActivation.isActive) throw new Error('Missing gesture');
+        document.body.dataset.sharedUrl = data.url;
+      } });
+    });
+    await page.goto(app.origin + '/receive/' + receive_token);
+    await page.getByRole('button', { name: 'Поделиться ссылкой на видео' }).click();
+    await expect(page.locator('body')).toHaveAttribute('data-shared-url', inlineUrl);
+
+    const embedded = await page.context().newPage();
+    await embedded.addInitScript(() => {
+      Object.defineProperty(navigator, 'share', { configurable: true, value: undefined });
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (url: string) => {
+        if (document.body.dataset.copiedUrl) throw new Error('Clipboard blocked');
+        document.body.dataset.copiedUrl = url;
+      } } });
+    });
+    await embedded.goto(app.origin + '/receive/' + receive_token);
+    const copy = embedded.getByRole('button', { name: 'Скопировать ссылку на видео' });
+    await copy.click();
+    await expect(embedded.locator('body')).toHaveAttribute('data-copied-url', inlineUrl);
+    await copy.click();
+    await expect(embedded.getByRole('textbox', { name: 'Ссылка на видео' })).toHaveValue(inlineUrl);
   } finally { db.close(); }
 });

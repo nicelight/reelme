@@ -5,10 +5,11 @@
    * requests cannot overwrite newer setup or authored text. Test status/result
    * remains mounted across resets. Source: docs/slot-setup/matrix.md. */
   import { onMount, onDestroy } from 'svelte';
-  import { models, recastId, slotSchema, type Media, type Mode, type SlotInput } from '../../shared/scenarios';
+  import { models, recastId, slotSchema, MAX_VIDEO_UPLOAD_MB, MAX_VIDEO_UPLOAD_BYTES, videoUploadLimitMessage, type Media, type Mode, type SlotInput } from '../../shared/scenarios';
   import { slotSetupMatrix, selectSlotPrompt } from '../../shared/slot-prompt-selection';
   import { allocatePhotoBudget, buildPosePlan, defaultSlotSetup, getSlotSetup, type Orientation } from '../../shared/slot-setup';
   import type { Pose } from '../../shared/capture';
+  import ServerUploadStatus from './ServerUploadStatus.svelte';
   import FileButton from './FileButton.svelte';
   import MediaField from './MediaField.svelte';
   import SlotTest from './SlotTest.svelte';
@@ -83,7 +84,7 @@
   }
   function unlock() { locked = false; testsOpen = false; resetLower(); }
   function changeMode(mode: Mode) {
-    resetLower(); draft.mode = mode;
+    resetLower(); draft.mode = mode; draft.duration = undefined;
     draft.videoId = undefined; videoMedia = undefined;
     draft.model = models.find(item => item.mode === mode)!.id;
     modelChosen = false;
@@ -108,7 +109,9 @@
         const ratios = next.aspectRatios[draft.orientation ?? 'landscape'];
         if (!ratios.includes(draft.aspectRatio ?? '')) draft.aspectRatio = ratios.length === 1 ? ratios[0] : undefined;
       }
-      if (model.mode === 'V2V') draft.duration = undefined;
+      if (model.mode === 'V2V') {
+        if (!model.editableVideoDuration || (draft.duration !== undefined && draft.duration > model.maxSeconds)) draft.duration = undefined;
+      }
       else if (draft.duration === undefined) draft.duration = 10;
       else if (draft.duration < model.minSeconds || draft.duration > model.maxSeconds || (id !== 'minimax/h3-max/reference-to-video' && !Number.isInteger(draft.duration))) draft.duration = undefined;
     }
@@ -128,9 +131,13 @@
     draft.recastShotsConfirmed = draft.model === recastId ? false : undefined;
     draft.aspectRatio = matrixModel.orientationMode === 'aspect-ratio' ? matrixModel.aspectRatios[value][0] : undefined;
   }
-  const sourceLimits = $derived(`MP4 · ${currentModel.minSeconds}–${currentModel.maxSeconds} с · до ${currentModel.maxVideoMB ?? 300} MB`);
+  const sourceLimits = $derived(`MP4 · ${currentModel.minSeconds}–${currentModel.maxSeconds} с · до ${MAX_VIDEO_UPLOAD_MB} МБ`);
   async function importSource(file?: File) {
     sourceFromFolder = !file;
+    if (file && file.size > MAX_VIDEO_UPLOAD_BYTES) {
+      sourceError = videoUploadLimitMessage;
+      return;
+    }
     sourceLoading = true; sourceError = ''; onBusy(true);
     try {
       const setup = { orientation: draft.orientation!, model: draft.model };
@@ -263,8 +270,20 @@
           <h4>Референсное видео</h4>
           <p class="hint" id="source-limits">{sourceLimits} · {draft.orientation === 'portrait' ? 'вертикальное' : 'горизонтальное'}</p>
           <FileButton label={draft.videoId ? 'Заменить референсное видео' : 'Добавить референсное видео'} accept="video/mp4,.mp4" disabled={sourceLoading} describedBy="source-limits" onchange={uploadSource} />
-          {#if sourceLoading && !sourceFromFolder}<p class="hint" role="status">Загружаем и проверяем ролик…</p>{/if}
+          {#if sourceLoading && !sourceFromFolder}<ServerUploadStatus />{/if}
           {#if draft.videoId}<video src={mediaUrl(draft.videoId)} aria-label="Исходный ролик сюжета" controls playsinline preload="metadata"><track kind="captions" /></video>{/if}
+          {#if currentModel.editableVideoDuration}
+            <label for="output-duration">Длительность результата</label>
+            <select id="output-duration" value={draft.duration ?? ''} onchange={event => {
+              const seconds = event.currentTarget.value;
+              draft.duration = seconds ? Number(seconds) : undefined;
+            }}>
+              <option value="">Как в исходнике</option>
+              {#each Array.from({ length: currentModel.maxSeconds - currentModel.minSeconds + 1 }, (_, i) => currentModel.minSeconds + i) as seconds}
+                <option value={seconds}>{seconds} с</option>
+              {/each}
+            </select>
+          {/if}
           {#if sourceError && !sourceFromFolder}<p class="error" role="alert">{sourceError}</p>{/if}
           {#if sourceProblem}<p class="error" role="alert">{sourceProblem}</p>{/if}
           {#if draft.model === recastId && draft.videoId}<label class="checkbox-label shot-confirmation"><input type="checkbox" bind:checked={draft.recastShotsConfirmed} />Подтверждаю: каждый непрерывный кадр длится не более 15 секунд</label>{/if}

@@ -68,6 +68,11 @@ test('телефон оператора видит сбой за предела�
     await expect(page.getByText('История частичная.',{exact:false})).toBeVisible();
     const details = await (await page.request.get(origin+'/api/statuses/id-2')).json();
     expect(details.facts.requestId).toBeNull();
+    const providerReason = 'Every shot must be at most 15 seconds long.';
+    await expect(page.getByText(providerReason, {exact:false})).toHaveCount(0);
+    db.prepare("INSERT INTO session_history(session_id,at,last_at,source,step,event,outcome,detail,bucket) VALUES ('id-2',?,?,'worker','fal.result','error','failed',?,'pipeline')")
+      .run(time, time, JSON.stringify({code:'FAL_FAILED', httpStatus:422, providerField:'video_url', providerReason}));
+    await expect(page.getByText('Ответ fal · video_url — ' + providerReason)).toBeVisible({timeout:8000});
     db.prepare("UPDATE generation_jobs SET error_code=NULL WHERE session_id='id-1'").run();
     await expect(page.locator('.row')).toHaveCount(1,{timeout:8000});
     await expect(failed).toHaveAttribute('aria-expanded','true');
@@ -77,7 +82,8 @@ test('телефон оператора видит сбой за предела�
     await page.getByRole('button',{name:'Скопировать JSON'}).click();
     await expect(page.getByText('История скопирована')).toBeVisible();
     const exported = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
-    expect(exported.entries).toHaveLength(102);
+    expect(exported.entries).toHaveLength(103);
+    expect(exported.entries[0].detail).toMatchObject({providerReason, providerField:'video_url', httpStatus:422});
     expect(exported.session.id).toBe('id-2');
     await page.route('**/api/statuses?*', route => route.abort());
     await page.evaluate(() => window.dispatchEvent(new Event('online')));

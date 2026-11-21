@@ -15,7 +15,7 @@ import { promisify } from 'node:util';
 import sharp from 'sharp';
 import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
-import type { Media } from '../../shared/scenarios.js';
+import { MAX_VIDEO_UPLOAD_BYTES, videoUploadLimitMessage, type Media } from '../../shared/scenarios.js';
 import { HttpError } from '../errors.js';
 import { MAX_PHOTO_BYTES } from '../../shared/capture.js';
 const run = promisify(execFile);
@@ -68,7 +68,16 @@ export function registerMedia(app: FastifyInstance, db: DB, dataDir: string, acc
     const id = randomUUID();
     const path = join(dataDir, 'media', id);
     try {
-      await pipeline(file.file, createWriteStream(path, { flags: 'wx', mode: 0o600 }));
+      async function* limitVideoBytes(chunks: AsyncIterable<Buffer>) {
+        let bytes = 0;
+        for await (const chunk of chunks) {
+          bytes += chunk.length;
+          if (bytes > MAX_VIDEO_UPLOAD_BYTES) throw new HttpError(413, 'FILE_TOO_LARGE', videoUploadLimitMessage);
+          yield chunk;
+        }
+      }
+      const stream = file.mimetype.startsWith('video/') ? limitVideoBytes(file.file) : file.file;
+      await pipeline(stream, createWriteStream(path, { flags: 'wx', mode: 0o600 }));
       if (file.file.truncated) throw new HttpError(413, 'FILE_TOO_LARGE', 'Размер файла превышает 300 MB');
       const size = (await stat(path)).size;
       const meta = await inspectMedia(path, file.mimetype);

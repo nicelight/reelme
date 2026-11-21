@@ -3,7 +3,7 @@
  * are exercised; provider transport is controlled. Source: docs/slot-setup/matrix.md. */
 import { test, expect } from './browser-fixture';
 import type { Page } from '@playwright/test';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, truncate, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { openDatabase } from '../src/server/db.js';
@@ -42,7 +42,7 @@ async function openTests(page: Page) {
 async function upload(page: Page, label: string, file: string) {
   await page.getByLabel(label, { exact: true }).setInputFiles(file);
   await expect(page.getByLabel('Заменить: ' + label, { exact: true })).toBeVisible();
-  await expect(page.getByText('Загружаем и проверяем файл…')).toHaveCount(0);
+  await expect(page.getByText('Загружаем файл на сервер ReelMe…')).toHaveCount(0);
 }
 async function chooseFile(page: Page, button: string, file: string) {
   const chooser = page.waitForEvent('filechooser');
@@ -54,26 +54,51 @@ async function save(page: Page) {
   await expect(page.getByText('Сюжет сохранён.', { exact: true })).toBeVisible();
 }
 
+test('Kling edit duration can be saved and reset without rebuilding the prompt', async ({ page, app }) => {
+  await login(page, app.origin, app.password);
+  await setup(page, 'V2V', 'kling/v4/video-to-video/edit', '1', '4');
+  await lock(page);
+  await upload(page, 'Изображение сюжета', app.image);
+  await page.getByLabel('Описание', { exact: true }).fill('Танец');
+  const duration = page.getByLabel('Длительность результата');
+  await expect(duration).toHaveValue('');
+  await page.locator('#prompt').fill('Keep the original dance.');
+  await duration.selectOption('8');
+  await save(page);
+  await page.reload();
+  await page.locator('.slot-open').click();
+  await expect(duration).toHaveValue('8');
+  await duration.selectOption({ label: 'Как в исходнике' });
+  await save(page);
+  const [saved] = await (await page.request.get(app.origin + '/api/admin/slots')).json();
+  expect(saved.duration).toBeUndefined();
+  expect(saved.prompt).toBe('Keep the original dance.');
+});
+
 test('visibility from a stale tab preserves the prompt saved in another tab', async ({ page, app }) => {
   await login(page, app.origin, app.password);
   await setup(page, 'P2V', h3, '1', '4');
   await lock(page);
   await upload(page, 'Изображение сюжета', app.image);
-  await page.getByLabel('Описание', { exact: true }).fill('Портрет гостя');
+  await page.getByLabel('Описание', { exact: true }).fill('Танец на стиле');
   await page.locator('.editor').getByLabel('Отображать клиенту').check();
   await save(page);
 
   const other = await page.context().newPage();
   await other.goto(app.origin + '/admin');
-  await other.getByRole('button', { name: /Портрет гостя/ }).click();
+  await other.getByRole('button', { name: /Танец на стиле/ }).click();
   const newPrompt = 'Show the guest in the mountains.';
   await other.locator('#prompt').fill(newPrompt);
+  const renamed = 'Танец на стиле _ Fal4';
+  await other.getByLabel('Описание', { exact: true }).fill(renamed);
   await save(other);
+  await expect(other.locator('.slot-open strong')).toHaveText(renamed);
 
   await page.locator('.slot-list').getByLabel('Отображать клиенту').uncheck();
   await expect(page.getByText('Сюжет скрыт от клиента.')).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: /Портрет гостя/ }).click();
+  await expect(page.locator('.slot-open strong')).toHaveText(renamed);
+  await page.getByRole('button', { name: /Танец на стиле/ }).click();
   await expect(page.locator('.slot-list').getByLabel('Отображать клиенту')).not.toBeChecked();
   await expect(page.locator('#prompt')).toHaveValue(newPrompt);
 });
@@ -182,7 +207,7 @@ test('prompt text survives reference changes and stale fetches; real load failur
   await expect(page.getByText('Референсы изменены.', { exact: false })).toBeVisible();
   await expect(page.locator('#prompt')).toHaveValue('My authored text with Image 1');
   await chooseFile(page, 'Заменить референс 1', app.jpeg);
-  await expect(page.getByText('Загружаем и проверяем файл…')).toHaveCount(0);
+  await expect(page.getByText('Загружаем файл на сервер ReelMe…')).toHaveCount(0);
   await expect(page.locator('#prompt')).toHaveValue('My authored text with Image 1');
   await page.locator('.references .media-field').first().getByRole('button', { name: 'Убрать', exact: true }).click();
   await expect(page.locator('#prompt')).toHaveValue('My authored text with Image 1');
@@ -298,6 +323,23 @@ test('draft source binding and five-guide page show actual immutable media on de
   await expect(page.getByRole('button', { name: 'Добавить референсное видео' })).toBeVisible();
   const connect = page.getByRole('button', { name: 'Подключить исходник из файла', exact: true });
   await connect.click(); await expect(page.getByRole('alert')).toContainText('Шаблонный ролик этой ориентации не найден');
+  const uploading = page.getByRole('status').filter({ hasText: 'Загружаем файл на сервер ReelMe…' });
+  for (const endpoint of ['**/api/admin/slot-media', '**/template-video?*']) {
+    await page.route(endpoint, async route => {
+      try {
+        await expect(uploading).toBeVisible();
+        expect(await uploading.evaluate(el => getComputedStyle(el, '::before').animationName)).not.toBe('none');
+      } finally { await route.continue(); }
+    }, { times: 1 });
+  }
+  const oversized = join(app.dataDir, 'oversized.mp4');
+  await writeFile(oversized, '');
+  await truncate(oversized, 200_000_001);
+  const videoUploads: string[] = [];
+  page.on('request', req => { if (req.url().includes('/template-video?')) videoUploads.push(req.url()); });
+  await chooseFile(page, 'Добавить референсное видео', oversized);
+  await expect(page.getByRole('alert')).toContainText('Размер видео превышает 200 МБ');
+  expect(videoUploads).toHaveLength(0);
   await upload(page, 'Изображение сюжета', app.image); await page.getByLabel('Описание', { exact: true }).fill('Подготовленный исходник');
   await chooseFile(page, 'Добавить референсное видео', app.video);
   const player = page.getByLabel('Исходный ролик сюжета', { exact: true }); await expect(player).toBeVisible();

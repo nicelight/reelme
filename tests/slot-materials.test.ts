@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, truncate, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fixture, imageBytes, videoBytes } from './helpers.js';
 import { openDatabase } from '../src/server/db.js';
@@ -75,6 +75,10 @@ test('named source imports preserve draft identity, provenance, ranges and old s
   assert.equal((await f.app.inject({ method: 'POST', url: importUrl, headers: admin, payload: { orientation: 'portrait', model: recast } })).json().code, 'VIDEO_ORIENTATION');
   await writeFile(join(f.config.templateVideosDir, `${id}__landscape.mp4`), await videoBytes(f.root, 1));
   assert.equal((await f.app.inject({ method: 'POST', url: importUrl, headers: admin, payload: { orientation: 'landscape', model: o1 } })).json().code, 'MODEL_LIMIT');
+  await truncate(join(f.config.templateVideosDir, `${id}__landscape.mp4`), 200_000_001);
+  const oversized = await f.app.inject({ method: 'POST', url: importUrl, headers: admin, payload: { orientation: 'landscape', model: recast } });
+  assert.equal(oversized.statusCode, 413);
+  assert.equal(oversized.json().code, 'FILE_TOO_LARGE');
 });
 
 test('already saved upload sources remain usable; arbitrary replacements need named import', async t => {

@@ -13,9 +13,14 @@
   let emailUncertain = $state(false);
   let error = $state('');
   let shareFile = $state<File>();
-  let shareState = $state<'preparing' | 'ready' | 'unavailable' | 'failed'>('preparing');
+  let shareState = $state<'preparing' | 'ready' | 'link' | 'copy' | 'failed'>('preparing');
+  const shareLabels = {
+    preparing: 'Подготавливаем видео…', ready: 'Поделиться видео',
+    link: 'Поделиться ссылкой на видео', copy: 'Скопировать ссылку на видео', failed: 'Подготовить видео снова',
+  };
   let sharing = $state(false);
   let shareMessage = $state('');
+  let showLink = $state(false);
   let shareAttempt = $state(0);
   let player = $state<HTMLVideoElement>();
   let playerError = $state(false);
@@ -26,6 +31,7 @@
   const requests = new Set<AbortController>();
   const path = $derived(`/receive/${encodeURIComponent(token)}`);
   const shareUrl = $derived(view?.downloadUrl);
+  const videoLink = $derived(view ? new URL(view.videoUrl, window.location.origin).href : '');
   const shareNumber = $derived(view?.number);
   const messages = {
     not_requested: '',
@@ -104,18 +110,24 @@
       }
     }
   }
+  function offerLink() {
+    let canSendLink = false;
+    try {
+      canSendLink = typeof navigator.share === 'function' && (typeof navigator.canShare !== 'function' || navigator.canShare({ url: videoLink }));
+    } catch {}
+    shareState = canSendLink ? 'link' : 'copy';
+    shareMessage = 'Чтобы отправить сам файл, откройте скачанный MP4 в «Загрузках» и нажмите «Поделиться».';
+  }
   $effect(() => {
     const url = shareUrl;
     const number = shareNumber;
     shareAttempt;
     if (!url) return;
     const controller = new AbortController();
-    shareFile = undefined; shareMessage = '';
+    shareFile = undefined; shareMessage = ''; showLink = false;
     const filename = `reelme-${number}.mp4`;
-    let supported = false;
-    try { supported = window.isSecureContext && typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [new File([], filename, { type: 'video/mp4' })] }); } catch {}
-    if (!supported) {
-      shareState = 'unavailable'; shareMessage = 'Скачайте видео и поделитесь им из галереи.';
+    if (typeof navigator.share !== 'function') {
+      offerLink();
       return;
     }
     shareState = 'preparing';
@@ -127,7 +139,11 @@
           return new File([await response.blob()], filename, { type: 'video/mp4' });
         }, 120_000, controller.signal);
         if (controller.signal.aborted || !active) return;
-        if (!navigator.canShare({ files: [file] })) throw new Error('Unsupported file');
+        if (typeof navigator.canShare === 'function') {
+          let supported = false;
+          try { supported = navigator.canShare({ files: [file] }); } catch {}
+          if (!supported) { offerLink(); return; }
+        }
         shareFile = file; shareState = 'ready';
       } catch {
         if (controller.signal.aborted || !active) return;
@@ -145,17 +161,35 @@
     } catch { return undefined; }
   }
   async function share() {
-    if (!shareFile || sharing) return;
+    if (sharing || shareState === 'preparing') return;
+    if (shareState === 'failed') { shareAttempt += 1; return; }
+    if (shareState === 'copy') {
+      try {
+        await navigator.clipboard.writeText(videoLink);
+        showLink = false; shareMessage = 'Ссылка на видео скопирована.';
+      } catch {
+        showLink = true;
+        shareMessage = 'Выделите и скопируйте ссылку на видео.';
+      }
+      return;
+    }
+    let data: ShareData;
+    if (shareState === 'link') data = { url: videoLink };
+    else if (shareFile) data = { files: [shareFile] };
+    else return;
     sharing = true; shareMessage = '';
     let operationId: string | undefined;
     try {
-      const shared = navigator.share({ files: [shareFile] });
+      const shared = navigator.share(data);
       operationId = report('share_started');
       await shared;
       report('share_returned', operationId);
     } catch (e) {
       report(e instanceof DOMException && e.name === 'AbortError' ? 'share_cancelled' : 'share_failed', operationId);
-      if (active && !(e instanceof DOMException && e.name === 'AbortError')) shareMessage = 'Не удалось открыть отправку. Попробуйте ещё раз или скачайте видео.';
+      if (active && !(e instanceof DOMException && e.name === 'AbortError')) {
+        if (data.files) offerLink();
+        else { shareState = 'copy'; shareMessage = 'Меню отправки недоступно. Скопируйте ссылку на видео.'; }
+      }
     } finally { if (active) sharing = false; }
   }
   function retryPlayer() { playerError = false; player?.load(); }
@@ -185,9 +219,12 @@
         </div>
         <div class="receive-content">
           <h1 id="receive-title">История № {view.number}</h1>
-          <button class="receive-submit" onclick={() => { if (shareState === 'failed') shareAttempt += 1; else void share(); }} disabled={!['ready', 'failed'].includes(shareState) || sharing}>{sharing ? 'Открываем отправку…' : shareState === 'preparing' ? 'Подготавливаем видео…' : shareState === 'failed' ? 'Подготовить видео снова' : 'Поделиться видео'}</button>
-          <p class="receive-hint">можно поделиться сразу в инсте, телеге, etc</p>
+          <button class="receive-submit" onclick={share} disabled={shareState === 'preparing' || sharing}>
+            {sharing ? 'Открываем отправку…' : shareLabels[shareState]}
+          </button>
+          {#if shareState === 'ready'}<p class="receive-hint">можно поделиться сразу в инсте, телеге, etc</p>{/if}
           {#if shareMessage}<p class="receive-hint" role="status">{shareMessage}</p>{/if}
+          {#if showLink}<input readonly aria-label="Ссылка на видео" value={videoLink} onfocus={event => event.currentTarget.select()} />{/if}
           <a class="receive-submit receive-download" href={view.downloadUrl} onclick={() => { report('download_clicked'); }} download={`reelme-${view.number}.mp4`}>Скачать видео</a>
           <p class="receive-hint receive-retention-note">видео будет доступно для скачивания 1-2 дня, рекомендую отправить его на почту</p>
           {#if view.emailState !== 'not_requested'}<p class:receive-failed={view.emailState === 'failed'} class:receive-sent={view.emailState === 'sent'} class="receive-status" role="status">{#if view.emailState === 'sent'}<span class="receive-sent-light" aria-hidden="true"></span><span class="receive-check" aria-hidden="true">✓</span>{/if}{messages[view.emailState]}</p>{/if}

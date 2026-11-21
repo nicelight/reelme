@@ -125,7 +125,7 @@
     finally { busy = false; saving = false; }
   }
   async function deleteSlot(slot: Slot) {
-    if (!confirm(`Удалить сюжет «${titleFrom(slot.description)}»? Он исчезнет из списка и каталога гостей. Уже начатые сессии сохранятся.`)) return;
+    if (!confirm(`Удалить сюжет «${slot.description}»? Он исчезнет из списка и каталога гостей. Уже начатые сессии сохранятся.`)) return;
     busy = true; error = '';
     try {
       await api<void>(`/admin/slots/${slot.id}`, { method: 'DELETE' });
@@ -214,10 +214,10 @@
         {#each slots as slot (slot.id)}
           <li class:selected={selectedId === slot.id}>
             <button class="slot-open" onclick={() => openSlot(slot.id)} disabled={formDisabled} aria-pressed={selectedId === slot.id}>
-              <img src={mediaUrl(slot.thumbnailId)} alt="" /><span><strong>{titleFrom(slot.description)}</strong><small>{slot.mode} · {models.find(model => model.id === slot.model)?.name}</small></span>
+              <img src={mediaUrl(slot.thumbnailId)} alt="" /><span><strong>{slot.description}</strong><small>{slot.mode} · {models.find(model => model.id === slot.model)?.name}</small></span>
             </button>
             <div class="slot-actions"><label class="visibility-toggle"><input type="checkbox" checked={slot.visible} disabled={formDisabled} onchange={event => toggleVisibility(slot, event.currentTarget)} /><span>Отображать клиенту</span></label>
-              <button type="button" class="delete-slot quiet" aria-label="Удалить сюжет" title={`Удалить сюжет «${titleFrom(slot.description)}»`} disabled={formDisabled} onclick={() => deleteSlot(slot)}>
+              <button type="button" class="delete-slot quiet" aria-label="Удалить сюжет" title={`Удалить сюжет «${slot.description}»`} disabled={formDisabled} onclick={() => deleteSlot(slot)}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v7m4-7v7"/></svg>
               </button>
             </div>
@@ -234,7 +234,7 @@
             <div class="section-heading"><span>01</span><h3>Карточка сюжета</h3></div>
             <MediaField label="Изображение сюжета" kind="image" id={draft.thumbnailId} hint="Рекомендуем вертикальную обложку 2:3, 600 × 900 px (ширина × высота). Главный объект держите в центре: в карточках края изображения обрезаются." onUploaded={media => draft.thumbnailId = media.id} onError={fail} onBusy={uploadBusy} />
             <label for="description">Описание</label><textarea id="description" rows="3" maxlength="5000" bind:value={draft.description} placeholder="Например: Прогулка по ночному Токио" required></textarea>
-            <p class="hint">Первые три слова станут названием карточки.{#if draft.description.trim()} <span class="title-preview">«{titleFrom(draft.description)}»</span>{/if}</p>
+            <p class="hint">Название в каталоге гостей — первые три слова описания.{#if draft.description.trim()} <span class="title-preview">«{titleFrom(draft.description)}»</span>{/if}</p>
             <label class="checkbox-label"><input type="checkbox" bind:checked={draft.visible} />Отображать клиенту</label>
           </section>
 

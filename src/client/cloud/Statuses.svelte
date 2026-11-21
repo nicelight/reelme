@@ -164,6 +164,7 @@
                   {#if entry.detail.profile}<small>Профиль {entry.detail.profile}</small>{/if}
                   {#if entry.detail.code}<small>{entry.detail.code}</small>{/if}
                   {#if entry.detail.httpStatus}<small>HTTP {entry.detail.httpStatus}</small>{/if}
+                  {#if entry.detail.providerReason}<small>Ответ fal{entry.detail.providerField ? ` · ${entry.detail.providerField}` : ''} — {entry.detail.providerReason}</small>{/if}
                   {#if entry.detail.attempt}<small>Попытка {entry.detail.attempt}</small>{/if}
                 </span></li>
               {/each}</ol>

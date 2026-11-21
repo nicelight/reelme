@@ -9,19 +9,23 @@ import { z } from 'zod';
 import { slotSetupMatrix } from './slot-prompt-selection.js';
 import { defaultSlotSetup, getSlotSetup, type Orientation } from './slot-setup.js';
 
+export const MAX_VIDEO_UPLOAD_MB = 200;
+export const MAX_VIDEO_UPLOAD_BYTES = MAX_VIDEO_UPLOAD_MB * 1_000_000;
+export const videoUploadLimitMessage = `Размер видео превышает ${MAX_VIDEO_UPLOAD_MB} МБ.`;
+
 export type Mode = 'V2V' | 'P2V';
 export interface Model {
   id: string; name: string; mode: Mode; resolutions: readonly string[];
   defaultResolution?: string; prompt: boolean; hint: string;
-  minSeconds: number; maxSeconds: number; maxVideoMB?: number;
+  minSeconds: number; maxSeconds: number; maxVideoMB?: number; editableVideoDuration?: true;
 }
 const klingHint = 'Посетитель: @Element1. Фото сюжета: @Image1, @Image2, @Image3.';
 const legacyModels: readonly Model[] = [
   { id: 'minimax/h3-max/recast', name: 'MiniMax H3 Max Recast', mode: 'V2V', resolutions: ['768P', '1080P'], defaultResolution: '768P', prompt: false, hint: 'Один главный персонаж. Непрерывный кадр — не более 15 секунд.', minSeconds: 5, maxSeconds: 30 },
   { id: 'fal-ai/kling-video/o1/video-to-video/edit', name: 'Kling O1 Edit Pro', mode: 'V2V', resolutions: [], prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 10, maxVideoMB: 200 },
   { id: 'fal-ai/kling-video/o3/pro/video-to-video/edit', name: 'Kling O3 Edit Pro', mode: 'V2V', resolutions: [], prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 15, maxVideoMB: 200 },
-  { id: 'kling/v4/video-to-video/edit', name: 'Kling 4 Editing', mode: 'V2V', resolutions: ['720p', '1080p'], defaultResolution: '720p', prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 30, maxVideoMB: 300 },
-  { id: 'kling/v4/flash/video-to-video', name: 'Kling 4 Flash Editing', mode: 'V2V', resolutions: ['720p'], defaultResolution: '720p', prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 20, maxVideoMB: 300 },
+  { id: 'kling/v4/video-to-video/edit', name: 'Kling 4 Editing', mode: 'V2V', resolutions: ['720p', '1080p'], defaultResolution: '720p', prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 30, maxVideoMB: 300, editableVideoDuration: true },
+  { id: 'kling/v4/flash/video-to-video', name: 'Kling 4 Flash Editing', mode: 'V2V', resolutions: ['720p'], defaultResolution: '720p', prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 20, maxVideoMB: 300, editableVideoDuration: true },
   { id: 'kling/v4/reference-to-video', name: 'Kling 4 Reference', mode: 'P2V', resolutions: ['720p', '1080p'], defaultResolution: '720p', prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 30 },
   { id: 'fal-ai/kling-video/o3/pro/reference-to-video', name: 'Kling O3 Reference Pro', mode: 'P2V', resolutions: [], prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 15 },
   { id: 'kling/v4/flash/reference-to-video', name: 'Kling 4 Flash Reference', mode: 'P2V', resolutions: ['720p'], defaultResolution: '720p', prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 20 },
@@ -98,7 +102,12 @@ export const slotSchema = slotFields.superRefine((slot, ctx) => {
   } else if (!model.aspectRatios[slot.orientation].includes(slot.aspectRatio ?? '')) fail('aspectRatio', 'Соотношение сторон не соответствует модели и ориентации');
   if (slot.mode === 'V2V') {
     if (slot.demoId) fail('demoId', 'В V2V показывается исходное видео');
-    if (slot.duration !== undefined) fail('duration', 'Длительность V2V определяется исходным видео');
+    if (slot.duration !== undefined) {
+      if (!timing.editableVideoDuration) fail('duration', 'Длительность определяется исходным видео');
+      else if (!Number.isInteger(slot.duration) || slot.duration < timing.minSeconds || slot.duration > timing.maxSeconds) {
+        fail('duration', `Выберите целое число секунд от ${timing.minSeconds} до ${timing.maxSeconds}`);
+      }
+    }
   } else {
     if (slot.videoId) fail('videoId', 'В P2V нет исходного видео');
     if (slot.duration === undefined || slot.duration < timing.minSeconds || slot.duration > timing.maxSeconds || (slot.model !== 'minimax/h3-max/reference-to-video' && !Number.isInteger(slot.duration))) fail('duration', `Длительность: ${timing.minSeconds}–${timing.maxSeconds} с`);

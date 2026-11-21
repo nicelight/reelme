@@ -24,7 +24,7 @@ import { buildModelInput } from './model-input.js';
 import { photoProviderUrl, slotProviderUrl } from './provider-media.js';
 import type { FalTransport } from './fal.js';
 import { InvalidVideo, prepareVideo } from './video.js';
-import { GenerationFailure, generationMessages } from './generation-errors.js';
+import { falHistoryReason, GenerationFailure, generationMessages } from './generation-errors.js';
 import { isTestVideo } from '../../shared/scenarios.js';
 import { testVideoTransport } from './test-video.js';
 
@@ -199,11 +199,12 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
     } catch (error) {
       const code = error instanceof GenerationFailure ? error.code : error instanceof InvalidVideo ? 'INVALID_RESULT' : 'GENERATION_RETRY';
       const rejectedStatus = session.state === 'observing' && (httpStatus(error) ?? 0) >= 400 && (httpStatus(error) ?? 0) < 500 && ![408,429].includes(httpStatus(error)!);
+      const providerDetail = !testVideo && step.startsWith('fal.') ? falHistoryReason(error, options.secret, input.prompt) : {};
       if (templates && (code === 'FAL_REJECTED' || code === 'FAL_FAILED' || rejectedStatus)) {
         const missing = await templates.invalidateMissing(input);
         if (missing && !job.request_id && !job.template_repaired && sessionAvailable(db, id)) {
           db.prepare('UPDATE generation_jobs SET template_repaired=1 WHERE session_id=?').run(id);
-          observe('rejected', 'retry', { code });
+          observe('rejected', 'retry', { code, ...providerDetail });
           step = 'template.cdn';
           observe('repair', 'retry');
           templates.warm(input);
@@ -217,6 +218,7 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
       const event = missingAck ? 'ack_missing' : submitting && context.requestId ? 'ack_not_saved' : 'error';
       observe(event, missingAck ? 'unknown' : terminal ? 'failed' : 'retry', {
         code: errorCode, httpStatus: code === 'RESULT_GONE' ? 410 : httpStatus(error) ?? httpStatus((error as Error | null)?.cause),
+        ...providerDetail,
       });
     }
   }
