@@ -2,6 +2,7 @@
  * Serves the QR saved before ready; older results without a file render it on demand.
  * Polling/media reads never confirm email or open a receive form. Authenticated
  * card-load failures produce one warning per request, without changing session state.
+ * The player caption uses the same access window as its video.
  * Manual hiding belongs to the display alone and survives reloads on every screen. */
 import { createHash } from 'node:crypto';
 import QRCode from 'qrcode';
@@ -17,7 +18,8 @@ import { eventKey } from '../../shared/events.js';
 import { eventDate } from './index.js';
 import { readyCard } from './receive.js';
 import { matchesPrivateCache, sendMedia } from '../scenarios/media.js';
-import { pageDurationOptions, stageLabels, type DisplaySettings, type DisplaySession, type TodayDisplay } from '../../shared/display.js';
+import { pageDurationOptions, stageLabels, type DisplaySettings, type DisplaySession, type TodayDisplay, type ResultVideoDetails } from '../../shared/display.js';
+import { isBillableRequest, type CostReader } from './fal-costs.js';
 import { isTestVideo } from '../../shared/scenarios.js';
 
 interface Row {
@@ -55,7 +57,7 @@ function projection(row: Row): DisplaySession {
     hideAt: row.email_confirmed_at === null ? null : row.email_confirmed_at + 180_000,
     card: row.state === 'ready' ? { photoUrl: `/api/display/${row.id}/photo`, frameUrl: `/api/display/${row.id}/frame`, qrUrl: `/api/display/${row.id}/qr`, videoUrl: `/api/display/${row.id}/video` } : null };
 }
-export function registerDisplay(app: FastifyInstance, db: DB, dataDir: string, origin: string, access: Access, now: () => number) {
+export function registerDisplay(app: FastifyInstance, db: DB, dataDir: string, origin: string, access: Access, now: () => number, costs: CostReader) {
   const settings = () => db.prepare('SELECT page_duration_seconds AS pageDurationSeconds FROM display_settings WHERE id=1').get() as DisplaySettings;
   const settingsSchema = z.object({ pageDurationSeconds: z.union(pageDurationOptions.map(value => z.literal(value))) }).strict();
   app.get('/api/admin/display-settings', { preHandler: access.requireAdmin }, settings);
@@ -81,11 +83,25 @@ export function registerDisplay(app: FastifyInstance, db: DB, dataDir: string, o
     if (!result.changes) throw new HttpError(404, 'NOT_FOUND', 'Результат недоступен на общем экране');
     return reply.code(204).send();
   });
+  const availableVideo = `FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id
+      WHERE ${currentEvent} AND s.id=? AND s.state='ready' AND s.display_hidden=0 AND g.video_path IS NOT NULL`;
+  app.get<{ Params: { id: string } }>('/api/display/:id/video-details', { preHandler: account }, (request): ResultVideoDetails => {
+    const id = request.params.id;
+    const row = db.prepare(`SELECT s.number, s.snapshot, g.request_id, g.cost_usd, COALESCE(g.submitted_at,s.created_at) AS submittedAt
+      ${availableVideo}`).get(eventDate(now()), id) as {
+      number: number; snapshot: string; request_id: string | null; cost_usd: number | null; submittedAt: number;
+    } | undefined;
+    if (!row) throw new HttpError(404, 'NOT_FOUND', 'Результат недоступен на общем экране');
+    const generation = JSON.parse(row.snapshot).generation ?? {};
+    const billable = isBillableRequest(row.request_id, generation.simulateGeneration);
+    if (billable && row.cost_usd === null) costs.refresh([{ id, requestId: row.request_id!, submittedAt: row.submittedAt }]);
+    return { number: row.number, model: generation.model ?? null, testVideo: isTestVideo(generation),
+      costUsd: billable ? row.cost_usd : undefined };
+  });
   app.get<{ Params: { id: string } }>('/api/display/:id/video', { preHandler: account }, (request, reply) => {
     // A card already on the active page is still actionable after its email deadline.
     const file = db.prepare(`SELECT g.video_path AS path,g.video_size AS size,g.width,g.height
-      FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id
-      WHERE ${currentEvent} AND s.id=? AND s.state='ready' AND s.display_hidden=0 AND g.video_path IS NOT NULL`)
+      ${availableVideo}`)
       .get(eventDate(now()), request.params.id) as { path: string; size: number; width: number; height: number } | undefined;
     if (!file) throw new HttpError(404, 'NOT_FOUND', 'Результат недоступен на общем экране');
     return sendMedia(dataDir, { ...file, id: request.params.id, kind: 'video', mime: 'video/mp4' }, request, reply, 'inline', 'Cookie');

@@ -9,7 +9,7 @@ import { test, expect } from './browser-fixture';
 test.use({ capturePort: 0, reducedMotion: 'reduce' });
 const artifacts = process.env.REELME_BROWSER_ARTIFACTS ?? '/tmp/reelme-promo-qa';
 
-test('public promo browses all visible stories and playable previews without capture or account requests', async ({ page, app }) => {
+test('public promo browses all visible stories and playable previews without capture or account requests', async ({ browser, page, app }) => {
   await mkdir(artifacts, { recursive: true });
   const admin = await playwrightRequest.newContext({ baseURL: app.origin, extraHTTPHeaders: { Origin: app.origin } });
   try {
@@ -71,6 +71,27 @@ test('public promo browses all visible stories and playable previews without cap
   await expect(page.locator('.center .story-heading h2')).toHaveText('История номер 13');
   await page.getByRole('button', { name: 'Обновить каталог', exact: true }).click();
   await expect(page.locator('.story')).toHaveCount(13);
+  const renamed = 'История номер 13 на танцполе под звёздным небом';
+  const editor = await browser.newPage();
+  try {
+    await editor.goto(app.origin + '/admin');
+    await editor.getByLabel('Логин').fill('admin');
+    await editor.getByLabel('Пароль', { exact: true }).fill(app.password);
+    await editor.getByRole('button', { name: 'Войти', exact: true }).click();
+    await editor.getByRole('button', { name: /История номер 13/ }).click();
+    await editor.getByLabel('Описание', { exact: true }).fill(renamed);
+    await editor.getByRole('button', { name: 'Сохранить сюжет', exact: true }).click();
+    await expect(editor.getByText('Сюжет сохранён.', { exact: true })).toBeVisible();
+  } finally { await editor.close(); }
+  await page.reload();
+  const heading = page.locator('.center .story-heading h2');
+  await expect(heading).toHaveText(renamed);
+  await page.getByRole('button', { name: 'Предыдущий сюжет', exact: true }).click();
+  const side = page.getByRole('link', { name: `Выбрать сюжет: ${renamed}`, exact: true });
+  await expect(side.getByRole('heading')).toHaveText('История номер');
+  await side.click();
+  await expect(heading).toHaveText(renamed);
+  await page.screenshot({ path: join(artifacts, 'promo-renamed-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('button', { name: 'Выбор доступен в фотобудке' })).toBeDisabled();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

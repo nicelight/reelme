@@ -121,7 +121,7 @@
   if (event.key === 'Escape' && !selected) dismissMenu();
 }} />
 {#snippet actions(item: DisplaySession)}
-  <a href={item.card?.videoUrl} target="_blank" rel="noopener">Посмотреть</a>
+  <a href={`/results?video=${encodeURIComponent(item.id)}`} target="_blank" rel="noopener">Посмотреть</a>
   <button type="button" onclick={() => bigQr(item)}>Большой QR</button>
   <button type="button" class="hide-action" onclick={() => select(item)}>Убрать с экрана</button>
 {/snippet}

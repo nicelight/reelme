@@ -6,12 +6,14 @@
    * validation and persistence. Manual tests call Sessions; camera and generation
    * processing remain outside this editor. Source: docs/slot-setup/matrix.md. */
   import { onMount } from 'svelte';
-  import { models, blankSlot, slotSchema, titleFrom, videoProblem } from '../../shared/scenarios';
+  import { compactStoryTitle } from '../../shared/capture';
+  import { models, blankSlot, slotSchema, videoProblem } from '../../shared/scenarios';
   import type { Media, Slot, SlotInput } from '../../shared/scenarios';
   import { api, ApiError, mediaUrl } from './api';
   import FinishEvent from './FinishEvent.svelte';
   import Archive from './Archive.svelte';
   import Statuses from './Statuses.svelte';
+  import ResultVideo from './results/ResultVideo.svelte';
   import Display from './Display.svelte';
   import MediaField from './MediaField.svelte';
   import TemplateUploadDialog from './TemplateUploadDialog.svelte';
@@ -32,6 +34,7 @@
   let photobooth = $state(false);
   const statusRoute = location.pathname === '/statuses';
   const dedicatedScreen = location.pathname === '/results';
+  const videoId = dedicatedScreen ? new URLSearchParams(location.search).get('video') : null;
   let ready = $state(false);
   let role = $state<'admin' | 'operator' | null>(null);
   const adminRoute = location.pathname === '/admin';
@@ -156,7 +159,7 @@
 </script>
 
 <svelte:window onbeforeunload={beforeUnload} />
-<svelte:head><title>ReelMe — {statusRoute ? 'Статусы видео' : photobooth ? 'Фотобудка' : dedicatedScreen ? 'Экран результатов' : parameters ? 'Параметры' : archive ? 'Архив' : adminWorkspace ? 'Сюжеты' : role ? 'Ваши видео' : 'Вход'}</title></svelte:head>
+<svelte:head><title>ReelMe — {statusRoute ? 'Статусы видео' : photobooth ? 'Фотобудка' : videoId ? 'Просмотр генерации' : dedicatedScreen ? 'Экран результатов' : parameters ? 'Параметры' : archive ? 'Архив' : adminWorkspace ? 'Сюжеты' : role ? 'Ваши видео' : 'Вход'}</title></svelte:head>
 
 <div class:admin-shell={adminWorkspace} data-admin-theme={theme}>
 {#if adminWorkspace}<TemplateUploadDialog {saving} onunauthorized={() => role = null} />{/if}
@@ -188,6 +191,8 @@
   <Login bind:username bind:password {busy} {error} onsubmit={login} />
 {:else if statusRoute}
   <Statuses onunauthorized={() => role = null} />
+{:else if publicScreen && videoId}
+  <ResultVideo id={videoId} onunauthorized={() => role = null} />
 {:else if publicScreen}
   <Display onunauthorized={() => role = null} />
 {:else if adminDenied}
@@ -237,7 +242,7 @@
             <div class="section-heading"><span>01</span><h3>Карточка сюжета</h3></div>
             <MediaField label="Изображение сюжета" kind="image" id={draft.thumbnailId} hint="Рекомендуем вертикальную обложку 2:3, 600 × 900 px (ширина × высота). Главный объект держите в центре: в карточках края изображения обрезаются." onUploaded={media => draft.thumbnailId = media.id} onError={fail} onBusy={uploadBusy} />
             <label for="description">Описание</label><textarea id="description" rows="3" maxlength="5000" bind:value={draft.description} placeholder="Например: Прогулка по ночному Токио" required></textarea>
-            <p class="hint">Название в каталоге гостей — первые три слова описания.{#if draft.description.trim()} <span class="title-preview">«{titleFrom(draft.description)}»</span>{/if}</p>
+            <p class="hint">В раскрытой карточке гости увидят весь текст. В узкой — первые два слова.{#if draft.description.trim()} <span class="title-preview">«{compactStoryTitle(draft.description)}»</span>{/if}</p>
             <label class="checkbox-label"><input type="checkbox" bind:checked={draft.visible} />Отображать клиенту</label>
           </section>
 

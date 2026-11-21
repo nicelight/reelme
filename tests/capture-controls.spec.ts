@@ -53,7 +53,7 @@ test('pause 5/2/1, restart, last retakes, person boundary, pending JPEG and guid
     return route.fulfill({ status: 404 });
   });
   await freeze(page); await installation(page, app.installationKey);
-  await page.getByRole('button', { name: 'Сюжет 1: Два человека по', exact: true }).click();
+  await page.getByRole('button', { name: 'Сюжет 1: Два человека по два кадра', exact: true }).click();
   await page.getByRole('button', { name: 'Выбрать этот сюжет' }).click();
   await expect(page.locator('.pose-guide img')).toHaveJSProperty('naturalWidth', 512);
   await expect(page.locator('.pose-panel .guide-caption')).toHaveText(caption);

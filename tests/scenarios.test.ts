@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { models, slotSchema, titleFrom, videoProblem, type Media } from '../src/shared/scenarios.js';
+import { compactStoryTitle } from '../src/shared/capture.js';
+import { models, slotSchema, videoProblem, type Media } from '../src/shared/scenarios.js';
 
 test('video limits include boundary values and provider file size limits', () => {
   const video: Media = { id: randomUUID(), kind: 'video', mime: 'video/mp4', size: 100, duration: 10, width: 320, height: 240 };
@@ -28,5 +29,6 @@ test('P2V permits optional demo and fractional H3 duration, rejects unexpected p
   assert.equal(slotSchema.safeParse(slot).success, true);
   assert.equal(slotSchema.safeParse({ ...slot, demoId: randomUUID() }).success, true);
   for (const change of [{ duration: 0.91 }, { duration: 15.01 }, { promptExpansionMode: 'enabled' }, { promptExpansionMode: undefined }, { role: 'admin' }, { model: 'unknown' }]) assert.equal(slotSchema.safeParse({ ...slot, ...change }).success, false);
-  assert.equal(titleFrom(slot.description), 'Первые три слова');
+  assert.equal(compactStoryTitle(slot.description), 'Первые три');
+  assert.equal(compactStoryTitle('Танец'), 'Танец');
 });

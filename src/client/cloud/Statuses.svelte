@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api, ApiError } from './api';
+  import { formatUsd, moneyPrecision } from './money';
   import { onMount } from 'svelte';
   import { balanceIntervalMs, type FalBalance, type SessionHistory, type StatusPage } from '../../shared/statuses';
 
@@ -16,7 +17,6 @@
   let detailError = $state('');
   let copied = $state('');
   let copying = $state(false);
-  const usd = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 9 });
   const clock = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Novosibirsk', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const reason = (e: unknown) => e instanceof Error ? e.message : 'Ошибка запроса';
   function denied(e: unknown) {
@@ -25,7 +25,7 @@
   }
   let balance = $state<FalBalance>({ credits: null, error: null });
   const amount = $derived(balance.credits && new Intl.NumberFormat('ru-RU', {
-    style: 'currency', currency: balance.credits.currency, currencyDisplay: 'code',
+    ...moneyPrecision, style: 'currency', currency: balance.credits.currency, currencyDisplay: 'code',
   }).format(balance.credits.amount));
 
   onMount(() => {
@@ -149,7 +149,7 @@
           <span class="num">№ {row.number}{#if !page.eventName && row.eventName}<small>{row.eventName}</small>{/if}</span><span class="when">{clock.format(row.updatedAt)}</span>
           <span class="track" aria-hidden="true"><i style:width={(row.issue ? 100 : Math.min(100,(row.stage+1)*16)) + '%'}></i></span>
           <span class="step">{#if row.issue}<b>{row.issue === 'retry' ? 'Сбой · повторяем' : 'Ошибка'}</b>{row.issue === 'retry' ? ' · ' : ': '}{/if}{row.label}{#if row.mode} · {row.mode}{/if}
-            {#if row.costUsd !== undefined}{' · '}<span title="Стоимость генерации в USD">{row.costUsd === null ? '..$' : usd.format(row.costUsd) + ' $'}</span>{/if}
+            {#if row.costUsd !== undefined}{' · '}<span title="Стоимость генерации в USD">{row.costUsd === null ? '..$' : formatUsd(row.costUsd)}</span>{/if}
           </span>
           <span class="chevron" aria-hidden="true">{opened === row.id ? '−' : '+'}</span>
         </button>

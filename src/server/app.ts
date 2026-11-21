@@ -26,6 +26,7 @@ import { createGenerationWorker, type GenerationOptions } from './sessions/gener
 import { registerReceive, publishReady } from './sessions/receive.js';
 import { registerEvents } from './sessions/events.js';
 import { registerSlotResults } from './sessions/slot-results.js';
+import { createCostReader } from './sessions/fal-costs.js';
 import { registerStatuses } from './sessions/statuses.js';
 import { registerDisplay } from './sessions/display.js';
 import { createEmailWorker, recoverEmail, type EmailOptions, type createSmtpTransport } from './sessions/email.js';
@@ -72,8 +73,10 @@ export async function createApp(config: Config, options: { now?: () => number; l
   registerSessions(app, db, config.dataDir, access, options.now ?? Date.now);
   registerSlotResults(app, db, config.dataDir, access);
   registerProviderMedia(app, db, config.dataDir);
-  registerStatuses(app, db, access, options.now ?? Date.now, config.falBillingKey);
-  registerDisplay(app, db, config.dataDir, config.origin, access, options.now ?? Date.now);
+  const costs = createCostReader(db, config.falBillingKey, status => app.log.warn({ status }, 'Не удалось получить стоимость генерации из fal'), fetch, options.now);
+  app.addHook('onClose', async () => { await costs.idle(); });
+  registerStatuses(app, db, access, options.now ?? Date.now, costs, config.falBillingKey);
+  registerDisplay(app, db, config.dataDir, config.origin, access, options.now ?? Date.now, costs);
   const cleanup = createEventCleanup(db, config.dataDir, app.log, options.now ?? Date.now, { ...options.cleanup, deleteOutput });
   registerEvents(app, db, config.dataDir, access, options.now ?? Date.now, cleanup);
   app.addHook('onReady', async () => { await cleanup.runOnce(); cleanup.start(); });

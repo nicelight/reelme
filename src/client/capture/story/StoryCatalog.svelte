@@ -3,7 +3,7 @@
    * Capture opens after the covers and selected player are ready. Unchanged cards
    * stay mounted during a refresh; previewOnly uses native public media. */
   import { onDestroy, tick, untrack } from 'svelte';
-  import type { CatalogItem } from '../../../shared/capture';
+  import { compactStoryTitle, type CatalogItem } from '../../../shared/capture';
   import ProtectedMedia from '../ProtectedMedia.svelte';
   import { createStoryMedia, storyMediaPath, type StoryMedia } from './media';
   import { ribbonLight } from './motion';
@@ -17,7 +17,6 @@
     'M-80 300 C100 265 220 170 420 145', 'M1150 140 C1370 160 1500 255 1690 370',
     'M-70 860 C130 710 260 820 485 940', 'M1160 960 C1410 710 1450 1000 1690 705',
   ];
-  const title = (item: CatalogItem) => item.description.trim().split(/\s+/).slice(0, 3).join(' ');
   let selected = $state(0);
   let requested = 0;
   let movement = 0;
@@ -165,19 +164,19 @@
             <div class="rim-decoration" aria-hidden="true"><div class="rim-light"><i class="rim-halo"></i><i class="rim-hotspot"></i></div></div>
             <div class="card-surface">
               <div class="center-content" inert={offset !== 0} aria-hidden={offset !== 0}>
-                <div class="story-heading"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 13h23v15H5zM4 8l22-5 2 6-23 5zM10 7l5 5m4-7 5 5M11 18l8 4-8 4z"/></svg><div><h2>{title(item)}</h2></div></div>
+                <div class="story-heading"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 13h23v15H5zM4 8l22-5 2 6-23 5zM10 7l5 5m4-7 5 5M11 18l8 4-8 4z"/></svg><h2>{item.description}</h2></div>
                 <div class="story-preview" class:portrait={item.previewOrientation === 'portrait'}>
                   {#if item.previewId && item.previewOrientation === 'portrait' && (offset === 0 || previousId === item.id)}<div class="preview-backdrop" aria-hidden="true" inert><ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} {installationKey} publicCatalog={previewOnly} prepared={source(item,item.thumbnailId)} /></div>{/if}
                   {#if offset === 0 || previousId === item.id}
                     {#if item.previewId}<ProtectedMedia slotId={item.id} mediaId={item.previewId} {installationKey} publicCatalog={previewOnly} prepared={source(item,item.previewId)} video active={offset === 0}/>
-                    {:else}<ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} {installationKey} publicCatalog={previewOnly} prepared={source(item,item.thumbnailId)} alt={title(item)}/>{/if}
+                    {:else}<ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} {installationKey} publicCatalog={previewOnly} prepared={source(item,item.thumbnailId)} alt={item.description}/>{/if}
                   {/if}
                 </div>
                 <button class="choose" class:preview-only={previewOnly} onclick={() => choose(item)} disabled={previewOnly || busy || transitioning} title={previewOnly ? 'Выбор сюжета доступен в фотобудке' : undefined}>{previewOnly ? 'Выбор доступен в фотобудке' : 'Выбрать этот сюжет'}{#if !previewOnly} <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg>{/if}</button>
               </div>
               <div class="side-button" inert={offset === 0} aria-hidden={offset === 0}>
-                <div class="side-media">{#if visible}<ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} {installationKey} publicCatalog={previewOnly} prepared={source(item,item.thumbnailId)} alt={title(item)}/>{/if}</div>
-                <a class="side-copy" href={`#slot=${encodeURIComponent(item.id)}`} onclick={(event) => { event.preventDefault(); void select(index); }} aria-label={`Выбрать сюжет: ${title(item)}`}><h2>{title(item)}</h2><span class="template"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 4 10 6-10 6z"/></svg>Шаблон</span></a>
+                <div class="side-media">{#if visible}<ProtectedMedia slotId={item.id} mediaId={item.thumbnailId} {installationKey} publicCatalog={previewOnly} prepared={source(item,item.thumbnailId)} alt={item.description}/>{/if}</div>
+                <a class="side-copy" href={`#slot=${encodeURIComponent(item.id)}`} onclick={(event) => { event.preventDefault(); void select(index); }} aria-label={`Выбрать сюжет: ${item.description}`}><h2>{compactStoryTitle(item.description)}</h2><span class="template"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 4 10 6-10 6z"/></svg>Шаблон</span></a>
               </div>
             </div>
           </article>
@@ -186,7 +185,7 @@
       </section>
       <div class="catalog-controls">
         {#if !previewOnly}<button class="catalog-back" onclick={onback}>← Назад в каталог</button>{/if}
-        <nav class="dots" aria-label="Выбор сюжета">{#each items as item, index}<button class:active={selected === index} aria-label={`Сюжет ${index + 1}: ${title(item)}`} aria-current={selected === index ? 'true' : undefined} onclick={() => select(index)}></button>{/each}</nav>
+        <nav class="dots" aria-label="Выбор сюжета">{#each items as item, index}<button class:active={selected === index} aria-label={`Сюжет ${index + 1}: ${item.description}`} aria-current={selected === index ? 'true' : undefined} onclick={() => select(index)}></button>{/each}</nav>
         <span class="catalog-count" aria-live="polite">{selected + 1} / {items.length}</span>
         <button class="catalog-refresh" onclick={onrefresh}>Обновить каталог</button>
       </div>
@@ -220,7 +219,9 @@
   .choose:disabled{cursor:default}
   .choose.preview-only:disabled{background:#352030;border-color:#785367;color:#dcb9cc;box-shadow:none}
   .center-content{height:32.7vw;display:flex;flex-direction:column;gap:1vw}
-  .story-heading{height:auto;flex:none;min-height:2.7vw}
+  .story-heading{height:auto;flex:none;min-height:2.7vw;max-height:40%;overflow-y:auto}
+  .story h2{overflow-wrap:anywhere}
+  .side-copy h2{overflow-y:auto}
   .story-preview{height:auto;flex:1;min-height:0}
   .choose{flex:none;min-height:3.6vw}
   .preview-backdrop{position:absolute;inset:-20px;filter:blur(18px);opacity:.4;pointer-events:none}

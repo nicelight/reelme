@@ -132,7 +132,6 @@ export interface LastSlotVideo {
   sessionId: string; videoUrl: string; submittedAt: number | null; readyAt: number | null; elapsedMs: number | null;
 }
 export interface Media { id: string; kind: 'image' | 'video'; mime: string; size: number; duration?: number; width: number; height: number }
-export const titleFrom = (description: string) => description.trim().split(/\s+/u).slice(0, 3).join(' ');
 export function blankSlot(mode: Mode = 'V2V'): SlotInput {
   const model = models.find(m => m.mode === mode)!;
   return { ...defaultSlotSetup(model.id, mode), description: '', visible: true, simulateGeneration: false, thumbnailId: '', mode, model: model.id, referenceIds: [], resolution: model.defaultResolution, ...(mode === 'P2V' ? { duration: 10, prompt: '' } : { recastShotsConfirmed: false }) };

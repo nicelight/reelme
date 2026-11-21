@@ -14,6 +14,9 @@ export interface CatalogItem {
   previewId?: string;
   previewOrientation?: 'portrait' | 'landscape';
 }
+export function compactStoryTitle(description: string): string {
+  return description.trim().split(/\s+/u, 2).join(' ');
+}
 export interface CatalogPage {
   items: CatalogItem[];
   page: number;

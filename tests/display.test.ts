@@ -25,7 +25,9 @@ test('operator display: six stages, explicit errors, stable order, private media
   const get = (url = '/api/display/today') => f.app.inject({ url, headers: { cookie } });
   const view = async () => (await get()).json<TodayDisplay>();
   const card = (await view()).sessions[0].card!;
-  for (const url of ['/api/display/today', card.photoUrl, card.frameUrl, card.qrUrl, card.videoUrl]) {
+  const detailsUrl = `/api/display/${first.id}/video-details`;
+  assert.deepEqual((await get(detailsUrl)).json(), {number: 1, model: 'minimax/h3-max/recast', testVideo: false, costUsd: null});
+  for (const url of ['/api/display/today', detailsUrl, card.photoUrl, card.frameUrl, card.qrUrl, card.videoUrl]) {
     assert.equal((await f.app.inject(url)).statusCode, 401, url);
     assert.equal((await f.app.inject({ url, headers: { cookie: admin } })).statusCode, 200, url);
     assert.equal((await f.app.inject({ url, headers: { authorization: `Bearer ${'a'.repeat(43)}` } })).statusCode, 403, url);
@@ -123,7 +125,7 @@ test('manual hide is shared and persistent, keeps the guest links and the archiv
   const hidden = await view();
   assert.deepEqual(hidden.sessions, []);
   assert.deepEqual(hidden.hiddenIds, [seed.id]);
-  for (const url of Object.values(card)) assert.equal((await f.app.inject({ url, headers })).statusCode, 404);
+  for (const url of [...Object.values(card), `/api/display/${seed.id}/video-details`]) assert.equal((await f.app.inject({ url, headers })).statusCode, 404);
   assert.equal((await f.app.inject(`/api/receive/${delivery.receive_token}`)).statusCode, 200);
   assert.deepEqual((await f.app.inject(`/download/${delivery.download_token}`)).rawPayload, bytes);
   f.advance(86_400_000);

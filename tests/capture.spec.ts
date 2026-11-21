@@ -70,7 +70,7 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   transfers.length = 0;
   await page.reload();
   await expect(page.locator('.story')).toHaveCount(13);
-  await expect(page.locator('.story h2').first()).toHaveText('История номер 1');
+  await expect(page.locator('.story h2').first()).toHaveText(slots[0].description);
   await expect(page.locator('.center video')).toBeVisible();
   expect(await page.locator('.center video').evaluate((video: HTMLVideoElement) => video.readyState)).toBeGreaterThanOrEqual(3);
   await expect.poll(() => transfers.length).toBe(15);
@@ -128,21 +128,21 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   await coldPage.close();
 
   await expect(page.locator('.story img').first()).toHaveJSProperty('naturalWidth', 512);
-  await expect(page.getByRole('link', { name: 'Выбрать сюжет: История номер 14', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: `Выбрать сюжет: ${slots[13].description}`, exact: true })).toHaveCount(0);
   await page.screenshot({ path: `${artifacts}/browser-catalog.png`, fullPage: true });
   // The transport still pages at 12; the visitor's sequence includes all 13.
   await expect(page.getByRole('navigation', { name: 'Выбор сюжета' }).getByRole('button')).toHaveCount(13);
-  await page.getByRole('button', { name: 'Сюжет 13: История номер 13', exact: true }).click();
-  await expect(page.locator('.center .story-heading h2')).toHaveText('История номер 13');
+  await page.getByRole('button', { name: `Сюжет 13: ${slots[12].description}`, exact: true }).click();
+  await expect(page.locator('.center .story-heading h2')).toHaveText(slots[12].description);
   await expect(page.locator('.center video')).toHaveCount(0);
   await expect(page.locator('.center .qualities')).toHaveCount(0);
   await expect(page).toHaveURL(new RegExp('#slot=' + slots[12].id));
   await page.getByRole('button', { name: '← Назад в каталог' }).click();
   await expect(page.locator('.story')).toHaveCount(13);
   await expect(page.locator('.pagination')).toHaveCount(0);
-  await expect(page.locator('.center .story-heading h2')).toHaveText('История номер 13');
+  await expect(page.locator('.center .story-heading h2')).toHaveText(slots[12].description);
   await page.reload();
-  await expect(page.locator('.center .story-heading h2')).toHaveText('История номер 13');
+  await expect(page.locator('.center .story-heading h2')).toHaveText(slots[12].description);
   await page.getByRole('button', { name: 'Сюжет 2: История номер 2', exact: true }).click();
   await expect(page.locator('.center video')).toHaveAttribute('src', /^blob:/);
   await expect.poll(() => page.locator('.center video').evaluate((video: HTMLVideoElement) => video.readyState)).toBeGreaterThanOrEqual(2);
@@ -157,8 +157,8 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   const portraitCard = await page.locator('.story.center').boundingBox();
   await page.screenshot({ path: `${artifacts}/browser-portrait.png`, fullPage: true });
   await page.getByRole('button', { name: '← Назад в каталог' }).click();
-  await page.getByRole('button', { name: 'Сюжет 1: История номер 1', exact: true }).click();
-  await expect(page.locator('.center .story-heading h2')).toHaveText('История номер 1');
+  await page.getByRole('button', { name: `Сюжет 1: ${slots[0].description}`, exact: true }).click();
+  await expect(page.locator('.center .story-heading h2')).toHaveText(slots[0].description);
   await expect.poll(async () => Math.round((await page.locator('.story.center').boundingBox())!.height)).toBe(Math.round(portraitCard!.height));
   await expect(page.locator('.center video')).toHaveAttribute('src', /^blob:/);
   await expect.poll(() => page.locator('.center video').evaluate((video: HTMLVideoElement) => video.readyState)).toBeGreaterThanOrEqual(2);
@@ -199,7 +199,7 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   // Another visitor starts a distinct session for the same story and pose.
   await page.getByRole('button', { name: 'Выбрать другой сценарий' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Выбрать сценарий' }).click();
-  await page.getByRole('button', { name: 'Сюжет 1: История номер 1', exact: true }).click();
+  await page.getByRole('button', { name: `Сюжет 1: ${slots[0].description}`, exact: true }).click();
   transfers.length = 0;
   const nextStart = page.waitForResponse(response => response.url().endsWith('/api/capture/sessions') && response.status() === 201);
   await page.getByRole('button', { name: 'Выбрать этот сюжет' }).click();
@@ -238,7 +238,7 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   // A staff visibility change invalidates the selected route on focus refresh.
   await page.evaluate(() => sessionStorage.removeItem('reelme.captureStart'));
   await page.goto(local + '#slot=' + slots[12].id); await page.reload();
-  await expect(page.locator('.center .story-heading h2')).toHaveText('История номер 13');
+  await expect(page.locator('.center .story-heading h2')).toHaveText(slots[12].description);
   const staff = await apiRequest.newContext({ baseURL: app.origin, extraHTTPHeaders: { Origin: app.origin } });
   await staff.post('/api/auth/login', { data: { username: 'admin', password: app.password } });
   const hide = async (index: number) => {
@@ -249,7 +249,7 @@ test('visitor catalog, protected media, durable start and lost acknowledgement r
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(page.locator('.story')).toHaveCount(12);
   await expect(page).toHaveURL(/#catalog$/);
-  await expect(page.locator('.center .story-heading h2')).not.toHaveText('История номер 13');
+  await expect(page.locator('.center .story-heading h2')).not.toHaveText(slots[12].description);
   for (let index = 3; index < 12; index++) await hide(index);
   for (const count of [3, 2, 1, 0]) {
     await page.getByRole('button', { name: 'Обновить каталог', exact: true }).click();

@@ -100,7 +100,24 @@ test('admin keeps editor access beside a reloadable results popup; operator sees
     const newTab = operator.waitForEvent('page');
     await card.getByRole('link', { name: 'Посмотреть' }).click();
     const video = await newTab;
-    await expect(video).toHaveURL(`${app.origin}/api/display/${seed.id}/video`);
+    await expect(video).toHaveURL(`${app.origin}/results?video=${seed.id}`);
+    watch(video);
+    await expect(video.getByRole('heading', { name: /Генерация.*001/ })).toBeVisible();
+    await expect(video.getByText('MiniMax H3 Max Recast', { exact: true })).toBeVisible();
+    await expect(video.getByText('Уточняется', { exact: true })).toBeVisible();
+    const player = video.locator('video');
+    await player.evaluate(async node => { node.muted = true; await node.play(); });
+    await expect.poll(() => player.evaluate(node => node.currentTime)).toBeGreaterThan(0);
+    const billing = openDatabase(app.dataDir);
+    try { billing.prepare('UPDATE generation_jobs SET cost_usd=4.53129 WHERE session_id=?').run(seed.id); }
+    finally { billing.close(); }
+    await expect(video.getByText('4,53 $', { exact: true })).toBeVisible({ timeout: 15_000 });
+    await video.screenshot({ path: join(artifacts, 'player-desktop.png') });
+    await video.setViewportSize({ width: 390, height: 844 });
+    await video.reload();
+    await expect(video.getByText('4,53 $', { exact: true })).toBeVisible();
+    expect(await video.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await video.screenshot({ path: join(artifacts, 'player-mobile.png') });
     await video.close();
     await showActions();
     await card.getByRole('button', { name: 'Большой QR' }).click();

@@ -2,6 +2,12 @@
  * Only a matching billed event can set a job's previously unknown USD amount. */
 import type { DB } from '../db.js';
 
+export const requestIdPattern = /^[a-zA-Z0-9_.:-]{1,160}$/;
+export function isBillableRequest(id: string | null, simulated: boolean | undefined): id is string {
+  return !!id && requestIdPattern.test(id) && !simulated && !id.startsWith('test-video:');
+}
+export type CostReader = ReturnType<typeof createCostReader>;
+
 interface PendingCost { id: string; requestId: string; submittedAt: number }
 const day = 86_400_000;
 const retryInterval = 60_000;

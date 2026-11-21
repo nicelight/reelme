@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { Access } from '../access/index.js';
 import type { DB } from '../db.js';
 import { HttpError } from '../errors.js';
-import { createCostReader } from './fal-costs.js';
+import { isBillableRequest, requestIdPattern, type CostReader } from './fal-costs.js';
 import { createBalanceReader } from './fal-balance.js';
 import { eventDate } from './index.js';
 import { captureHeartbeatTimeoutMs } from '../../shared/capture.js';
@@ -22,8 +22,6 @@ interface Row {
   page_seen_at: number | null; page_offline: number;
   photos: number; cost_usd: number | null;
 }
-
-const requestIdPattern = /^[a-zA-Z0-9_.:-]{1,160}$/;
 
 const steps: Record<string, string> = {
   'capture.start': 'Присвоение номера', 'capture.photo': 'Приём фотографии', 'capture.finalize': 'Завершение приёма фото',
@@ -114,8 +112,7 @@ function status(row: Row, latest?: EntryRow): SessionStatus {
   const inputs = snapshot.generation ?? {};
   const mode = isTestVideo(inputs) ? 'Тестовое видео' : inputs.simulateGeneration ? 'Эмуляция' :
     snapshot.testPhotoId || snapshot.testPhotoIds ? 'Ручной тест' : '';
-  const billable = row.request_id && requestIdPattern.test(row.request_id) &&
-    !inputs.simulateGeneration && !row.request_id.startsWith('test-video:');
+  const billable = isBillableRequest(row.request_id, inputs.simulateGeneration);
   const ready = row.state === 'ready';
   const stage = ready ? row.email_state === 'sent' ? 6 : row.opened_at !== null ? 5 : 4 :
     ({ submit_pending: 1, observing: 2, preparing: 3, simulated: 4 }[row.state] ?? 0);
@@ -145,13 +142,11 @@ function status(row: Row, latest?: EntryRow): SessionStatus {
     updatedAt: Math.max(row.created_at, contactAt, latest?.last_at ?? 0, row.ready_at ?? 0, row.opened_at ?? 0, row.sent_at ?? 0, row.submitted_at ?? 0) };
 }
 
-export function registerStatuses(app: FastifyInstance, db: DB, access: Access, now: () => number, billingKey?: string) {
+export function registerStatuses(app: FastifyInstance, db: DB, access: Access, now: () => number, costs: CostReader, billingKey?: string) {
   async function account(request: FastifyRequest, reply: FastifyReply) {
     const role = access.context(request, reply);
     if (role !== 'admin' && role !== 'operator') throw new HttpError(403, 'FORBIDDEN', 'Нужен аккаунт сотрудника');
   }
-  const costs = createCostReader(db, billingKey, status => app.log.warn({ status }, 'Не удалось получить стоимость генерации из fal'), fetch, now);
-  app.addHook('onClose', async () => { await costs.idle(); });
   const readBalance = createBalanceReader(billingKey);
   app.get('/api/statuses/fal-balance', { preHandler: account }, () => readBalance());
   let latestQuery: ReturnType<typeof db.prepare<[string], EntryRow>>;
