@@ -70,7 +70,8 @@ test('production results: admin timing, real preload/QR, first fill and stable p
     await expect(page.locator('.card')).toHaveCount(9);
     const ids = () => page.locator('.card').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-session')));
     expect(new Set(await ids()).size).toBe(9);
-    await expect(page.locator('.card button, .card .stage-bar')).toHaveCount(0);
+    await expect(page.locator('.card .stage-bar')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Убрать с экрана' })).toHaveCount(0);
     const first = page.locator('.card[data-session="1"]');
     const qrPng = await sharp(await first.locator('.qr').screenshot()).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     const decoded = jsQR(new Uint8ClampedArray(qrPng.data), qrPng.info.width, qrPng.info.height)?.data;

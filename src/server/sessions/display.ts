@@ -1,7 +1,8 @@
 /** Admin/operator projection of today's visible sessions and private media.
  * Serves the QR saved before ready; older results without a file render it on demand.
  * Polling/media reads never confirm email or open a receive form. Authenticated
- * card-load failures produce one warning per request, without changing session state. */
+ * card-load failures produce one warning per request, without changing session state.
+ * Manual hiding belongs to the display alone and survives reloads on every screen. */
 import { createHash } from 'node:crypto';
 import QRCode from 'qrcode';
 import { generationMessages } from './generation-errors.js';
@@ -12,6 +13,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
 import { HttpError } from '../errors.js';
+import { eventKey } from '../../shared/events.js';
 import { eventDate } from './index.js';
 import { readyCard } from './receive.js';
 import { matchesPrivateCache, sendMedia } from '../scenarios/media.js';
@@ -22,9 +24,10 @@ interface Row {
   id: string; number: number; state: string; snapshot: string; error_code: string | null; email: string | null;
   email_state: string | null; opened_at: number | null; email_confirmed_at: number | null; ready_at: number | null;
 }
+const currentEvent = 's.event_date=? AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.event_no=s.event_no AND e.deleting=0 AND e.closed_at IS NULL)';
 const selection = `SELECT s.id,s.number,s.state,s.snapshot,g.error_code,g.ready_at,d.email,d.email_state,d.opened_at,d.email_confirmed_at
   FROM capture_sessions s LEFT JOIN session_delivery d ON d.session_id=s.id LEFT JOIN generation_jobs g ON g.session_id=s.id
-  WHERE s.event_date=? AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.deleting=0) AND (d.email_confirmed_at IS NULL OR d.email_confirmed_at+180000>?)`;
+  WHERE ${currentEvent} AND s.display_hidden=0 AND (d.email_confirmed_at IS NULL OR d.email_confirmed_at+180000>?)`;
 // Match the PRD's local-prefix***@***.suffix presentation, bounding long names.
 export function maskEmail(email: string) {
   const [name, domain] = email.split('@');
@@ -50,7 +53,7 @@ function projection(row: Row): DisplaySession {
     error: row.state === 'failed' ? failure
       : row.email_state === 'failed' ? 'Письмо не подтверждено. Откройте форму и повторите отправку.' : null,
     hideAt: row.email_confirmed_at === null ? null : row.email_confirmed_at + 180_000,
-    card: row.state === 'ready' ? { photoUrl: `/api/display/${row.id}/photo`, frameUrl: `/api/display/${row.id}/frame`, qrUrl: `/api/display/${row.id}/qr` } : null };
+    card: row.state === 'ready' ? { photoUrl: `/api/display/${row.id}/photo`, frameUrl: `/api/display/${row.id}/frame`, qrUrl: `/api/display/${row.id}/qr`, videoUrl: `/api/display/${row.id}/video` } : null };
 }
 export function registerDisplay(app: FastifyInstance, db: DB, dataDir: string, origin: string, access: Access, now: () => number) {
   const settings = () => db.prepare('SELECT page_duration_seconds AS pageDurationSeconds FROM display_settings WHERE id=1').get() as DisplaySettings;
@@ -68,7 +71,24 @@ export function registerDisplay(app: FastifyInstance, db: DB, dataDir: string, o
   app.get('/api/display/today', { preHandler: account }, (): TodayDisplay => {
     const time = now(); const date = eventDate(time);
     const rows = db.prepare(`${selection} ORDER BY s.number,s.id`).all(date, time) as Row[];
-    return { date, serverNow: time, ...settings(), sessions: rows.map(projection) };
+    const hidden = db.prepare(`SELECT s.id FROM capture_sessions s WHERE ${currentEvent} AND s.display_hidden=1`).all(date) as { id: string }[];
+    const current = db.prepare('SELECT event_no FROM events WHERE date=? AND closed_at IS NULL AND deleting=0').get(date) as {event_no: number} | undefined;
+    return { date, eventKey: current ? eventKey(date,current.event_no) : null, serverNow: time, ...settings(), sessions: rows.map(projection), hiddenIds: hidden.map(row => row.id) };
+  });
+  app.post<{ Params: { id: string } }>('/api/display/:id/hide', { preHandler: [access.requireOrigin, account] }, (request, reply) => {
+    const result = db.prepare(`UPDATE capture_sessions AS s SET display_hidden=1 WHERE ${currentEvent} AND s.id=? AND s.state='ready'`)
+      .run(eventDate(now()), request.params.id);
+    if (!result.changes) throw new HttpError(404, 'NOT_FOUND', 'Результат недоступен на общем экране');
+    return reply.code(204).send();
+  });
+  app.get<{ Params: { id: string } }>('/api/display/:id/video', { preHandler: account }, (request, reply) => {
+    // A card already on the active page is still actionable after its email deadline.
+    const file = db.prepare(`SELECT g.video_path AS path,g.video_size AS size,g.width,g.height
+      FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id
+      WHERE ${currentEvent} AND s.id=? AND s.state='ready' AND s.display_hidden=0 AND g.video_path IS NOT NULL`)
+      .get(eventDate(now()), request.params.id) as { path: string; size: number; width: number; height: number } | undefined;
+    if (!file) throw new HttpError(404, 'NOT_FOUND', 'Результат недоступен на общем экране');
+    return sendMedia(dataDir, { ...file, id: request.params.id, kind: 'video', mime: 'video/mp4' }, request, reply, 'inline', 'Cookie');
   });
   const loadFailure = z.object({ attempts: z.literal(4), reason: z.enum(['timeout', 'image']) }).strict();
   app.post<{ Params: { id: string } }>('/api/display/:id/load-failure', { preHandler: [access.requireOrigin, account] }, (request, reply) => {

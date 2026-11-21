@@ -1,0 +1,46 @@
+{
+  "id": "TASK-039-T2-FT-005-W36",
+  "title": "Завершать мероприятие и начинать следующее в тот же день",
+  "status": "in_progress",
+  "wave": "W36",
+  "tier": "T2",
+  "feature": "FT-005",
+  "reqs": [
+    "REQ-014",
+    "REQ-018"
+  ],
+  "depends_on": [
+    "TASK-025-T2-FT-005-W22"
+  ],
+  "source_artifacts": [
+    ".memory-bank/features/FT-005-event-archive.md#ft-005-ac-005"
+  ],
+  "normative_inputs": [
+    ".memory-bank/domains/core-domain.md",
+    ".memory-bank/contracts/http-api.md"
+  ],
+  "constraints": [
+    "Сквозная нумерация посетителей по дню Новосибирска."
+  ],
+  "invariants": [
+    "После завершения обработка сессий, публичные ссылки и сохранённые материалы принадлежат исходному мероприятию."
+  ],
+  "verification_targets": [
+    "Подтверждение по идентификатору, новый старт, текущий экран и архив за тот же день, независимое удаление после полуночи."
+  ],
+  "touched_files": [
+    "src/server/db.ts",
+    "src/server/sessions/index.ts",
+    "src/server/sessions/events.ts",
+    "src/client/cloud/FinishEvent.svelte",
+    "src/client/cloud/Archive.svelte"
+  ],
+  "docs": [
+    "docs/MANUAL.md"
+  ],
+  "evidence_required": [
+    "Проверка перехода в браузере и миграции SQLite."
+  ],
+  "gates": [],
+  "verify": []
+}

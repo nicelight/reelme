@@ -2,20 +2,21 @@
 # Run by release.sh under the production deployment lock.
 set -euo pipefail
 umask 077
-release=${1:?}
-commit=${2:?}
-checksum=${3:?}
-dir="/srv/reelme/releases/$release"
+stage=${1:?}
+release=${2:?}
+commit=${3:?}
+checksum=${4:?}
+log_dir="/srv/reelme/releases/$release"
 backup="/var/backups/reelme/before-$release"
 origin=https://reelme.natureonzoom.win
-cd "$dir"
+cd "$stage"
 echo "$checksum  source.tar.gz" | sha256sum -c -
 mkdir src
 tar -xzf source.tar.gz -C src
 cd /srv/reelme
 docker compose config --quiet
 # Production compose or infrastructure changes require their own rollout.
-cmp compose.yaml "$dir/src/deploy/compose.yaml"
+cmp compose.yaml "$stage/src/deploy/compose.yaml"
 container=$(docker compose ps -q app)
 previous=$(docker inspect "$container" --format '{{.Config.Image}}')
 running_commit=$(docker inspect "$container" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')
@@ -43,7 +44,8 @@ if [[ "$running_commit" = "$commit" && "$(docker inspect "$container" --format '
 fi
 
 echo "Собираем reelme:$release"
-docker build --label "org.opencontainers.image.revision=$commit" -t "reelme:$release" "$dir/src" > "$dir/build.log" 2>&1 || { tail -40 "$dir/build.log" >&2; exit 1; }
+mkdir -m 0700 "$log_dir"
+docker build --label "org.opencontainers.image.revision=$commit" -t "reelme:$release" "$stage/src" > "$log_dir/build.log" 2>&1 || { tail -40 "$log_dir/build.log" >&2; exit 1; }
 python3 - <<'PY'
 import sqlite3
 db = sqlite3.connect('file:/srv/reelme-data/reelme.sqlite?mode=ro', uri=True)

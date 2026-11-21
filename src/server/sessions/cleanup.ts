@@ -1,5 +1,5 @@
 /** Module contract: archive, event preparation and retention share one serial
- * deletion per date. Persist confirmed dates before I/O so startup resumes them. Own
+ * deletion per event. Persist confirmed dates before I/O so startup resumes them. Own
  * session directories and records are removed; Scenarios owns pruning materials.
  * Test-video results are local only and never enter fal deletion. fal errors are
  * logged without URLs/secrets and never prevent local cleanup. */
@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 import type { FastifyBaseLogger } from 'fastify';
 import type { DB } from '../db.js';
-import type { EventPreparation, PreparationProgress } from '../../shared/events.js';
+import { eventKey, type EventPreparation, type PreparationProgress } from '../../shared/events.js';
 import { HttpError } from '../errors.js';
 import { eventDate } from './index.js';
 import { materialIds, removeUnusedMaterials } from '../scenarios/cleanup.js';
@@ -32,39 +32,40 @@ export function createEventCleanup(db: DB, dataDir: string, log: FastifyBaseLogg
   const running = new Map<string, Promise<number>>();
   let tail = Promise.resolve();
   let preparation: PreparationProgress | null = null;
-  async function clean(date: string) {
-    const sessions = db.prepare('SELECT id,snapshot FROM capture_sessions WHERE event_date=?').all(date) as { id: string; snapshot: string }[];
+  async function clean(date: string, eventNo: number) {
+    const sessions = db.prepare('SELECT id,snapshot FROM capture_sessions WHERE event_date=? AND event_no=?').all(date,eventNo) as { id: string; snapshot: string }[];
     const outputs = db.prepare(`SELECT DISTINCT g.result_url FROM generation_jobs g JOIN capture_sessions s ON s.id=g.session_id
-      WHERE s.event_date=? AND g.result_url IS NOT NULL AND COALESCE(json_extract(s.snapshot,'$.generation.simulateGeneration'),0)=0`).all(date) as { result_url: string }[];
+      WHERE s.event_date=? AND s.event_no=? AND g.result_url IS NOT NULL AND COALESCE(json_extract(s.snapshot,'$.generation.simulateGeneration'),0)=0`).all(date,eventNo) as { result_url: string }[];
     let remoteErrors = 0;
     for (const output of outputs) {
       if (!await deleteKnownOutput(output.result_url, log, options.deleteOutput)) remoteErrors++;
     }
     for (const session of sessions) await rm(join(dataDir, 'media', 'sessions', session.id), { recursive: true, force: true });
-    const discardedUrls = removeUnusedMaterials(db, dataDir, sessions.flatMap(s => materialIds(JSON.parse(s.snapshot))), date);
+    const discardedUrls = removeUnusedMaterials(db, dataDir, sessions.flatMap(s => materialIds(JSON.parse(s.snapshot))), date, eventNo);
     db.transaction(() => {
-      db.prepare('DELETE FROM capture_sessions WHERE event_date=?').run(date);
-      db.prepare('DELETE FROM events WHERE date=? AND deleting=1').run(date);
+      db.prepare('DELETE FROM capture_sessions WHERE event_date=? AND event_no=?').run(date,eventNo);
+      db.prepare('DELETE FROM events WHERE date=? AND event_no=? AND deleting=1').run(date,eventNo);
     }).immediate();
     for (const url of discardedUrls) {
       if (!await deleteKnownOutput(url, log, options.deleteOutput)) remoteErrors++;
     }
     return remoteErrors;
   }
-  function remove(date: string) {
-    const existing = running.get(date);
+  function remove(date: string, eventNo = 1) {
+    const key = eventKey(date, eventNo);
+    const existing = running.get(key);
     if (existing) return existing;
-    if (!db.prepare('UPDATE events SET deleting=1 WHERE date=?').run(date).changes) return Promise.resolve(0);
-    const promise = tail.then(() => setImmediate()).then(() => clean(date)).finally(() => running.delete(date));
+    if (!db.prepare('UPDATE events SET deleting=1 WHERE date=? AND event_no=?').run(date,eventNo).changes) return Promise.resolve(0);
+    const promise = tail.then(() => setImmediate()).then(() => clean(date,eventNo)).finally(() => running.delete(key));
     tail = promise.then(() => {}, () => {});
-    running.set(date, promise);
+    running.set(key, promise);
     return promise;
   }
   function cutoff(advance = 0) { return shiftDate(eventDate(now()), advance - retentionDays); }
-  function cleanDates(rows: { date: string }[], progress?: PreparationProgress) {
-    return Promise.all(rows.map(async ({ date }) => {
+  function cleanDates(rows: { date: string; event_no: number }[], progress?: PreparationProgress) {
+    return Promise.all(rows.map(async ({ date, event_no }) => {
       try {
-        const remoteErrors = await remove(date);
+        const remoteErrors = await remove(date,event_no);
         if (progress) { progress.deleted++; progress.remoteErrors += remoteErrors; }
       } catch {
         log.error({ code: 'EVENT_CLEANUP_FAILED', date }, 'Очистка мероприятия продолжится при следующей проверке');
@@ -75,7 +76,7 @@ export function createEventCleanup(db: DB, dataDir: string, log: FastifyBaseLogg
   }
   async function pass() {
     const boundary = cutoff();
-    const rows = db.prepare('SELECT date FROM events WHERE deleting=1 OR date<? ORDER BY date').all(boundary) as { date: string }[];
+    const rows = db.prepare('SELECT date,event_no FROM events WHERE deleting=1 OR date<? ORDER BY date').all(boundary) as { date: string; event_no: number }[];
     await cleanDates(rows);
   }
   function preview(boundary = cutoff(3)): EventPreparation {
@@ -88,7 +89,7 @@ export function createEventCleanup(db: DB, dataDir: string, log: FastifyBaseLogg
     if (preparation?.running) return view;
     if (through !== view.through) throw new HttpError(409, 'CONFIRM_DATE', 'Дата очистки изменилась. Нажмите «Подготовка к мероприятию» ещё раз.');
     if (!view.eligibleCount) return view;
-    const rows = db.prepare('SELECT date FROM events WHERE date<? ORDER BY date').all(boundary) as { date: string }[];
+    const rows = db.prepare('SELECT date,event_no FROM events WHERE date<? ORDER BY date').all(boundary) as { date: string; event_no: number }[];
     const progress: PreparationProgress = { running: true, total: rows.length, deleted: 0, failed: 0, remoteErrors: 0 };
     preparation = progress;
     void cleanDates(rows, progress);

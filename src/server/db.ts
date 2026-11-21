@@ -119,21 +119,56 @@ export function openDatabase(dataDir: string) {
     db.exec(`CREATE TABLE IF NOT EXISTS event_name_counter (
       id INTEGER PRIMARY KEY CHECK(id=1), next_number INTEGER NOT NULL CHECK(next_number>=1)
     ); INSERT OR IGNORE INTO event_name_counter(id,next_number) VALUES(1,1);`);
-    // Existing ordinary capture has already begun: never ask for its event retroactively.
-    // Admin-only test days remain available for setup before the first visitor.
-    const unnamed = db.prepare('SELECT date FROM events WHERE name IS NULL ORDER BY date').all() as { date: string }[];
-    for (const { date } of unnamed) {
-      const { number } = db.prepare('UPDATE event_name_counter SET next_number=next_number+1 WHERE id=1 RETURNING next_number-1 AS number').get() as { number: number };
-      db.prepare(`UPDATE events SET name=?,setup_complete=EXISTS (
-        SELECT 1 FROM capture_sessions s WHERE s.event_date=events.date
-          AND json_type(s.snapshot,'$.testPhotoId') IS NULL AND json_type(s.snapshot,'$.testPhotoIds') IS NULL
-      ) WHERE date=?`).run(`Session_${number}`, date);
-    }
   }).immediate();
   // Older sessions have no observation of page contact.
   if (!db.prepare("SELECT 1 FROM pragma_table_info('capture_sessions') WHERE name='page_seen_at'").get()) {
     db.exec('ALTER TABLE capture_sessions ADD COLUMN page_seen_at INTEGER');
   }
+  if (!db.prepare("SELECT 1 FROM pragma_table_info('capture_sessions') WHERE name='display_hidden'").get()) {
+    db.exec('ALTER TABLE capture_sessions ADD COLUMN display_hidden INTEGER NOT NULL DEFAULT 0 CHECK(display_hidden IN (0,1))');
+  }
+  // Keep the calendar-day number unique while allowing independently closed events on that date.
+  if (!eventColumns.has('event_no')) {
+    db.pragma('foreign_keys = OFF');
+    try {
+      db.transaction(() => {
+        if (db.prepare("SELECT 1 FROM pragma_table_info('events') WHERE name='event_no'").get()) return;
+        db.exec(`CREATE TABLE events_next (
+          date TEXT NOT NULL, event_no INTEGER NOT NULL DEFAULT 1 CHECK(event_no>=1),
+          next_number INTEGER NOT NULL CHECK(next_number>=1), name TEXT, participant_range TEXT,
+          location TEXT NOT NULL DEFAULT 'Новосибирск', setup_complete INTEGER NOT NULL DEFAULT 0 CHECK(setup_complete IN (0,1)),
+          deleting INTEGER NOT NULL DEFAULT 0 CHECK(deleting IN (0,1)), closed_at INTEGER, PRIMARY KEY(date,event_no)
+        );
+        INSERT INTO events_next(date,next_number,name,participant_range,location,setup_complete,deleting)
+          SELECT date,next_number,name,participant_range,location,setup_complete,deleting FROM events;
+        CREATE TABLE capture_sessions_next (
+          id TEXT PRIMARY KEY, start_request_id TEXT UNIQUE NOT NULL,
+          event_date TEXT NOT NULL, event_no INTEGER NOT NULL DEFAULT 1, number INTEGER NOT NULL,
+          slot_id TEXT NOT NULL REFERENCES slots(id), snapshot TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'capturing',
+          created_at INTEGER NOT NULL, page_seen_at INTEGER, display_hidden INTEGER NOT NULL DEFAULT 0 CHECK(display_hidden IN (0,1)),
+          UNIQUE(event_date,number), FOREIGN KEY(event_date,event_no) REFERENCES events(date,event_no)
+        );
+        INSERT INTO capture_sessions_next(id,start_request_id,event_date,number,slot_id,snapshot,state,created_at,page_seen_at,display_hidden)
+          SELECT id,start_request_id,event_date,number,slot_id,snapshot,state,created_at,page_seen_at,display_hidden FROM capture_sessions;
+        DROP TABLE capture_sessions; DROP TABLE events;
+        ALTER TABLE events_next RENAME TO events; ALTER TABLE capture_sessions_next RENAME TO capture_sessions;
+        CREATE UNIQUE INDEX events_one_open_per_day ON events(date) WHERE closed_at IS NULL;`);
+        if ((db.pragma('foreign_key_check') as unknown[]).length) throw new Error('Event migration violates foreign keys');
+      }).immediate();
+    } finally { db.pragma('foreign_keys = ON'); }
+  }
+  db.transaction(() => {
+    // Existing ordinary capture has already begun: never ask for its event retroactively.
+    // Admin-only test days remain available for setup before the first visitor.
+    const unnamed = db.prepare('SELECT date,event_no FROM events WHERE name IS NULL ORDER BY date').all() as { date: string; event_no: number }[];
+    for (const { date, event_no } of unnamed) {
+      const { number } = db.prepare('UPDATE event_name_counter SET next_number=next_number+1 WHERE id=1 RETURNING next_number-1 AS number').get() as { number: number };
+      db.prepare(`UPDATE events SET name=?,setup_complete=EXISTS (
+        SELECT 1 FROM capture_sessions s WHERE s.event_date=events.date AND s.event_no=events.event_no
+          AND json_type(s.snapshot,'$.testPhotoId') IS NULL AND json_type(s.snapshot,'$.testPhotoIds') IS NULL
+      ) WHERE date=? AND event_no=?`).run(`Session_${number}`, date, event_no);
+    }
+  }).immediate();
   const jobColumns = new Set((db.prepare('PRAGMA table_info(generation_jobs)').all() as { name: string }[]).map(column => column.name));
   for (const column of ['submitted_at', 'ready_at']) {
     if (!jobColumns.has(column)) db.exec(`ALTER TABLE generation_jobs ADD COLUMN ${column} INTEGER`);
@@ -187,7 +222,7 @@ export function openDatabase(dataDir: string) {
     CREATE INDEX IF NOT EXISTS session_history_session ON session_history(session_id,id);
     CREATE INDEX IF NOT EXISTS session_history_bucket ON session_history(session_id,bucket,id);`);
   } catch { console.warn('SESSION_HISTORY_SCHEMA_UNAVAILABLE'); }
-  db.pragma('user_version = 18');
+  db.pragma('user_version = 20');
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

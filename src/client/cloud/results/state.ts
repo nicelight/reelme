@@ -2,6 +2,7 @@
  * from the opening snapshot join as ordinary cards, never replayed hatches.
  * A late ordinary card waits for the active centre move/hatch: it cannot occupy
  * the move's destination or enable paging before that move finishes.
+ * Manual hiding immediately removes the ID even from an active page or hatch.
  * Supplied times are monotonic; this class starts no timers. */
 export const perimeter = [0, 1, 2, 3, 5, 6, 7, 8] as const;
 export type ResultPhase = 'egg' | 'shake' | 'bloom' | 'reveal' | 'result';
@@ -49,6 +50,28 @@ export class ResultsQueue {
       this.hatched.add(id); this.circular.push(id);
     }
     if (animate) this.advance(now);
+  }
+  hide(id: string) {
+    this.valid.delete(id);
+    this.pending = this.pending.filter(value => value !== id);
+    this.circular = this.circular.filter(value => value !== id);
+    if (this.cells[4] === id) {
+      this.hatch = null;
+      this.movingUntil = null;
+      this.completedAt = null;
+      this.phase = 'result';
+    }
+    this.cells = this.cells.map(value => value === id ? null : value);
+    this.page = Math.min(this.page, this.pageCount - 1);
+    if (!this.cells.some(Boolean) && !this.circular.length && !this.pending.length) {
+      this.paged = false;
+      this.pageDue = this.leavingUntil = this.enteringUntil = null;
+    }
+  }
+  nextPage(now: number) {
+    if (!this.paged || this.leavingUntil !== null || (this.enteringUntil !== null && now < this.enteringUntil)) return;
+    this.pageDue = now;
+    this.advance(now);
   }
   private placeOrdinary(now: number) {
     // A moving centre owns the next free position until its hatch completes.

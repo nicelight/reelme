@@ -15,7 +15,7 @@ export async function preparedSession(dataDir: string, bytes: Buffer, number = 1
     await mkdir(join(dataDir, 'media', 'sessions', id), { recursive: true });
     await writeFile(join(dataDir, 'media', photoPath), photo);
     db.prepare('INSERT INTO slots(id,config) VALUES (?,?)').run(slotId, '{}');
-    db.prepare("INSERT INTO events(date,next_number) VALUES ('2026-11-14',?) ON CONFLICT(date) DO UPDATE SET next_number=excluded.next_number").run(number + 1);
+    db.prepare("INSERT INTO events(date,next_number) VALUES ('2026-11-14',?) ON CONFLICT(date,event_no) DO UPDATE SET next_number=excluded.next_number").run(number + 1);
     const snapshot = { expectedPhotos: 1, generation: { model: 'minimax/h3-max/recast', mode: 'V2V', videoId: randomUUID(), resolution: '768P', referenceIds: [] }, description: 'Fixture', thumbnailId: randomUUID() };
     db.prepare("INSERT INTO capture_sessions(id,start_request_id,event_date,number,slot_id,snapshot,state,created_at) VALUES (?,?,'2026-11-14',?,?,?,'preparing',?)").run(id, randomUUID(), number, slotId, JSON.stringify(snapshot), Date.now());
     db.prepare('INSERT INTO capture_photos(session_id,pose_index,path,size,width,height) VALUES (?,0,?,?,400,500)').run(id, photoPath, photo.length);

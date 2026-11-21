@@ -1,4 +1,5 @@
 export interface SessionStatus {
+  eventName?: string | null;
   id: string;
   date: string;
   number: number;

@@ -224,7 +224,7 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
   }
   function createLoop(condition: string) {
     const select = db.prepare<[], { id: string }>(`SELECT s.id FROM capture_sessions s
-      JOIN events e ON e.date=s.event_date LEFT JOIN generation_jobs g ON g.session_id=s.id
+      JOIN events e ON e.date=s.event_date AND e.event_no=s.event_no LEFT JOIN generation_jobs g ON g.session_id=s.id
       WHERE e.deleting=0 AND ${condition} ORDER BY s.created_at,s.id`);
     let active: Promise<void> | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;

@@ -3,7 +3,7 @@
    * only admins see deletion, with explicit confirmation.
    * The server owns dates/authorization; viewing never opens visitor forms. */
   import { onMount } from 'svelte';
-  import type { ArchiveEvent, ArchiveSession, EventGallery } from '../../shared/events';
+  import { eventKey, type ArchiveEvent, type ArchiveSession, type EventGallery } from '../../shared/events';
   import { api, ApiError } from './api';
   let { role, onunauthorized }: { role: 'admin' | 'operator'; onunauthorized: () => void } = $props();
   let events = $state<ArchiveEvent[]>([]);
@@ -11,7 +11,7 @@
   let selected = $state<ArchiveSession | null>(null);
   let busy = $state(true);
   let error = $state('');
-  let deleting = $state<string | null>(null);
+  let deleting = $state<ArchiveEvent | null>(null);
   let removing = $state(false);
   const dateLabel = (date: string) => new Date(`${date}T12:00:00+07:00`).toLocaleDateString('ru-RU', { timeZone: 'Asia/Novosibirsk', day: 'numeric', month: 'long', year: 'numeric' });
   const bytesLabel = (bytes: number) => `${bytes.toLocaleString('ru-RU')} Б`;
@@ -23,15 +23,15 @@
     busy = true; error = ''; gallery = null; selected = null;
     try { events = await api<ArchiveEvent[]>('/events'); } catch (value) { fail(value); } finally { busy = false; }
   }
-  async function open(date: string) {
+  async function open(key: string) {
     busy = true; error = ''; selected = null;
-    try { gallery = await api<EventGallery>(`/events/${date}`); } catch (value) { fail(value); } finally { busy = false; }
+    try { gallery = await api<EventGallery>(`/events/${key}`); } catch (value) { fail(value); } finally { busy = false; }
   }
   function showConfirmation(dialog: HTMLDialogElement) { dialog.showModal(); }
   async function remove() {
     if (!deleting || removing) return;
     removing = true; error = '';
-    try { await api(`/events/${deleting}`, { method: 'DELETE' }); deleting = null; await load(); }
+    try { await api(`/events/${eventKey(deleting.date, deleting.eventNo)}`, { method: 'DELETE' }); deleting = null; await load(); }
     catch (value) { fail(value); } finally { removing = false; }
   }
   onMount(() => { void load(); });
@@ -42,8 +42,8 @@
     <div><p class="eyebrow">REELME / МЕРОПРИЯТИЯ</p><h1>{gallery ? gallery.name : 'Архив мероприятий'}</h1>{#if gallery}<p class="hint">{[dateLabel(gallery.date), gallery.location, gallery.participantRange ? `${gallery.participantRange} участников` : null].filter(Boolean).join(' · ')}</p>{/if}</div>
     {#if gallery}<button class="quiet" onclick={load} disabled={busy}>← Все мероприятия</button>{/if}
   </div>
-  <p class="hint">{gallery ? 'Выберите историю, чтобы посмотреть её видео.' : 'Прошедшие дни по Новосибирску. Сегодняшние истории появятся здесь после полуночи.'}</p>
-  {#if error}<p class="error" role="alert">{error}</p><button onclick={() => gallery ? open(gallery.date) : load()}>Повторить</button>{/if}
+  <p class="hint">{gallery ? 'Выберите историю, чтобы посмотреть её видео.' : 'Завершённые мероприятия и съёмки за прошлые дни.'}</p>
+  {#if error}<p class="error" role="alert">{error}</p><button onclick={() => gallery ? open(eventKey(gallery.date,gallery.eventNo)) : load()}>Повторить</button>{/if}
   {#if busy}<p class="archive-empty" role="status">Открываем архив…</p>
   {:else if gallery}
     {#if selected}
@@ -66,12 +66,12 @@
     {#if gallery.sessions.length === 0}<p class="archive-empty">В этом мероприятии нет фотосессий.</p>{/if}
   {:else}
     <div class="archive-days">
-      {#each events as event (event.date)}
+      {#each events as event (eventKey(event.date,event.eventNo))}
         <article class="archive-event">
-        <button class="archive-day" onclick={() => open(event.date)} data-date={event.date}>
+        <button class="archive-day" onclick={() => open(eventKey(event.date,event.eventNo))} data-date={event.date}>
           <h2>{event.name}</h2><p class="hint">{dateLabel(event.date)} · {event.location}</p><span>Фотографии <strong>{bytesLabel(event.photoBytes)}</strong></span><span>Видео <strong>{bytesLabel(event.videoBytes)}</strong></span><span class="archive-link">Открыть мероприятие →</span>
         </button>
-        {#if role === 'admin'}<button class="archive-delete" aria-label={`Удалить мероприятие ${dateLabel(event.date)}`} onclick={() => deleting = event.date}>Удалить мероприятие</button>{/if}
+        {#if role === 'admin' && !event.closedToday}<button class="archive-delete" aria-label={`Удалить мероприятие ${dateLabel(event.date)}`} onclick={() => deleting = event}>Удалить мероприятие</button>{/if}
         </article>
       {/each}
     </div>
@@ -80,7 +80,7 @@
   {#if deleting}
     <dialog class="confirmation" use:showConfirmation aria-labelledby="delete-title" oncancel={(event) => { if (removing) event.preventDefault(); else deleting = null; }}>
         <h2 id="delete-title">Удалить мероприятие?</h2>
-        <p>{dateLabel(deleting)} Фотографии, видео и ссылки посетителей будут удалены. Отменить удаление нельзя.</p>
+        <p>«{deleting.name}», {dateLabel(deleting.date)}. Фотографии, видео и ссылки посетителей будут удалены. Отменить удаление нельзя.</p>
         {#if error}<p class="error" role="alert">{error}</p>{/if}
         <div class="confirmation-actions"><button disabled={removing} onclick={() => deleting = null}>Отмена</button><button class="danger" disabled={removing} onclick={remove}>{removing ? 'Удаляем…' : 'Удалить'}</button></div>
     </dialog>

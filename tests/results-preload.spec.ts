@@ -12,15 +12,15 @@ test('results recover a failed stage preload without hiding its error on success
     await expect.poll(async () => {
       if (server.exitCode !== null) throw new Error('Preload fixture Vite exited');
       try { return (await fetch(origin)).ok; } catch { return false; }
-    }).toBe(true);
+    }, { timeout: 15_000 }).toBe(true);
     await page.route('**/api/auth/session', route => route.fulfill({ json: { role: 'operator' } }));
     await page.route('**/api/display/today', route => {
       polls++;
       return route.fulfill({ json: {
-        date: '2026-11-17', serverNow: Date.now(), pageDurationSeconds: 10,
+        date: '2026-11-17', serverNow: Date.now(), pageDurationSeconds: 10, hiddenIds: [],
         sessions: [{ id: 'ready-fixture', number: 1, stage: 4, label: 'Видео ждёт скачивания',
           error: null, hideAt: null, readyAt: 1, simulation: null,
-          card: { photoUrl: '/fixture.png', frameUrl: '/fixture.png', qrUrl: '/fixture.png' } }],
+          card: { photoUrl: '/fixture.png', frameUrl: '/fixture.png', qrUrl: '/fixture.png', videoUrl: '/fixture.mp4' } }],
       } });
     });
     await page.route('**/fixture.png*', route => route.fulfill({ contentType: 'image/png', body: pixel }));

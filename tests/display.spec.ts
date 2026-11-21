@@ -54,7 +54,8 @@ test('Chromium preparation header: stable preparation slots, hide/restore, hatch
     await expect(page.locator('[data-progress-session="1"]')).toContainText('Отправка на генерацию');
     await expect(page.locator('[data-progress-session="2"]')).toContainText('Генерация');
     await expect(page.locator('[data-progress-session="3"]')).toContainText('Подготовка для скачивания');
-    await expect(page.locator('.card .stage-bar, .card button')).toHaveCount(0);
+    await expect(page.locator('.card .stage-bar')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Убрать с экрана' })).toHaveCount(0);
     await page.locator('[data-progress-session="2"]').click();
     await expect(page.locator('.progress-panel')).toHaveCount(0);
     await page.getByRole('button', { name: 'StatusShow', exact: true }).click();

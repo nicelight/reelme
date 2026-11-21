@@ -1,7 +1,7 @@
 ---
 description: Pure SDD spec registry and planned-spec index.
 status: active
-last_updated: 2026-11-17
+last_updated: 2026-11-21
 source_of_truth:
   - .memory-bank/spec-index.md
 ---
@@ -20,7 +20,7 @@ source_of_truth:
 |---|---|---|---|---|
 | governance | [.memory-bank/constitution.md](constitution.md) | active | Top governing policy. | /constitution |
 | visual | [DESIGN.md](../DESIGN.md) | approved 2026-11-17; implemented TASK-020 | Экран результатов A: точный визуальный эталон и motion. | Прямое задание оператора |
-| behavior | [.memory-bank/states/results-display.md](states/results-display.md) | implemented TASK-020 | Первоначальное заполнение 3×3, FIFO/круговая очередь, таймер N и предзагрузка. | Прямое задание оператора |
+| behavior | [.memory-bank/states/results-display.md](states/results-display.md) | active | Сетка 3×3, очереди, таймер N, предзагрузка, действия оператора и ручное скрытие. | Прямое задание оператора |
 | architecture | [.memory-bank/architecture/system-architecture.md](architecture/system-architecture.md) | active | Серверная основа, модули и развёртывание ReelMe. | /spec-design; затем /spec-redesign |
 | data | [.memory-bank/domains/core-domain.md](domains/core-domain.md) | active | Идентичность сессии, снимок слота, файлы, даты и номера. | /spec-design |
 | lifecycle | [.memory-bank/states/lifecycle-map.md](states/lifecycle-map.md) | active | Обработка, выдача, восстановление и удаление. | /spec-design |

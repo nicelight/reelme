@@ -9,6 +9,7 @@
   import { models, blankSlot, slotSchema, titleFrom, videoProblem } from '../../shared/scenarios';
   import type { Media, Slot, SlotInput } from '../../shared/scenarios';
   import { api, ApiError, mediaUrl } from './api';
+  import FinishEvent from './FinishEvent.svelte';
   import Archive from './Archive.svelte';
   import Statuses from './Statuses.svelte';
   import Display from './Display.svelte';
@@ -26,6 +27,7 @@
   import './admin.css';
 
   let archive = $state(false);
+  let archiveVersion = $state(0);
   let parameters = $state(false);
   let photobooth = $state(false);
   const statusRoute = location.pathname === '/statuses';
@@ -175,6 +177,7 @@
     {#if adminWorkspace}<a class="button" href="/operator">Сегодня / Архив</a>{:else}<button class="quiet" aria-current={archive ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = true; parameters = false; photobooth = false; }}>Архив</button>{/if}
     <a class="button" href="/statuses" target="_blank" rel="noopener">Статусы видео</a>
     <a class="button" href="/results" target="_blank" rel="noopener">Открыть экран</a>
+    {#if !adminWorkspace}<FinishEvent onfinished={() => { archiveVersion++; archive = true; }} onunauthorized={() => role = null} />{/if}
   </nav>
 {/if}
 {/if}
@@ -201,7 +204,7 @@
     <CaptureGuides onunauthorized={() => role = null} onBusy={uploadBusy} />
   </main>
 {:else if archive}
-  <Archive {role} onunauthorized={() => role = null} />
+  {#key archiveVersion}<Archive {role} onunauthorized={() => role = null} />{/key}
 {:else if !adminWorkspace}
   <Display onunauthorized={() => role = null} />
 {:else}

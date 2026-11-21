@@ -9,12 +9,12 @@ export interface DisplaySession {
   hideAt: number | null;
   readyAt: number | null;
   simulation: { status: 'pending' | 'passed' | 'failed'; message: string; detail: string | null } | null;
-  card: { photoUrl: string; frameUrl: string; qrUrl: string } | null;
+  card: { photoUrl: string; frameUrl: string; qrUrl: string; videoUrl: string } | null;
 }
 export const pageDurationOptions = [10, 20, 30, 40, 50, 60] as const;
 export type PageDurationSeconds = typeof pageDurationOptions[number];
 export interface DisplaySettings { pageDurationSeconds: PageDurationSeconds }
-export interface TodayDisplay extends DisplaySettings { date: string; serverNow: number; sessions: DisplaySession[] }
+export interface TodayDisplay extends DisplaySettings { date: string; eventKey?: string | null; serverNow: number; sessions: DisplaySession[]; hiddenIds: string[] }
 export const stageLabels = [
   'Съёмка', 'Отправка на генерацию', 'Генерация', 'Подготовка для скачивания',
   'Видео ждёт скачивания', 'Видео в процессе получения клиентом',

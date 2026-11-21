@@ -1,4 +1,4 @@
-/** Module contract: account-only archive projection and admin deletion of past Novosibirsk events.
+/** Module contract: staff event closure and archive projection; deletion is limited to dates before today.
  * Counts stored session-owned files once, excluding shared scenario materials.
  * Saved snapshots select thumbnails; only this session's ready video is served.
  * Deletion delegates to the shared restartable Sessions cleanup after role/date checks.
@@ -7,7 +7,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
 import type { SlotSnapshot } from '../../shared/capture.js';
-import type { ArchiveEvent, EventDetails, EventGallery } from '../../shared/events.js';
+import { eventKey, type ArchiveEvent, type CurrentEvent, type EventDetails, type EventGallery } from '../../shared/events.js';
 import { HttpError } from '../errors.js';
 import { readMedia, sendMedia } from '../scenarios/media.js';
 import { eventDate } from './index.js';
@@ -19,21 +19,44 @@ interface Row {
   video_path: string | null; video_size: number | null; width: number; height: number;
 }
 const selection = `SELECT s.id,s.number,s.snapshot,s.state,g.video_path,g.video_size,g.width,g.height
-  FROM capture_sessions s LEFT JOIN generation_jobs g ON g.session_id=s.id WHERE s.event_date=?`;
+  FROM capture_sessions s LEFT JOIN generation_jobs g ON g.session_id=s.id WHERE s.event_date=? AND s.event_no=?`;
 const hasVideo = (row: Row) => row.state === 'ready' && !!row.video_path && (row.video_size ?? 0) > 0;
 export function registerEvents(app: FastifyInstance, db: DB, dataDir: string, access: Access, now: () => number, cleanup: ReturnType<typeof createEventCleanup>) {
   async function account(request: FastifyRequest, reply: FastifyReply) {
     const role = access.context(request, reply);
     if (role !== 'operator' && role !== 'admin') throw new HttpError(403, 'FORBIDDEN', 'Нужен аккаунт оператора или администратора');
   }
-  function requirePast(date: string) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date >= eventDate(now()) || !db.prepare('SELECT 1 FROM events WHERE date=? AND deleting=0').get(date)) {
-      throw new HttpError(404, 'NOT_FOUND', 'Мероприятие отсутствует в архиве');
-    }
+  function parseKey(key: string) {
+    const match = /^(\d{4}-\d{2}-\d{2})(?:~([1-9]\d*))?$/.exec(key);
+    const eventNo = Number(match?.[2] ?? 1);
+    if (!match || !Number.isSafeInteger(eventNo)) throw new HttpError(404, 'NOT_FOUND', 'Мероприятие не найдено');
+    return { date: match[1], eventNo };
   }
-  app.delete<{ Params: { date: string } }>('/api/events/:date', { preHandler: [access.requireAdmin, access.requireOrigin] }, async (request, reply) => {
-    requirePast(request.params.date);
-    await cleanup.remove(request.params.date);
+  function requireArchived(key: string) {
+    const { date, eventNo } = parseKey(key);
+    const today = eventDate(now());
+    const event = db.prepare('SELECT name,participant_range AS participantRange,location FROM events WHERE date=? AND event_no=? AND deleting=0 AND (date<? OR (date=? AND closed_at IS NOT NULL))')
+      .get(date,eventNo,today,today) as Omit<EventDetails,'date'> | undefined;
+    if (!event) throw new HttpError(404, 'NOT_FOUND', 'Мероприятие отсутствует в архиве');
+    return { date, eventNo, event };
+  }
+  app.get('/api/events/current', { preHandler: account }, (): { event: CurrentEvent | null } => {
+    const date = eventDate(now());
+    const row = db.prepare('SELECT event_no,name FROM events WHERE date=? AND closed_at IS NULL AND deleting=0').get(date) as {event_no: number; name: string} | undefined;
+    return { event: row ? { key: eventKey(date,row.event_no), name: row.name } : null };
+  });
+  app.post<{ Params: { key: string } }>('/api/events/:key/finish', { preHandler: [access.requireOrigin, account] }, (request, reply) => {
+    const time = now(), { date, eventNo } = parseKey(request.params.key);
+    if (date !== eventDate(time)) throw new HttpError(409, 'EVENT_CHANGED', 'День мероприятия уже завершён');
+    // Repeat confirmations always address the event named in the dialog.
+    const result = db.prepare('UPDATE events SET closed_at=COALESCE(closed_at,?) WHERE date=? AND event_no=? AND deleting=0').run(time,date,eventNo);
+    if (!result.changes) throw new HttpError(404, 'NOT_FOUND', 'Мероприятие не найдено');
+    return reply.code(204).send();
+  });
+  app.delete<{ Params: { key: string } }>('/api/events/:key', { preHandler: [access.requireAdmin, access.requireOrigin] }, async (request, reply) => {
+    const { date, eventNo } = requireArchived(request.params.key);
+    if (date >= eventDate(now())) throw new HttpError(409, 'EVENT_TODAY', 'Удаление доступно со следующего дня');
+    await cleanup.remove(date,eventNo);
     return reply.code(204).send();
   });
   app.get('/api/admin/event-preparation', { preHandler: access.requireAdmin }, async () => cleanup.preview());
@@ -43,30 +66,35 @@ export function registerEvents(app: FastifyInstance, db: DB, dataDir: string, ac
   });
   app.get('/api/events', { preHandler: account }, (): ArchiveEvent[] => {
     // UNION groups by path before summing, so neither joins nor shared inputs multiply files.
-    return db.prepare(`WITH files AS (
-      SELECT s.event_date,p.path,p.size,'image' AS kind FROM capture_sessions s JOIN capture_photos p ON p.session_id=s.id
-      UNION SELECT s.event_date,g.frame_path,g.frame_size,'image' FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id WHERE g.frame_path IS NOT NULL AND g.frame_size IS NOT NULL
-      UNION SELECT s.event_date,g.video_path,g.video_size,'video' FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id WHERE g.video_path IS NOT NULL AND g.video_size IS NOT NULL
-    ) SELECT e.date,e.name,e.participant_range AS participantRange,e.location,COALESCE(SUM(CASE WHEN f.kind='image' THEN f.size ELSE 0 END),0) AS photoBytes,
+    const today = eventDate(now());
+    const rows = db.prepare(`WITH files AS (
+      SELECT s.event_date,s.event_no,p.path,p.size,'image' AS kind FROM capture_sessions s JOIN capture_photos p ON p.session_id=s.id
+      UNION SELECT s.event_date,s.event_no,g.frame_path,g.frame_size,'image' FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id WHERE g.frame_path IS NOT NULL AND g.frame_size IS NOT NULL
+      UNION SELECT s.event_date,s.event_no,g.video_path,g.video_size,'video' FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id WHERE g.video_path IS NOT NULL AND g.video_size IS NOT NULL
+    ) SELECT e.date,e.event_no,e.name,e.participant_range AS participantRange,e.location,COALESCE(SUM(CASE WHEN f.kind='image' THEN f.size ELSE 0 END),0) AS photoBytes,
       COALESCE(SUM(CASE WHEN f.kind='video' THEN f.size ELSE 0 END),0) AS videoBytes
-      FROM events e LEFT JOIN files f ON f.event_date=e.date WHERE e.date<? AND e.deleting=0 GROUP BY e.date ORDER BY e.date DESC`).all(eventDate(now())) as ArchiveEvent[];
+      FROM events e LEFT JOIN files f ON f.event_date=e.date AND f.event_no=e.event_no
+      WHERE (e.date<? OR (e.date=? AND e.closed_at IS NOT NULL)) AND e.deleting=0
+      GROUP BY e.date,e.event_no ORDER BY e.date DESC,e.event_no DESC`).all(today,today) as (ArchiveEvent & {event_no: number})[];
+    return rows.map(({event_no, ...event}) => ({...event, ...(event_no > 1 && {eventNo: event_no}), ...(event.date === today && {closedToday: true})}));
   });
-  app.get<{ Params: { date: string } }>('/api/events/:date', { preHandler: account }, (request): EventGallery => {
-    const { date } = request.params; requirePast(date);
-    const rows = db.prepare(`${selection} ORDER BY s.number,s.id`).all(date) as Row[];
-    const event = db.prepare('SELECT date,name,participant_range AS participantRange,location FROM events WHERE date=?').get(date) as EventDetails;
-    return { ...event, sessions: rows.map(row => {
+  app.get<{ Params: { key: string } }>('/api/events/:key', { preHandler: account }, (request): EventGallery => {
+    const key = request.params.key;
+    const { date, eventNo, event } = requireArchived(key);
+    const rows = db.prepare(`${selection} ORDER BY s.number,s.id`).all(date,eventNo) as Row[];
+    return { ...event, date, ...(eventNo > 1 && {eventNo}), sessions: rows.map(row => {
       const snapshot = JSON.parse(row.snapshot) as SlotSnapshot;
-      const base = `/api/events/${date}/${row.id}`;
+      const base = `/api/events/${key}/${row.id}`;
       return { id: row.id, number: row.number, description: snapshot.description,
         ...(isTestVideo(snapshot.generation) ? { testVideo: true as const } : {}),
         thumbnailUrl: `${base}/thumbnail`, videoUrl: hasVideo(row) ? `${base}/video` : null };
     }) };
   });
   for (const kind of ['thumbnail', 'video'] as const) {
-    app.get<{ Params: { date: string; id: string } }>(`/api/events/:date/:id/${kind}`, { preHandler: account }, async (request, reply) => {
-      const { date, id } = request.params; requirePast(date);
-      const row = db.prepare(`${selection} AND s.id=?`).get(date, id) as Row | undefined;
+    app.get<{ Params: { key: string; id: string } }>(`/api/events/:key/:id/${kind}`, { preHandler: account }, async (request, reply) => {
+      const { id } = request.params;
+      const { date, eventNo } = requireArchived(request.params.key);
+      const row = db.prepare(`${selection} AND s.id=?`).get(date,eventNo,id) as Row | undefined;
       if (!row) throw new HttpError(404, 'NOT_FOUND', 'Фотосессия отсутствует в мероприятии');
       if (kind === 'thumbnail') {
         const snapshot = JSON.parse(row.snapshot) as SlotSnapshot;

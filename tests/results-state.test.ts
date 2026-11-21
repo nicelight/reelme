@@ -33,6 +33,34 @@ test('paged FIFO and circular queue: one hatch per page, newly hatched first ord
   assert.deepEqual(queue.pending, ['12']);
 });
 
+test('manual paging uses one normal transition and lets the active hatch finish', () => {
+  const queue = new ResultsQueue();
+  queue.bootstrap(ids(8), 0);
+  const partial = [...queue.cells];
+  queue.nextPage(100);
+  assert.equal(queue.pageDue, null);
+  assert.deepEqual(queue.cells, partial);
+
+  queue.bootstrap(ids(9), 0);
+  queue.sync(ids(11), 100);
+  queue.nextPage(800);
+  const boundary = queue.leavingUntil!;
+  assert.ok(boundary > 800 && boundary < 1500);
+  queue.nextPage(810);
+  assert.equal(queue.leavingUntil, boundary);
+  queue.advance(boundary);
+  assert.equal(queue.hatch?.id, '10');
+  assert.equal(queue.pageDue, boundary + queue.duration);
+  queue.nextPage(boundary + 1000);
+  assert.equal(queue.hatch?.id, '10');
+  assert.equal(queue.leavingUntil, null);
+  finish(queue);
+  assert.ok(queue.hatched.has('10'));
+  assert.ok(queue.leavingUntil !== null);
+  queue.advance(queue.leavingUntil!);
+  assert.equal(queue.hatch?.id, '11');
+});
+
 test('expiry prunes future eligibility but keeps the complete current snapshot till page boundary', () => {
   const queue = new ResultsQueue(); queue.bootstrap(ids(9), 0);
   const original = [...queue.cells]; queue.sync(['7','8','9'], 5000);
@@ -49,6 +77,24 @@ test('an expired hatching card remains on the page, but cannot reenter the circu
   const queue = new ResultsQueue(); queue.bootstrap(ids(9), 0); queue.sync(ids(10), 100);
   queue.advance(10000); queue.advance(10280); queue.sync(ids(9), 11000); finish(queue);
   assert.equal(queue.cells[4], '10'); assert.ok(!queue.circular.includes('10'));
+});
+
+test('manual hiding removes the result from a fixed page and cancels an active centre hatch', () => {
+  const queue = new ResultsQueue(); queue.bootstrap(ids(9), 0);
+  const before = [...queue.cells];
+  queue.hide('1');
+  assert.deepEqual(queue.cells, before.map(id => id === '1' ? null : id));
+  assert.ok(!queue.circular.includes('1'));
+  assert.equal(queue.pageDue, 10000);
+
+  const pending = new ResultsQueue(); pending.bootstrap([], 0); pending.sync(['A', 'B', 'C'], 0);
+  pending.hide('A'); pending.hide('B'); pending.advance(10);
+  assert.equal(pending.hatch?.id, 'C');
+  finish(pending);
+  assert.deepEqual(pending.circular, ['C']);
+  pending.hide('C');
+  assert.equal(pending.cells.filter(Boolean).length, 0);
+  assert.equal(pending.nextWake(6000), null);
 });
 
 test('changing duration applies at the next page and sparse arrival waits only remaining centre hold', () => {

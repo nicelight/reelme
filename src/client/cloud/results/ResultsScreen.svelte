@@ -1,20 +1,105 @@
 <script lang="ts">
-  /** Renders fixed page snapshots and eight status slots. Local load failures
-   * replace the ready label without changing server-owned session data. */
+  /** Renders fixed page snapshots and eight status slots. Actions belong to the
+   * selected history. The QR holds its decoded image through page changes. */
+  import { tick, untrack } from 'svelte';
+  import { MediaQuery } from 'svelte/reactivity';
   import egg from '../results-prototype/assets/egg.png';
   import '../results-prototype/assets/fonts.css';
   import { ribbonLight, rimWave, revealSize } from './motion';
   import type { DisplaySession } from '../../../shared/display';
   import type { ResultPhase } from './state';
-  let { cells, phase, page, pageCount, pageVersion, moving, leaving, entering, reduced, resourcesReady, error, sessions, progress, completedIds, loadStates = {} } : {
+  let { cells, phase, page, pageCount, pageVersion, moving, leaving, entering, canAdvance, reduced, resourcesReady, error, sessions, progress, completedIds, loadStates = {}, displayEventKey, hiddenIds, onhide, getQr, onqrchange, onnextpage } : {
     cells: (string | null)[]; phase: ResultPhase; page: number; pageCount: number; pageVersion: number;
-    moving: boolean; leaving: boolean; entering: boolean; reduced: boolean; resourcesReady: boolean;
+    moving: boolean; leaving: boolean; entering: boolean; canAdvance: boolean; reduced: boolean; resourcesReady: boolean;
     error: string; sessions: Record<string, DisplaySession>; progress: (DisplaySession | null)[]; completedIds: string[];
     loadStates?: Record<string, 'delayed' | 'deprecated'>;
+    displayEventKey: string; hiddenIds: string[]; onhide: (id: string) => Promise<void>; getQr: (id: string) => HTMLImageElement | undefined;
+    onqrchange: (open: boolean) => void;
+    onnextpage: () => void;
   } = $props();
   let showProgress = $state(true);
   const completed = $derived(new Set(completedIds));
   const number = (n: number) => String(n).padStart(3, '0');
+  const compact = new MediaQuery('(max-width: 720px), (max-height: 440px)');
+  let menu = $state<{ id: string; index: number; version: number } | null>(null);
+  let dialog = $state<HTMLDialogElement>();
+  let selected = $state.raw<{ id: string; number: number; eventKey: string; qr?: HTMLImageElement } | null>(null);
+  let hiding = $state(false);
+  let hideError = $state('');
+
+  function actionable(index: number) {
+    return !leaving && !entering && (index !== 4 || phase === 'result' && !moving);
+  }
+  function openMenu(id: string, index: number) {
+    if (!selected && actionable(index) && (menu?.id !== id || menu.index !== index)) {
+      menu = { id, index, version: pageVersion };
+    }
+  }
+  function outside(event: PointerEvent) {
+    if (menu && event.target instanceof Element && !event.target.closest('.card, [data-card-menu], dialog')) menu = null;
+  }
+  $effect(() => {
+    if (menu && (menu.version !== pageVersion || cells[menu.index] !== menu.id || !actionable(menu.index))) menu = null;
+  });
+  function select(item: DisplaySession, qr?: HTMLImageElement) {
+    hideError = ''; hiding = false;
+    selected = { id: item.id, number: item.number, eventKey: displayEventKey, qr };
+  }
+  function bigQr(item: DisplaySession) {
+    const image = getQr(item.id);
+    if (image) select(item, image);
+  }
+  function attachQr(node: HTMLElement, image: HTMLImageElement) {
+    image.alt = 'QR для получения видео';
+    node.append(image);
+    return { destroy() { image.remove(); } };
+  }
+  $effect(() => {
+    const target = selected;
+    if (target && (hiddenIds.includes(target.id) || target.eventKey !== displayEventKey)) {
+      selected = null;
+    }
+  });
+  $effect(() => {
+    const modal = dialog;
+    if (!modal) return;
+    modal.showModal();
+    // The predecoded image mounts with the dialog. Polls and page changes must
+    // not extend its five-second lifetime.
+    return () => modal.close();
+  });
+  $effect(() => {
+    if (!selected?.qr) return;
+    untrack(() => onqrchange(true));
+    const timer = setTimeout(() => { selected = null; }, 5000);
+    return () => { clearTimeout(timer); untrack(() => onqrchange(false)); };
+  });
+  async function confirmHide() {
+    const target = selected;
+    if (!target || target.qr || hiding) return;
+    hiding = true; hideError = '';
+    try {
+      await onhide(target.id);
+      if (selected === target) selected = null;
+    } catch {
+      if (selected === target) hideError = 'Не удалось подтвердить скрытие. Повторите попытку.';
+    } finally {
+      if (selected === target) hiding = false;
+    }
+  }
+  async function activateMenu(event: MouseEvent, id: string, index: number) {
+    openMenu(id, index);
+    if (event.detail === 0) {
+      await tick();
+      document.querySelector<HTMLElement>('[data-card-menu] a')?.focus();
+    }
+  }
+  function dismissMenu() {
+    if (menu && document.activeElement?.closest('[data-card-menu]')) {
+      document.querySelector<HTMLElement>(`.card[data-position="${menu.index}"] .card-trigger`)?.focus();
+    }
+    menu = null;
+  }
   const ribbons = [
     'M-200 208 C140 175 172 122 388 2 S735 -74 780 -126',
     'M920 -88 C1190 198 1452 -30 1715 -100',
@@ -32,6 +117,14 @@
 
 </script>
 
+<svelte:window onpointerdown={outside} onkeydown={event => {
+  if (event.key === 'Escape' && !selected) dismissMenu();
+}} />
+{#snippet actions(item: DisplaySession)}
+  <a href={item.card?.videoUrl} target="_blank" rel="noopener">Посмотреть</a>
+  <button type="button" onclick={() => bigQr(item)}>Большой QR</button>
+  <button type="button" class="hide-action" onclick={() => select(item)}>Убрать с экрана</button>
+{/snippet}
 <svelte:head><title>ReelMe — ваши видео</title><link rel="preload" as="image" href={egg}/></svelte:head>
 <div class="results-shell">
   <section class="screen" aria-label="Экран результатов ReelMe">
@@ -50,7 +143,7 @@
       {/each}
     </svg>
     <header>
-      <div class="brand"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 2C22 18 18 22 2 24c16 2 20 6 22 22 2-16 6-20 22-22C30 22 26 18 24 2Z"/></svg><span>REELME</span></div>
+      <div class="brand"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 2C22 18 18 22 2 24c16 2 20 6 22 22 2-16 6-20 22-22C30 22 26 18 24 2Z"/></svg><button type="button" aria-label="Следующая страница результатов" title="Следующая страница результатов" disabled={!canAdvance || !!selected?.qr} onclick={onnextpage}>REELME</button></div>
       {#if showProgress}
         <div class="progress-panel" aria-label="Готовящиеся видео">
           {#each Array.from({ length: 8 }) as _, index}
@@ -69,10 +162,30 @@
       {#each cells as id, index (index)}
         {@const item = id ? sessions[id] : undefined}
         {#if item?.card}
-        <article class="card" class:center={index === 4} class:incubating={index === 4 && phase !== 'result'} class:moving={index === 4 && moving} data-position={index} data-session={item.number} aria-label={`История № ${number(item.number)}`}>
+        <article class="card" class:center={index === 4} class:incubating={index === 4 && phase !== 'result'} class:moving={index === 4 && moving} data-position={index} data-session={item.number} aria-label={`История № ${number(item.number)}`}
+          onpointermove={event => { if (event.pointerType === 'mouse') openMenu(item.id, index); }}
+          onpointerleave={event => { if (event.pointerType === 'mouse' && !compact.current && !event.currentTarget.contains(document.activeElement) && menu?.id === item.id) menu = null; }}
+          onfocusout={event => { if (!compact.current && !selected && menu?.id === item.id && !event.currentTarget.contains(event.relatedTarget as Node)) menu = null; }}>
           <div class="rim-decoration" aria-hidden="true"><div class="rim-light"><i class="rim-halo"></i><i class="rim-hotspot"></i></div><div class="rim-light rim-breath"><i class="rim-halo"></i><i class="rim-hotspot"></i></div></div>
           <div class="result" class:concealed={index === 4 && !['reveal','result'].includes(phase)}>
-            <img class="portrait" src={item.card.frameUrl} alt={`Кадр видео № ${item.number}`} loading="eager" />
+            {#if actionable(index)}
+              <button class="card-trigger" type="button" aria-label={`Действия истории № ${number(item.number)}`}
+                onkeydown={event => {
+                  if (compact.current && menu?.id === item.id && event.key === 'Tab' && !event.shiftKey) {
+                    event.preventDefault();
+                    document.querySelector<HTMLElement>('[data-card-menu] a')?.focus();
+                  }
+                }}
+                aria-expanded={menu?.id === item.id} onfocus={() => openMenu(item.id, index)} onclick={event => activateMenu(event, item.id, index)}></button>
+            {/if}
+            <div class="card-photo">
+              <img class="portrait" src={item.card.frameUrl} alt={`Кадр видео № ${item.number}`} loading="eager" />
+              {#if menu?.id === item.id && menu.index === index && !compact.current}
+                <div class="card-actions" data-card-menu role="group" aria-label={`Действия истории № ${number(item.number)}`}>
+                  {@render actions(item)}
+                </div>
+              {/if}
+            </div>
             <div class="receive"><h2><span>№</span> {number(item.number)}</h2><img class="qr" src={item.card.qrUrl} alt={`QR формы получения видео № ${item.number}`} loading="eager" /></div>
           </div>
           {#if index === 4 && phase !== 'result'}
@@ -88,6 +201,32 @@
       {#each Array.from({ length: pageCount }) as _, index}<span class:active={index === page}></span>{/each}
     </footer>
   </section>
+  {#if compact.current && menu && sessions[menu.id]?.card}
+    {@const item = sessions[menu.id]}
+    <div class="compact-actions" data-card-menu role="group" aria-label={`Действия истории № ${number(item.number)}`}>
+      <strong>№ {number(item.number)}</strong>
+      {@render actions(item)}
+    </div>
+  {/if}
+  {#if selected}
+    <dialog bind:this={dialog} class:qr-dialog={!!selected.qr} class="action-dialog"
+      aria-label={selected.qr ? `Большой QR истории № ${number(selected.number)}` : `Убрать № ${number(selected.number)} с экрана?`}
+      oncancel={event => { event.preventDefault(); selected = null; }}>
+      {#if selected.qr}
+        <button class="large-qr" type="button" aria-label="Закрыть большой QR" onclick={() => selected = null}>
+          <span>История № {number(selected.number)}</span>
+          <span class="qr-image" use:attachQr={selected.qr}></span>
+        </button>
+      {:else}
+        <h2>Убрать № {number(selected.number)} с экрана?</h2>
+        {#if hideError}<p role="alert">{hideError}</p>{/if}
+        <div class="confirm-buttons">
+          <button type="button" onclick={() => selected = null}>Отмена</button>
+          <button type="button" disabled={hiding} onclick={confirmHide}>{hiding ? 'Убираем…' : 'Убрать'}</button>
+        </div>
+      {/if}
+    </dialog>
+  {/if}
 </div>
 <style>
   .results-shell,.results-shell :global(*) { box-sizing:border-box; }
@@ -109,7 +248,38 @@
   .rim-hotspot { position:absolute; top:-.025cqw; left:8%; width:14%; height:.12cqw; background:linear-gradient(90deg,transparent,#ffb0da 18%,#fffaf4 38%,#fffaf4 57%,#ffc3e3 72%,transparent); filter:drop-shadow(0 0 .15cqw #ffe5f2) drop-shadow(0 0 .32cqw #ff7fcaa6); }
   .rim-breath { opacity:0; }
 
-  .result { height:100%; display:grid; grid-template-rows:minmax(0,1fr); grid-template-columns:minmax(0,1.66fr) minmax(0,1fr); gap:1.15cqw; opacity:1; }
+  .result { position:relative; height:100%; display:grid; grid-template-rows:minmax(0,1fr); grid-template-columns:minmax(0,1.66fr) minmax(0,1fr); gap:1.15cqw; opacity:1; }
+  .card-photo { min-width:0; min-height:0; position:relative; }
+  .card-trigger { position:absolute; inset:0; z-index:1; width:100%; height:100%; min-height:0; padding:0; border:0; border-radius:1.1cqw; background:transparent; box-shadow:none; cursor:pointer; }
+  .card-trigger:hover,.card-trigger:active { background:transparent; }
+  .card-trigger:focus-visible { outline:2px solid #f5a4df; outline-offset:2px; }
+  .card-actions {
+    position:absolute; inset:0; z-index:2; display:grid; align-content:center; gap:.2cqw; padding:.4cqw;
+    border-radius:1.1cqw; background:rgba(24,12,29,.83); color:#fff4fb;
+  }
+  [data-card-menu] a,[data-card-menu] button {
+    display:flex; align-items:center; justify-content:center; min-height:0; padding:.35em .4em; border:0;
+    border-radius:.4em; background:transparent; color:inherit; text-align:center; text-decoration:none;
+    font:650 clamp(11px,1.13cqw,22px)/1.25 Manrope,sans-serif; cursor:pointer;
+  }
+  [data-card-menu] .hide-action { color:#ffc7d2; }
+  [data-card-menu] :is(button,a):focus-visible,.action-dialog button:focus-visible { outline:2px solid #f5a4df; outline-offset:-2px; }
+  @media(hover:hover) and (pointer:fine) { [data-card-menu] :is(button,a):hover { background:#ffffff24; } }
+  .compact-actions { position:fixed; inset:auto max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); z-index:10; display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:4px; padding:8px; border:1px solid #885573; border-radius:12px; background:#241329f5; color:#fff4fb; }
+  .compact-actions strong { padding:0 8px; font:700 14px Manrope,sans-serif; }
+  .compact-actions :is(a,button) { min-height:44px; padding:6px 10px; font:650 14px Manrope,sans-serif; }
+  .action-dialog { width:min(90vw,380px); margin:auto; padding:24px; border:1px solid #885573; border-radius:16px; background:#241329; color:#fff4fb; font-family:Manrope,sans-serif; }
+  .action-dialog::backdrop { background:#100b14bf; }
+  .action-dialog h2 { width:auto; white-space:normal; font:750 20px/1.35 Manrope,sans-serif; }
+  .action-dialog p { color:#ffc7d2; font-size:14px; }
+  .confirm-buttons { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+  .confirm-buttons button { min-height:40px; padding:8px 14px; border:1px solid #885573; border-radius:8px; background:transparent; color:#fff4fb; font:650 14px Manrope,sans-serif; cursor:pointer; }
+  .confirm-buttons button:last-child { background:#f5a4df; color:#231122; }
+  .action-dialog.qr-dialog { inset:0; width:100%; height:100%; max-width:none; max-height:none; margin:0; padding:0; border:0; border-radius:0; background:white; }
+  .large-qr { width:100%; height:100%; display:grid; place-content:center; justify-items:center; gap:8px; margin:0; padding:0; border:0; border-radius:0; background:white; color:#231122; font:750 clamp(18px,3vmin,34px)/1.25 Manrope,sans-serif; cursor:pointer; }
+  .large-qr:hover:not(:disabled) { background:white; }
+  .qr-image { display:block; width:min(96vw,calc(100dvh - 4rem)); aspect-ratio:1; }
+  .qr-image :global(img) { display:block; width:100%; height:100%; image-rendering:pixelated; }
   .result.concealed { opacity:0; }
   .card.center .result { transition:opacity 300ms ease-out; }
   .portrait { display:block; width:100%; min-height:0; object-fit:cover; border-radius:1.1cqw; min-width:0; height:100%; box-shadow:inset 0 0 0 1px #ffa8e026; }
@@ -140,7 +310,10 @@
   .card.moving { opacity:0; }
   .empty-cell { min-width:0; min-height:0; }
   .connection { position:absolute; bottom:.35cqw; left:3.5cqw; right:3.5cqw; text-align:center; font-size:.9cqw; color:#fff4fb; margin:0; }
-  .brand span { color:#fff4fb; }
+  .brand button { min-height:0; padding:0; border:0; box-shadow:none; background:transparent; color:#fff4fb; font:inherit; letter-spacing:inherit; cursor:pointer; }
+  .brand button:hover:not(:disabled) { background:transparent; }
+  .brand button:disabled { opacity:1; cursor:default; }
+  .brand button:focus-visible { outline:2px solid #f5a4df; outline-offset:3px; }
   .portrait { max-width:none; }
   @media(prefers-reduced-motion:reduce) { .card { transition:opacity 160ms ease; } }
   .progress-panel { position:absolute; top:-1.1cqw; left:23cqw; width:50cqw; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:repeat(4,1.3cqw); gap:.24cqw 1.8cqw; }

@@ -31,7 +31,7 @@ import { HttpError } from '../errors.js';
 import { participantRanges, type EventSetup } from '../../shared/events.js';
 
 interface SessionRow {
-  id: string; start_request_id: string; event_date: string; number: number;
+  id: string; start_request_id: string; event_date: string; event_no: number; number: number;
   slot_id: string; snapshot: string; state: SessionState; created_at: number; page_seen_at: number | null;
 }
 const eventSetupSchema = z.discriminatedUnion('action', [
@@ -56,7 +56,7 @@ function sessionStory(snapshot: SlotSnapshot): NonNullable<StartReceipt['story']
   return { slotId: snapshot.slotId, description: snapshot.description, thumbnailId: snapshot.thumbnailId };
 }
 export function readSession(db: DB, sessionId: string) {
-  const row = db.prepare('SELECT s.* FROM capture_sessions s JOIN events e ON e.date=s.event_date WHERE s.id=? AND e.deleting=0').get(sessionId) as SessionRow | undefined;
+  const row = db.prepare('SELECT s.* FROM capture_sessions s JOIN events e ON e.date=s.event_date AND e.event_no=s.event_no WHERE s.id=? AND e.deleting=0').get(sessionId) as SessionRow | undefined;
   if (!row) throw new HttpError(404, 'NOT_FOUND', 'Сессия не найдена');
   const snapshot = JSON.parse(row.snapshot) as SlotSnapshot;
   snapshot.generation.simulateGeneration ??= false;
@@ -111,28 +111,30 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     const snapshot = snapshotSlot(db, slotId, manualTest);
     snapshot.captureSettings = settings();
     const createdAt = now(); const date = eventDate(createdAt);
-    let event = db.prepare('SELECT setup_complete FROM events WHERE date=?').get(date) as { setup_complete: number } | undefined;
-    if (!event?.setup_complete && eventSetup?.action === 'check') {
+    const last = db.prepare('SELECT event_no,next_number,closed_at,setup_complete,deleting FROM events WHERE date=? ORDER BY event_no DESC LIMIT 1').get(date) as
+      { event_no: number; next_number: number; closed_at: number | null; setup_complete: number; deleting: number } | undefined;
+    const current = last?.closed_at === null ? last : undefined;
+    if (current?.deleting) throw new HttpError(409, 'EVENT_DELETING', 'Мероприятие удаляется');
+    if (!current?.setup_complete && eventSetup?.action === 'check') {
       throw new HttpError(409, 'EVENT_SETUP_REQUIRED', 'Перед первой съёмкой создайте мероприятие или нажмите «Пропустить».');
     }
-    if (!event) {
+    const eventNo = current?.event_no ?? (last?.event_no ?? 0) + 1;
+    if (!current) {
       const { number } = db.prepare('UPDATE event_name_counter SET next_number=next_number+1 WHERE id=1 RETURNING next_number-1 AS number').get() as { number: number };
-      db.prepare('INSERT INTO events(date,next_number,name) VALUES (?,1,?)').run(date, `Session_${number}`);
-      event = { setup_complete: 0 };
+      db.prepare('INSERT INTO events(date,event_no,next_number,name) VALUES (?,?,?,?)').run(date, eventNo, last?.next_number ?? 1, `Session_${number}`);
     }
-    if (db.prepare('SELECT 1 FROM events WHERE date=? AND deleting=1').get(date)) throw new HttpError(409, 'EVENT_DELETING', 'Мероприятие удаляется');
-    if (!event.setup_complete && !manualTest) {
+    if (!current?.setup_complete && !manualTest) {
       if (eventSetup?.action === 'save') {
-        db.prepare('UPDATE events SET name=?,participant_range=?,location=?,setup_complete=1 WHERE date=?')
-          .run(eventSetup.name, eventSetup.participantRange, eventSetup.location, date);
-      } else db.prepare('UPDATE events SET setup_complete=1 WHERE date=?').run(date);
+        db.prepare('UPDATE events SET name=?,participant_range=?,location=?,setup_complete=1 WHERE date=? AND event_no=?')
+          .run(eventSetup.name, eventSetup.participantRange, eventSetup.location, date, eventNo);
+      } else db.prepare('UPDATE events SET setup_complete=1 WHERE date=? AND event_no=?').run(date, eventNo);
     }
-    const { number } = db.prepare('UPDATE events SET next_number=next_number+1 WHERE date=? RETURNING next_number-1 AS number').get(date) as { number: number };
+    const { number } = db.prepare('UPDATE events SET next_number=next_number+1 WHERE date=? AND event_no=? RETURNING next_number-1 AS number').get(date, eventNo) as { number: number };
     const row: SessionRow = {
-      id: randomUUID(), start_request_id: startRequestId, event_date: date, number,
+      id: randomUUID(), start_request_id: startRequestId, event_date: date, event_no: eventNo, number,
       slot_id: slotId, snapshot: JSON.stringify(snapshot), state: 'capturing', created_at: createdAt, page_seen_at: manualTest ? null : createdAt,
     };
-    db.prepare('INSERT INTO capture_sessions(id,start_request_id,event_date,number,slot_id,snapshot,state,created_at,page_seen_at) VALUES (@id,@start_request_id,@event_date,@number,@slot_id,@snapshot,@state,@created_at,@page_seen_at)').run(row);
+    db.prepare('INSERT INTO capture_sessions(id,start_request_id,event_date,event_no,number,slot_id,snapshot,state,created_at,page_seen_at) VALUES (@id,@start_request_id,@event_date,@event_no,@number,@slot_id,@snapshot,@state,@created_at,@page_seen_at)').run(row);
     return { created: true, value: receipt(row) };
   });
   app.post('/api/capture/sessions', { preHandler: access.requireInstallation }, (request, reply) => {
@@ -142,7 +144,7 @@ export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, 
     return reply.code(result.created ? 201 : 200).send(result.value);
   });
   const pageContact = db.prepare<[string], { state: SessionState; page_seen_at: number | null }>(
-    'SELECT s.state,s.page_seen_at FROM capture_sessions s JOIN events e ON e.date=s.event_date AND e.deleting=0 WHERE s.id=?');
+    'SELECT s.state,s.page_seen_at FROM capture_sessions s JOIN events e ON e.date=s.event_date AND e.event_no=s.event_no AND e.deleting=0 WHERE s.id=?');
   const touchPage = db.prepare("UPDATE capture_sessions SET page_seen_at=? WHERE id=? AND state='capturing' AND page_seen_at=?");
   app.post('/api/capture/sessions/:id/heartbeat', { preHandler: access.requireInstallation }, (request, reply) => {
     const { id } = sessionParams.parse(request.params);

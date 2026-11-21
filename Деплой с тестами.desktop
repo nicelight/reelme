@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Деплой с тестами
+Comment=Проверить последний локальный коммит и развернуть его на nskserver
+Icon=network-server
+Exec=konsole --hold -e bash -c "exec \\"\\$(dirname -- \\"\\$1\\")/deploy/release.sh\\" --with-tests" reelme %k
+Terminal=false

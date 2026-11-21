@@ -18,7 +18,7 @@ status: active
 | REQ-008 | Повтор submit только без подтверждения; после request_id наблюдение, встроенные retries fal, допустимый дубль | [Генерация](prd.md#фоновая-генерация) |
 | REQ-009 | Воспроизводимый результат с собственной ссылкой и формой; терминальная ошибка видна и записана | [Генерация](prd.md#фоновая-генерация) |
 | REQ-010 | Прогресс сегодняшних сессий: восемь неподвижных FIFO-слотов в шапке, цветные этапы без процентов | [Прогресс](prd.md#публичный-прогресс-и-промоэкран) |
-| REQ-011 | Карточки: кадр ролика, номер, QR; сетка 3×3, очереди и страницы через настраиваемый N | [Промоэкран](prd.md#публичный-прогресс-и-промоэкран) |
+| REQ-011 | Сетка 3×3 перелистывается по таймеру N или нажатию REELME. Меню готовой истории открывает MP4, показывает большой QR с паузой на пять секунд и позволяет убрать историю с показа | [Промоэкран](prd.md#публичный-прогресс-и-промоэкран) |
 | REQ-012 | QR ведёт на форму с фото; видео по email вложением, при невозможности — ссылкой; повтор при сбое письма | [Email](prd.md#получение-по-email) |
 | REQ-013 | Через 3 минуты результат исключается из будущих страниц; активная карточка остаётся до перелистывания, прогресс скрывается; запись остаётся в админке | [Публичное завершение](prd.md#публичный-прогресс-и-промоэкран) |
 | REQ-014 | Создание мероприятия перед первой съёмкой: название, участники, локация либо Session_N; день Новосибирска и ежедневный номер; название в архиве, даты/размеры и галерея | [Мероприятия](prd.md#мероприятия-и-срок-хранения) |
@@ -63,10 +63,10 @@ status: active
 | REQ-008 | EP-001 | FT-003 | [FT-003-AC-003](features/FT-003-video-generation.md#ft-003-ac-003) | [done](tasks/TASK-006-T3-FT-003-W4.task.json) |
 | REQ-009 | EP-001 | FT-003 | [FT-003-AC-004](features/FT-003-video-generation.md#ft-003-ac-004) | [done](tasks/TASK-008-T3-FT-003-W5.task.json) |
 | REQ-010 | EP-001 | FT-004 | [FT-004-AC-001](features/FT-004-public-delivery.md#ft-004-ac-001) | [done](tasks/TASK-020-T2-FT-004-W17.task.json) |
-| REQ-011 | EP-001 | FT-004 | [FT-004-AC-002](features/FT-004-public-delivery.md#ft-004-ac-002) | [done](tasks/TASK-020-T2-FT-004-W17.task.json) |
+| REQ-011 | EP-001 | FT-004 | [FT-004-AC-002](features/FT-004-public-delivery.md#ft-004-ac-002) | [Сетка и очереди](tasks/TASK-020-T2-FT-004-W17.task.json), [меню карточки](tasks/TASK-038-T2-FT-004-W35.task.json) |
 | REQ-012 | EP-001 | FT-004 | [FT-004-AC-003](features/FT-004-public-delivery.md#ft-004-ac-003) | [done](tasks/TASK-010-T2-FT-004-W7.task.json) |
 | REQ-013 | EP-001 | FT-004 | [FT-004-AC-004](features/FT-004-public-delivery.md#ft-004-ac-004) | [done](tasks/TASK-020-T2-FT-004-W17.task.json) |
-| REQ-014 | EP-001 | FT-005 | [FT-005-AC-001](features/FT-005-event-archive.md#ft-005-ac-001), [FT-005-AC-002](features/FT-005-event-archive.md#ft-005-ac-002), [FT-005-AC-004](features/FT-005-event-archive.md#ft-005-ac-004) | [done](tasks/TASK-011-T2-FT-005-W8.task.json), [создание мероприятия](tasks/TASK-025-T2-FT-005-W22.task.json) |
+| REQ-014 | EP-001 | FT-005 | [FT-005-AC-001](features/FT-005-event-archive.md#ft-005-ac-001), [FT-005-AC-002](features/FT-005-event-archive.md#ft-005-ac-002), [FT-005-AC-004](features/FT-005-event-archive.md#ft-005-ac-004) | [done](tasks/TASK-011-T2-FT-005-W8.task.json), [создание мероприятия](tasks/TASK-025-T2-FT-005-W22.task.json), [завершение](tasks/TASK-039-T2-FT-005-W36.task.json) |
 | REQ-015 | EP-001 | FT-005 | [FT-005-AC-003](features/FT-005-event-archive.md#ft-005-ac-003) | [done](tasks/TASK-012-T3-FT-005-W9.task.json) |
 | REQ-016 | EP-001 | FT-001, FT-002, FT-004, FT-005 | [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004) | [done_for_prod](tasks/TASK-005-T3-FT-002-W4.task.json) |
 | REQ-017 | EP-001 | FT-002 | [FT-002-AC-004](features/FT-002-photo-session.md#ft-002-ac-004) | [done_for_prod](tasks/TASK-005-T3-FT-002-W4.task.json) |

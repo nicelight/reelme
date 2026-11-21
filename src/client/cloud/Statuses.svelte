@@ -146,7 +146,7 @@
     {#each page.sessions as row (row.id)}
       <article>
         <button class="row" class:problem={!!row.issue} data-stage={row.stage} aria-expanded={opened === row.id} onclick={() => expand(row.id)}>
-          <span class="num">№ {row.number}</span><span class="when">{clock.format(row.updatedAt)}</span>
+          <span class="num">№ {row.number}{#if !page.eventName && row.eventName}<small>{row.eventName}</small>{/if}</span><span class="when">{clock.format(row.updatedAt)}</span>
           <span class="track" aria-hidden="true"><i style:width={(row.issue ? 100 : Math.min(100,(row.stage+1)*16)) + '%'}></i></span>
           <span class="step">{#if row.issue}<b>{row.issue === 'retry' ? 'Сбой · повторяем' : 'Ошибка'}</b>{row.issue === 'retry' ? ' · ' : ': '}{/if}{row.label}{#if row.mode} · {row.mode}{/if}
             {#if row.costUsd !== undefined}{' · '}<span title="Стоимость генерации в USD">{row.costUsd === null ? '..$' : usd.format(row.costUsd) + ' $'}</span>{/if}

@@ -4,6 +4,8 @@
 import type { Page } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import sharp from 'sharp';
+import jsQR from 'jsqr';
 import { test, expect } from './browser-fixture';
 import { preparedSession } from './receive-fixture';
 import { openDatabase } from '../src/server/db';
@@ -90,6 +92,52 @@ test('admin keeps editor access beside a reloadable results popup; operator sees
     await login(operatorPage, 'operator', '/results');
     await results(operatorPage, 'operator');
     await operatorPage.screenshot({ path: join(artifacts, 'operator-results-desktop.png') });
+    const card = operatorPage.locator('.card[data-session="1"]');
+    const showActions = () => card.hover({ position: { x: 30, y: 30 } });
+    await showActions();
+    await expect(card.getByRole('link', { name: 'Посмотреть' })).toBeVisible();
+    await operatorPage.screenshot({ path: join(artifacts, 'results-card-actions.png') });
+    const newTab = operator.waitForEvent('page');
+    await card.getByRole('link', { name: 'Посмотреть' }).click();
+    const video = await newTab;
+    await expect(video).toHaveURL(`${app.origin}/api/display/${seed.id}/video`);
+    await video.close();
+    await showActions();
+    await card.getByRole('button', { name: 'Большой QR' }).click();
+    const largeQr = operatorPage.getByRole('dialog', { name: /Большой QR.*001/ });
+    const image = largeQr.getByRole('img');
+    await expect(image).toBeVisible();
+    await operatorPage.screenshot({ path: join(artifacts, 'results-large-qr.png') });
+    const pixels = await sharp(await image.screenshot()).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const original = await sharp(expectedMedia.qr).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const expectedUrl = jsQR(new Uint8ClampedArray(original.data), original.info.width, original.info.height)?.data;
+    expect(expectedUrl).toContain(app.origin + '/receive/');
+    expect(jsQR(new Uint8ClampedArray(pixels.data), pixels.info.width, pixels.info.height)?.data).toBe(expectedUrl);
+    await operatorPage.keyboard.press('Escape');
+    await expect(largeQr).toHaveCount(0);
+    await showActions();
+    await card.getByRole('button', { name: 'Убрать с экрана' }).click();
+    await expect(operatorPage.getByText(/Убрать №\s*001 с экрана\?/)).toBeVisible();
+    await operatorPage.getByRole('button', { name: 'Отмена', exact: true }).click();
+    await expect(card).toBeVisible();
+    await showActions();
+    await card.getByRole('button', { name: 'Убрать с экрана' }).click();
+    await operatorPage.route(`**/api/display/${seed.id}/hide`, route => route.fulfill({ status: 503 }), { times: 1 });
+    await operatorPage.getByRole('button', { name: 'Убрать', exact: true }).click();
+    await expect(operatorPage.getByRole('alert')).toBeVisible();
+    await expect(card).toBeVisible();
+    const otherCard = popup.locator('.card[data-session="1"]');
+    await otherCard.hover({ position: { x: 30, y: 30 } });
+    await otherCard.getByRole('button', { name: 'Большой QR' }).click();
+    const otherQr = popup.getByRole('dialog', { name: /Большой QR.*001/ });
+    await expect(otherQr).toBeVisible();
+    await operatorPage.getByRole('button', { name: 'Убрать', exact: true }).click();
+    await expect(card).toHaveCount(0);
+    await expect(otherQr).toHaveCount(0, { timeout: 4_000 });
+    await expect(otherCard).toHaveCount(0);
+    await popup.reload();
+    await expect(popup.getByRole('region', { name: 'Экран результатов ReelMe' })).toBeVisible();
+    await expect(popup.locator('.card')).toHaveCount(0);
     await operatorPage.goto(app.origin + '/admin');
     await expect(operatorPage.getByRole('heading', { name: 'Админка доступна администратору' })).toBeVisible();
     await expect(operatorPage.getByRole('region', { name: 'Редактор сюжета' })).toHaveCount(0);
@@ -103,6 +151,7 @@ test('admin keeps editor access beside a reloadable results popup; operator sees
   await writeFile(join(artifacts, 'results-access-observations.json'), JSON.stringify({
     adminPopupAndReload: true, adminEditorSessionPreserved: true, operatorAdminDenied: true,
     bothRolesRenderedReadyCard: true, privatePhotoFrameQrBytesMatch: true, fullscreenWithoutAdminChrome: true,
+    inlineVideoOpened: true, enlargedQrDecoded: true, hideAppliedOnBothScreens: true,
     horizontalOverflow: false, pageErrors: errors, externalFalOrSmtp: false,
   }, null, 2) + '\n');
 });

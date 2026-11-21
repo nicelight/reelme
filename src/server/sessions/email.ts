@@ -59,7 +59,7 @@ export function createEmailWorker(db: DB, dataDir: string, origin: string, log: 
   const claim = db.transaction(() => {
     const job = db.prepare(`SELECT d.session_id,d.email,d.download_token,s.number,g.video_path FROM session_delivery d
       JOIN capture_sessions s ON s.id=d.session_id JOIN generation_jobs g ON g.session_id=s.id
-      WHERE d.email_state='pending' AND s.state='ready' AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.deleting=0) ORDER BY d.email_confirmed_at,s.id LIMIT 1`).get() as Job | undefined;
+      WHERE d.email_state='pending' AND s.state='ready' AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.event_no=s.event_no AND e.deleting=0) ORDER BY d.email_confirmed_at,s.id LIMIT 1`).get() as Job | undefined;
     if (job) db.prepare("UPDATE session_delivery SET email_state='sending',email_error=NULL WHERE session_id=? AND email_state='pending'").run(job.session_id);
     return job;
   });

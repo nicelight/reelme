@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ProgressSlots } from '../src/client/cloud/results/progress.js';
 import type { DisplaySession } from '../src/shared/display.js';
-const item = (n: number, ready = false): DisplaySession => ({ id: String(n), number: n, stage: ready ? 4 : 2, label: '', error: null, simulation: null, hideAt: null, readyAt: ready ? n : null, card: ready ? { photoUrl: '', frameUrl: '', qrUrl: '' } : null });
+const item = (n: number, ready = false): DisplaySession => ({ id: String(n), number: n, stage: ready ? 4 : 2, label: '', error: null, simulation: null, hideAt: null, readyAt: ready ? n : null, card: ready ? { photoUrl: '', frameUrl: '', qrUrl: '', videoUrl: '' } : null });
 
 test('ready header slot remains stable until oldest waiting preparation replaces it', () => {
   const state = new ProgressSlots(); const initial = Array.from({length: 8}, (_, index) => item(index + 1));

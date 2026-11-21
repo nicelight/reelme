@@ -25,7 +25,7 @@ test('operator display: six stages, explicit errors, stable order, private media
   const get = (url = '/api/display/today') => f.app.inject({ url, headers: { cookie } });
   const view = async () => (await get()).json<TodayDisplay>();
   const card = (await view()).sessions[0].card!;
-  for (const url of ['/api/display/today', card.photoUrl, card.frameUrl, card.qrUrl]) {
+  for (const url of ['/api/display/today', card.photoUrl, card.frameUrl, card.qrUrl, card.videoUrl]) {
     assert.equal((await f.app.inject(url)).statusCode, 401, url);
     assert.equal((await f.app.inject({ url, headers: { cookie: admin } })).statusCode, 200, url);
     assert.equal((await f.app.inject({ url, headers: { authorization: `Bearer ${'a'.repeat(43)}` } })).statusCode, 403, url);
@@ -42,6 +42,11 @@ test('operator display: six stages, explicit errors, stable order, private media
     assert.equal((await f.app.inject({ url, headers })).statusCode, 401);
   }
   assert.deepEqual((await get(card.photoUrl)).rawPayload, first.photo);
+  const preview = await f.app.inject({ url: card.videoUrl, headers: { cookie, range: 'bytes=0-15' } });
+  assert.equal(preview.statusCode, 206);
+  assert.equal(preview.headers['content-type'], 'video/mp4');
+  assert.match(String(preview.headers['content-disposition']), /^inline/);
+  assert.deepEqual(preview.rawPayload, bytes.subarray(0, 16));
   assert.deepEqual((await get(card.frameUrl)).rawPayload, await readFile(join(f.config.dataDir, 'media', first.frame_path)));
   const png = await sharp((await get(card.qrUrl)).rawPayload).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   assert.equal(jsQR(new Uint8ClampedArray(png.data), png.info.width, png.info.height)?.data, `${f.config.origin}/receive/${row().receive_token}`);
@@ -91,6 +96,44 @@ test('operator display: six stages, explicit errors, stable order, private media
   const failed = (await view()).sessions[1]; assert.equal(failed.stage, 0); assert.equal(failed.card, null); assert.match(failed.error!, /Не удалось создать/);
 });
 
+test('manual hide is shared and persistent, keeps the guest links and the archived video', async t => {
+  const f = await fixture(); t.after(() => f.close()); f.advance(NOVEMBER - JANUARY);
+  const bytes = await videoBytes(f.root, 1);
+  const seed = await preparedSession(f.config.dataDir, bytes);
+  const legacy = openDatabase(f.config.dataDir);
+  try {
+    legacy.exec('ALTER TABLE capture_sessions DROP COLUMN display_hidden');
+    legacy.pragma('user_version = 18');
+  } finally { legacy.close(); }
+  await f.restart(); await f.app.ready();
+  const db = openDatabase(f.config.dataDir); t.after(() => db.close());
+  const delivery = db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(seed.id) as Delivery;
+  const admin = await f.login('admin'); const operator = await f.login('operator');
+  const view = async () => (await f.app.inject({ url: '/api/display/today', headers: { cookie: operator } })).json<TodayDisplay>();
+  const hide = (headers: Record<string, string>) => f.app.inject({ method: 'POST', url: `/api/display/${seed.id}/hide`, headers });
+  const headers = { cookie: operator, origin: f.config.origin };
+  const card = (await view()).sessions[0].card!;
+  assert.equal((await hide({ origin: f.config.origin })).statusCode, 401);
+  assert.equal((await hide({ ...headers, origin: 'https://other.test' })).statusCode, 403);
+  assert.equal((await hide({ origin: f.config.origin, authorization: 'Bearer ' + 'a'.repeat(43) })).statusCode, 403);
+  assert.deepEqual((await view()).hiddenIds, []);
+  assert.equal((await hide(headers)).statusCode, 204);
+  assert.equal((await hide({ ...headers, cookie: admin })).statusCode, 204);
+  await f.restart();
+  const hidden = await view();
+  assert.deepEqual(hidden.sessions, []);
+  assert.deepEqual(hidden.hiddenIds, [seed.id]);
+  for (const url of Object.values(card)) assert.equal((await f.app.inject({ url, headers })).statusCode, 404);
+  assert.equal((await f.app.inject(`/api/receive/${delivery.receive_token}`)).statusCode, 200);
+  assert.deepEqual((await f.app.inject(`/download/${delivery.download_token}`)).rawPayload, bytes);
+  f.advance(86_400_000);
+  assert.deepEqual((await view()).hiddenIds, []);
+  assert.equal((await hide(headers)).statusCode, 404);
+  const archive = await f.app.inject({ url: `/api/events/2026-11-14/${seed.id}/video`, headers });
+  assert.equal(archive.statusCode, 200);
+  assert.deepEqual(archive.rawPayload, bytes);
+});
+
 test('first-confirmation deadline survives retry/restart; today is Novosibirsk; hidden data and links remain', async t => {
   const f = await fixture(); t.after(() => f.close()); f.advance(NOVEMBER - JANUARY);
   const bytes = await videoBytes(f.root, 1); const session = await preparedSession(f.config.dataDir, bytes);
@@ -108,7 +151,11 @@ test('first-confirmation deadline survives retry/restart; today is Novosibirsk; 
   await f.restart(); await f.app.ready(); assert.equal(row().email_confirmed_at, confirmed);
   f.advance(119_000); assert.equal((await view()).sessions.length, 1); assert.equal((await view()).sessions[0].hideAt, confirmed! + 180_000);
   f.advance(1000); assert.equal((await view()).sessions.length, 0);
-  for (const url of Object.values(card)) assert.equal((await f.app.inject({ url, headers: { cookie } })).statusCode, 404);
+  for (const url of [card.photoUrl, card.frameUrl, card.qrUrl]) {
+    assert.equal((await f.app.inject({ url, headers: { cookie } })).statusCode, 404);
+  }
+  // The visible snapshot still offers staff the original video until its page turns.
+  assert.deepEqual((await f.app.inject({ url: card.videoUrl, headers: { cookie } })).rawPayload, bytes);
   assert.equal((await f.app.inject(`/api/receive/${original.receive_token}`)).statusCode, 200);
   assert.deepEqual((await f.app.inject(`/download/${original.download_token}`)).rawPayload, bytes);
   assert.deepEqual(await readFile(join(f.config.dataDir, 'media', session.video_path)), bytes);

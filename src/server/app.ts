@@ -83,7 +83,7 @@ export async function createApp(config: Config, options: { now?: () => number; l
   app.addHook('onReady', async () => {
     // A serving client entrypoint is part of ready, also when fal is disabled.
     await readFile(join(config.clientDir, 'index.html'));
-    const rows = db.prepare("SELECT s.id FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id WHERE s.state='preparing' AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.deleting=0) AND g.video_path IS NOT NULL").all() as { id: string }[];
+    const rows = db.prepare("SELECT s.id FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id WHERE s.state='preparing' AND EXISTS (SELECT 1 FROM events e WHERE e.date=s.event_date AND e.event_no=s.event_no AND e.deleting=0) AND g.video_path IS NOT NULL").all() as { id: string }[];
     for (const row of rows) await publish(row.id);
   });
   const generation = options.generation ?? (config.falKey ? { client: createFalTransport(config.falKey), secret: config.falKey } : {});

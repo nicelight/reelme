@@ -129,3 +129,38 @@ for (const action of ['save', 'skip'] as const) {
     expect(errors).toEqual([]);
   });
 }
+
+test('оператор завершает мероприятие с подтверждением, а следующая съёмка продолжает номера дня', async ({page, app}) => {
+  const http = page.request, headers = {Origin:app.origin};
+  const login = (username:string) => http.post(app.origin+'/api/auth/login',{headers,data:{username,password:app.password}});
+  expect((await login('admin')).ok()).toBe(true);
+  const thumbnail = await http.post(app.origin+'/api/admin/slot-media',{headers,multipart:{file:{name:'cover.png',mimeType:'image/png',buffer:await readFile(app.image)}}});
+  const slot = await http.post(app.origin+'/api/admin/slots',{headers,data:{description:'Портрет',thumbnailId:(await thumbnail.json()).id,visible:true,
+    referenceIds:[],mode:'P2V',model:'minimax/h3-max/reference-to-video',orientation:'landscape',participants:1,photosPerParticipant:1,
+    aspectRatio:'16:9',resolution:'768P',duration:5,prompt:'Portrait',promptExpansionMode:'disabled'}});
+  expect(slot.status()).toBe(201);
+  const slotId = (await slot.json()).id;
+  const start = await http.post(app.origin+'/api/capture/sessions',{headers:{Authorization:'Bearer '+app.installationKey},
+    data:{slotId,startRequestId:randomUUID(),eventSetup:{action:'save',name:'Утро',participantRange:'0–50',location:'Зал'}}});
+  expect((await start.json()).number).toBe(1);
+  expect((await login('operator')).ok()).toBe(true);
+  await page.goto(app.origin+'/operator');
+  const button = page.getByRole('button',{name:'Завершить текущее мероприятие'});
+  await button.click();
+  await expect(page.getByRole('dialog')).toContainText('«Утро»');
+  await page.getByRole('button',{name:'Отмена'}).click();
+  await button.click();
+  await page.getByRole('button',{name:'Завершить мероприятие',exact:true}).click();
+  await expect(page.locator('.archive-day')).toContainText('Утро');
+  await page.locator('.archive-day').click();
+  await expect(page.locator('.archive-session')).toContainText('№ 1');
+  await button.click();
+  await expect(page.getByRole('dialog')).toContainText('Сейчас нет открытого мероприятия');
+  await page.getByRole('button',{name:'Закрыть',exact:true}).click();
+  await page.addInitScript(key => localStorage.setItem('reelme.installationKey',key),app.installationKey);
+  await page.goto(app.captureOrigin+'/reelme.html#slot='+slotId);
+  await page.getByRole('button',{name:'Выбрать этот сюжет'}).click();
+  await expect(page.getByRole('heading',{name:'Новое мероприятие'})).toBeVisible();
+  await page.getByRole('button',{name:'Пропустить',exact:true}).click();
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(sessionStorage.getItem('reelme.captureStart') ?? '{}').receipt?.number)).toBe(2);
+});

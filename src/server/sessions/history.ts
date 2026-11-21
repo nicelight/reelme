@@ -21,7 +21,7 @@ function writer(db: DB) {
   const previous = db.prepare('SELECT id,source,step,event,outcome,detail FROM session_history WHERE session_id=? AND bucket=? ORDER BY id DESC LIMIT 1');
   const insert = db.prepare(`INSERT INTO session_history(session_id,at,last_at,source,step,event,outcome,detail,bucket,report_key)
     SELECT @id,@time,@time,@source,@step,@event,@outcome,@detail,@bucket,@reportKey
-    WHERE EXISTS (SELECT 1 FROM capture_sessions s JOIN events e ON e.date=s.event_date WHERE s.id=@id AND e.deleting=0)
+    WHERE EXISTS (SELECT 1 FROM capture_sessions s JOIN events e ON e.date=s.event_date AND e.event_no=s.event_no WHERE s.id=@id AND e.deleting=0)
     ON CONFLICT(session_id,report_key) DO NOTHING`);
   const bump = db.prepare('UPDATE session_history SET last_at=?,repeats=repeats+1 WHERE id=?');
   // Retain the first observations and the latest window; preserve a visible gap marker.

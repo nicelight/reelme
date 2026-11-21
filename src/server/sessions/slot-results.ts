@@ -18,7 +18,7 @@ interface ResultRow {
   submitted_at: number | null; ready_at: number | null;
 }
 const selection = `SELECT s.id,g.video_path,g.video_size,g.width,g.height,g.submitted_at,g.ready_at
-  FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id JOIN events e ON e.date=s.event_date
+  FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id JOIN events e ON e.date=s.event_date AND e.event_no=s.event_no
   WHERE s.slot_id=? AND s.state='ready' AND e.deleting=0 AND COALESCE(json_extract(s.snapshot,'$.generation.simulateGeneration'),0)=0
     AND g.video_path IS NOT NULL AND g.video_size>0`;
 const params = z.object({ id: z.string().uuid() });

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Деплой ReelMe
+Comment=Развернуть последний локальный коммит на nskserver
+Icon=network-server
+Exec=konsole --hold -e bash -c "exec \\"\\$(dirname -- \\"\\$1\\")/deploy/release.sh\\"" reelme %k
+Terminal=false

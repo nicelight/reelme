@@ -4,7 +4,8 @@
    * not when their animations finish. Deprecated cards stay local until reload.
    * Polling cannot start another load for an active or deprecated id. Date/unmount
    * cancellation and generation checks reject completions from the previous screen.
-   * Server ready state is never changed. */
+   * Confirmed manual hides take precedence over active page snapshots, in-flight
+   * loads and older polls. A hidden result keeps its guest delivery and archive. */
   import { onMount } from 'svelte';
   import { api, ApiError } from './api';
   import type { DisplaySession, TodayDisplay } from '../../shared/display';
@@ -26,18 +27,24 @@
   let revision = $state(0);
   let queue = new ResultsQueue();
   let headerSlots = new ProgressSlots();
+  let hiddenIds = $state<string[]>([]);
+  let displayEventKey = $state('');
+  let hideCard: (id: string) => Promise<void>;
+  let setQrOpen: (open: boolean) => void;
+  let nextPage: () => void;
+  const decoded = new Map<string, Awaited<ReturnType<typeof loadCardImages>>>();
   const scene = $derived.by(() => {
     revision;
     return { cells: [...queue.cells], phase: queue.phase, page: queue.page, pageCount: queue.pageCount,
       pageVersion: queue.pageVersion, completedIds: [...queue.hatched], moving: queue.movingUntil !== null,
-      leaving: queue.leavingUntil !== null, entering: queue.enteringUntil !== null };
+      leaving: queue.leavingUntil !== null, entering: queue.enteringUntil !== null,
+      canAdvance: queue.paged && queue.leavingUntil === null && queue.enteringUntil === null };
   });
   onMount(() => {
     let stopped = false;
     const lifecycle = new AbortController();
     let initialized = false;
     let firstIds: Set<string> | undefined;
-    let currentDate: string | undefined;
     let projection: TodayDisplay | undefined;
     let anchor = 0;
     let anchorClock = 0;
@@ -50,8 +57,9 @@
     let poll: ReturnType<typeof setTimeout>;
     let expiry: ReturnType<typeof setTimeout>;
     let wake: ReturnType<typeof setTimeout>;
-    let hiddenAt: number | null = document.hidden ? performance.now() : null;
-    const decoded = new Map<string, Awaited<ReturnType<typeof loadCardImages>>>();
+    let pausedAt: number | null = document.hidden ? performance.now() : null;
+    let qrOpen = false;
+    const hidden = new Set<string>();
     const loads = new Map<string, { state: 'loading' | 'delayed' | 'retry' | 'ready' | 'deprecated'; order: number }>();
     const media = matchMedia('(prefers-reduced-motion: reduce)');
     reduced = media.matches; queue.reduced = reduced;
@@ -64,6 +72,28 @@
       const images = decoded.get(item.id);
       return images && item.card ? { ...item, card: { ...item.card, frameUrl: images.frameUrl, qrUrl: images.qrUrl } } : item;
     }
+    function excludeHidden(ids: string[]) {
+      const previousSize = hidden.size;
+      for (const id of ids) {
+        if (hidden.has(id)) continue;
+        hidden.add(id);
+        queue.hide(id);
+        loads.delete(id);
+        decoded.delete(id);
+      }
+      if (hidden.size !== previousSize) hiddenIds = [...hidden];
+      if (projection && hidden.size) projection.sessions = projection.sessions.filter(item => !hidden.has(item.id));
+    }
+    hideCard = async id => {
+      const epoch = generation;
+      await api(`/display/${encodeURIComponent(id)}/hide`, {
+        method: 'POST', signal: AbortSignal.any([lifecycle.signal, AbortSignal.timeout(15_000)]),
+      });
+      if (stopped || generation !== epoch) return;
+      excludeHidden([id]);
+      updateProgress();
+      reconcile();
+    };
     function updateProgress() {
       const states: typeof loadStates = {};
       for (const [id, entry] of loads) {
@@ -83,7 +113,7 @@
       sessions = next;
       for (const id of decoded.keys()) if (!retain.has(id) && !projection?.sessions.some(item => item.id === id)) decoded.delete(id);
       clearTimeout(wake);
-      if (!document.hidden) {
+      if (pausedAt === null) {
         const now = performance.now(); const next = queue.nextWake(now);
         if (next !== null) wake = setTimeout(() => { queue.advance(performance.now()); publish(); }, Math.max(1, next - now));
       }
@@ -102,7 +132,7 @@
         }
         return !blocked;
       });
-      const now = performance.now();
+      const now = pausedAt ?? performance.now();
       if (!initialized) {
         if (document.hidden) return;
         // First response is one bootstrap snapshot; do not hatch old results simply
@@ -111,7 +141,7 @@
         queue.bootstrap(available.filter(item => firstIds?.has(item.id)).map(item => item.id), now);
         initialized = true;
       }
-      queue.sync(available.map(item => item.id), now, !document.hidden, firstIds);
+      queue.sync(available.map(item => item.id), now, pausedAt === null, firstIds);
       publish();
       if (retry) void prepare(retry, true);
     }
@@ -171,12 +201,14 @@
       try {
         const next = await api<TodayDisplay>('/display/today', { signal: AbortSignal.any([lifecycle.signal, AbortSignal.timeout(15_000)]) });
         if (stopped) return;
-        if (currentDate !== undefined && currentDate !== next.date) {
+        const screenKey = next.eventKey === undefined ? next.date : next.eventKey ?? `${next.date}:closed`;
+        if (displayEventKey && displayEventKey !== screenKey) {
           resourceLifetime.abort(); resourceLifetime = new AbortController();
           generation++; headerSlots = new ProgressSlots(); queue = new ResultsQueue(); queue.reduced = reduced; decoded.clear(); loads.clear(); loadStates = {}; sessions = {}; order = 0;
-          initialized = false; firstIds = undefined;
+          initialized = false; firstIds = undefined; hidden.clear(); hiddenIds = [];
         }
-        currentDate = next.date; projection = next; anchor = next.serverNow; anchorClock = started;
+        displayEventKey = screenKey; projection = next; anchor = next.serverNow; anchorClock = started;
+        excludeHidden(next.hiddenIds ?? []);
         queue.duration = next.pageDurationSeconds * 1000;
         firstIds ??= new Set(serverReadySessions().map(item => item.id));
         error = '';
@@ -200,15 +232,25 @@
       }
     }
     function visibility() {
+      if (stopped) return;
+      const paused = document.hidden || qrOpen;
+      if (paused === (pausedAt !== null)) return;
       const now = performance.now();
-      if (document.hidden) { hiddenAt = now; clearTimeout(wake); }
+      if (paused) { pausedAt = now; clearTimeout(wake); }
       else {
-        if (hiddenAt !== null) queue.shiftTime(now - hiddenAt);
-        hiddenAt = null; reconcile();
+        queue.shiftTime(now - pausedAt!);
+        pausedAt = null;
+        reconcile();
       }
-      document.querySelectorAll('.results-shell .bloom,.results-shell .egg-scene img,.results-shell .grid').forEach(node => node.getAnimations().forEach(animation => { if (document.hidden) animation.pause(); else animation.play(); }));
+      document.querySelectorAll('.results-shell .bloom,.results-shell .egg-scene img,.results-shell .grid').forEach(node => node.getAnimations().forEach(animation => { if (paused) animation.pause(); else animation.play(); }));
     }
-    function preference() { reduced = media.matches; queue.reduced = reduced; queue.advance(performance.now()); publish(); }
+    setQrOpen = open => { qrOpen = open; visibility(); };
+    nextPage = () => {
+      if (pausedAt !== null) return;
+      queue.nextPage(performance.now());
+      publish();
+    };
+    function preference() { reduced = media.matches; queue.reduced = reduced; if (pausedAt === null) queue.advance(performance.now()); publish(); }
     media.addEventListener('change', preference); document.addEventListener('visibilitychange', visibility);
     void prepareStage();
     void refresh();
@@ -219,7 +261,9 @@
     };
   });
 </script>
-<ResultsScreen {...scene} {sessions} {reduced} {resourcesReady} error={stageError || error} {progress} {loadStates} />
+<ResultsScreen {...scene} {sessions} {reduced} {resourcesReady} error={stageError || error} {progress} {loadStates}
+  {displayEventKey} {hiddenIds} onhide={id => hideCard(id)} getQr={id => decoded.get(id)?.qr}
+  onqrchange={open => setQrOpen(open)} onnextpage={() => nextPage()} />
 
 {#if !publicScreen && issues.length}
   <section class="operator-issues" aria-label="Сообщения обработки">

@@ -16,7 +16,7 @@ interface EntryRow {
   outcome: string; detail: string; repeats: number;
 }
 interface Row {
-  id: string; event_date: string; number: number; state: string; created_at: number; snapshot: string;
+  id: string; event_date: string; event_name: string | null; number: number; state: string; created_at: number; snapshot: string;
   request_id: string | null; submitted_at: number | null; ready_at: number | null; error_code: string | null;
   opened_at: number | null; sent_at: number | null; email_state: string | null; email_error: string | null;
   page_seen_at: number | null; page_offline: number;
@@ -46,9 +46,9 @@ const failures: Record<string, string> = {
 };
 // Use one server-clock cutoff for the displayed row, the day total and issue pagination.
 const join = `FROM (SELECT *, (state='capturing' AND page_seen_at IS NOT NULL AND page_seen_at < ?) AS page_offline
-    FROM capture_sessions) s JOIN events e ON e.date=s.event_date AND e.deleting=0
+    FROM capture_sessions) s JOIN events e ON e.date=s.event_date AND e.event_no=s.event_no AND e.deleting=0
   LEFT JOIN generation_jobs g ON g.session_id=s.id LEFT JOIN session_delivery d ON d.session_id=s.id`;
-const selection = `SELECT s.id,s.event_date,s.number,s.state,s.created_at,s.snapshot,s.page_seen_at,s.page_offline,
+const selection = `SELECT s.id,s.event_date,e.name AS event_name,s.number,s.state,s.created_at,s.snapshot,s.page_seen_at,s.page_offline,
   g.cost_usd,g.request_id,g.submitted_at,g.ready_at,g.error_code,d.opened_at,d.sent_at,d.email_state,d.email_error,
   (SELECT COUNT(*) FROM capture_photos WHERE session_id=s.id) photos ${join}`;
 // Only an outstanding capture rejection belongs to the current capture phase.
@@ -140,7 +140,7 @@ function status(row: Row, latest?: EntryRow): SessionStatus {
   if (ready && ['delivery.download','delivery.share'].includes(last?.step ?? '') && row.email_state === 'not_requested') label = 'Видео готово · ' + last!.label;
   const contactAt = row.state === 'capturing' && row.page_seen_at !== null
     ? row.page_seen_at + (row.page_offline ? captureHeartbeatTimeoutMs : 0) : 0;
-  return { id: row.id, date: row.event_date, number: row.number, state: row.state, mode, stage, issue, label,
+  return { id: row.id, date: row.event_date, eventName: row.event_name, number: row.number, state: row.state, mode, stage, issue, label,
     costUsd: billable ? row.cost_usd : undefined,
     updatedAt: Math.max(row.created_at, contactAt, latest?.last_at ?? 0, row.ready_at ?? 0, row.opened_at ?? 0, row.sent_at ?? 0, row.submitted_at ?? 0) };
 }
@@ -180,7 +180,7 @@ export function registerStatuses(app: FastifyInstance, db: DB, access: Access, n
     if (q.before) { where.push('s.number<?'); values.push(q.before); }
     const rows = db.prepare(`${selection} WHERE ${where.join(' AND ')} ORDER BY s.number DESC LIMIT 31`).all(...values) as Row[];
     const count = db.prepare(`SELECT COUNT(*) n ${join} WHERE s.event_date=? AND ${issue}`).get(cutoff, date) as { n: number };
-    const event = db.prepare<[string], { name: string | null }>('SELECT name FROM events WHERE date=? AND deleting=0').get(date);
+    const event = db.prepare<[string], { name: string | null }>('SELECT CASE WHEN COUNT(*)=1 THEN MAX(name) END AS name FROM events WHERE date=? AND deleting=0').get(date);
     return { date, eventName: event?.name ?? null, serverNow: time, issues: count.n, sessions: views(rows.slice(0,30), available), nextBefore: rows.length > 30 ? rows[29].number : null };
   });
   app.get<{ Params: { id: string } }>('/api/statuses/:id', { preHandler: account }, (request): SessionHistory => {
