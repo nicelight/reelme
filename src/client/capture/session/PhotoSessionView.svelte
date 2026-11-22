@@ -98,7 +98,11 @@
     <radialGradient id="session-core"><stop stop-color="#fffaf5"/><stop offset=".4" stop-color="#fff2f2"/><stop offset=".72" stop-color="#ffbbdf" stop-opacity=".8"/><stop offset="1" stop-color="#ff8bcd" stop-opacity="0"/></radialGradient>
     <filter id="session-bloom" x="-30%" y="-150%" width="160%" height="400%"><feGaussianBlur stdDeviation="12"/></filter>
   </defs>{#each paths as path}<g fill="none" stroke="url(#session-line)"><path class="glow" d={path}/><path class="ribbon" d={path}/></g><g use:ribbonLight={{path,from:5,to:95}}><ellipse rx="120" ry="36" fill="url(#session-halo)"/><ellipse rx="62" ry="6" fill="url(#session-halo)"/><ellipse rx="40" ry="2.5" fill="url(#session-core)"/></g>{/each}</svg>
-  <header class:usb-header={webUsb}><div class="brand"><img src={brand} alt=""/><span>REELME</span></div>{#if webUsb}<CameraPanel onopen={onpause}/>{/if}<div class="event">{@render icon('people')}<span>Фотосессия · {date}</span></div></header>
+  <header class:usb-header={webUsb}>
+    <div class="brand"><img src={brand} alt=""/><span>REELME</span></div>
+    {#if webUsb}<div class="camera-tools"><CameraPanel showBattery onopen={onpause}/></div>{/if}
+    <div class="event">{@render icon('people')}<span>Фотосессия · {date}</span></div>
+  </header>
   <div class="composition" use:rimWave={{pageVersion:0,gain:1,previewVersion:0}}>
     <article class="story framed">
       <div class="story-media">{#if story?.thumbnailId}<ProtectedMedia mediaId={story.thumbnailId} path={story.slotId ? storyMediaPath(story.slotId, story.thumbnailId) : sessionThumbnailPath} sessionPath={story.slotId ? sessionThumbnailPath : undefined} {installationKey} onsettled={() => coverSettled = true} alt={title}/>{:else}<div class="story-missing">Сюжет этой фотосессии</div>{/if}</div>
@@ -139,7 +143,7 @@
 
 <style>
   header.usb-header { position:relative;min-height:36px; }
-  header.usb-header :global(.camera-status) { position:absolute;right:0;top:0; }
+  .camera-tools { position:absolute;right:0;top:0;display:flex;align-items:center;gap:8px; }
   .usb-flash { position:fixed;inset:0;z-index:50;background:white;pointer-events:none;opacity:0;animation:usb-flash 50ms step-end 200ms; }
   @keyframes usb-flash { from {opacity:1} to {opacity:0} }
 </style>

@@ -27,7 +27,7 @@ export async function mockUsbCamera(page: Page, bytes: Buffer) {
     body: `
       const jpeg = Uint8Array.from(atob('${bytes.toString('base64')}'), c => c.charCodeAt(0));
       const stats = window.usbTest = { shots: 0, previews: 0, active: 0, overlaps: 0, stops: 0, writes: [],
-        failOff: false, holdShot: false, previewStarts: [] };
+        failOff: false, holdShot: false, previewStarts: [], battery: '75%', configReads: 0 };
       async function read(ms = 25) {
         if (stats.active++) stats.overlaps++;
         await new Promise(resolve => setTimeout(resolve, ms));
@@ -44,13 +44,15 @@ export async function mockUsbCamera(page: Page, bytes: Buffer) {
         delete() { if (stats.active) stats.overlaps++; }
         supportedOps() { return {capturePreview:true, captureImage:true, config:true}; }
         configToJS() {
+          stats.configReads++;
           if (window.holdConfig) return new Promise((_, reject) => { window.rejectConfig = reject; });
           const controls = {
             viewfinder: {}, autofocusdrive: {}, manualfocusdrive: { choices: ['Near 1', 'Near 2', 'Near 3', 'Far 1', 'Far 2', 'Far 3'] },
             afmethod: { choices: ['Quick', 'Live'], value: 'Quick' }, eosremoterelease: { choices: ['Immediate'] }
           };
           for (const [name, widget] of Object.entries(controls)) Object.assign(widget, {name, readonly:false});
-          return {name:'main', children:{ actions: {name:'actions', children:controls} }};
+          return {name:'main', children:{ actions: {name:'actions', children:controls},
+            status: {name:'status', children:{batterylevel:{name:'batterylevel', readonly:true, value:stats.battery}}} }};
         }
         async setConfigValue(name, value) {
           stats.writes.push([name, value]);

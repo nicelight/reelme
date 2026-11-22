@@ -39,6 +39,12 @@ test('WebUSB booth keeps one connection across screens and recovers a pose witho
     await panel.getByRole('button', { name: 'Закрыть' }).click();
   }
   await connect();
+  await ready.click();
+  await expect(panel.getByText('Заряд камеры · 75%')).toBeVisible();
+  await page.evaluate("window.usbTest.battery = '50%'");
+  await expect(panel.getByText('Заряд камеры · 50%')).toBeVisible({ timeout: 18000 });
+  expect(await page.evaluate('window.usbTest.configReads')).toBe(2);
+  await panel.getByRole('button', { name: 'Закрыть' }).click();
   expect(await page.evaluate('window.cameraPickerOptions')).toEqual({
     filters: [{ vendorId: 0x04a9, classCode: 6, subclassCode: 1 }]
   });
@@ -50,6 +56,12 @@ test('WebUSB booth keeps one connection across screens and recovers a pose witho
   await page.getByRole('button', { name: 'Сюжет 1: USB портрет' }).click();
   await page.getByRole('button', { name: 'Выбрать этот сюжет' }).click();
   await expect(page.locator('.live-preview')).toBeVisible();
+  const battery = page.locator('header').getByText('Заряд · 50%', { exact: true });
+  await expect(battery).toBeVisible();
+  const batteryBox = (await battery.boundingBox())!;
+  const cameraBox = (await ready.boundingBox())!;
+  expect(batteryBox.x + batteryBox.width).toBeLessThanOrEqual(cameraBox.x);
+  expect(Math.abs(batteryBox.y + batteryBox.height / 2 - cameraBox.y - cameraBox.height / 2)).toBeLessThan(2);
   await expect(ready).toBeVisible();
   expect(await page.evaluate('window.usbCalls')).toEqual(['picker','list']);
   await page.evaluate('window.usbTest.holdShot = true');
@@ -63,6 +75,7 @@ test('WebUSB booth keeps one connection across screens and recovers a pose witho
   await page.evaluate('window.usbTest.releaseShot(); window.usbTest.holdShot = false');
   await panel.getByRole('button', { name: 'Закрыть' }).click();
   await expect(page.locator('.thumbnail.filled')).toHaveCount(1);
+  await expect(battery).toBeHidden();
   await page.getByRole('button', { name: 'Снять один кадр' }).click();
   await expect(page.getByRole('alert')).toContainText('Проверьте камеру');
   expect(await page.evaluate('window.usbTest.shots')).toBe(1);

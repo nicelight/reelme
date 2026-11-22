@@ -2,7 +2,7 @@
 // last read before viewfinder=false. Its 800 ms JS acknowledgement is outside
 // the native queue. Measure the 100 ms from dispatch and observe both promises.
 // disconnect() deletes the native context outside the queue; drain before delete.
-import { canonVendorId, checkSelectedCamera, chooseCamera, createCamera, errorMessage, unsupportedReason, usbApi, writableSettings, type Camera, type Device } from '../cam-test-web/camera';
+import { canonVendorId, checkSelectedCamera, chooseCamera, createCamera, errorMessage, unsupportedReason, usbApi, writableSettings, type Camera, type ConfigWidget, type Device } from '../cam-test-web/camera';
 import { pause, validatedCameraJpeg } from './camera-frame';
 
 export class BoothUsb {
@@ -10,6 +10,7 @@ export class BoothUsb {
   detail = $state('');
   stage = $state('');
   uncertain = $state(false);
+  battery = $state('');
   readonly support = unsupportedReason();
   readonly hasPendingCapture = false; // The wrapper cannot retrieve an earlier shot by filename.
   private camera?: Camera;
@@ -20,11 +21,40 @@ export class BoothUsb {
   attempt = $state('');
   sendCaptureLogs = false;
   private previewInFlight = false;
+  private batteryTimer?: number;
+  private batteryInFlight = false;
+  private pending = 0;
   private toggleAck?: Promise<void>;
 
   private track<T>(work: Promise<T>) {
-    this.tail = work.then(() => {}, () => {});
+    this.pending++;
+    const finished = () => { this.pending--; };
+    this.tail = work.then(finished, finished);
     return work;
+  }
+
+  private updateBattery(config: ConfigWidget) {
+    const value = config.children?.status?.children?.batterylevel?.value;
+    this.battery = typeof value === 'string' || typeof value === 'number' ? String(value) : '';
+  }
+
+  private async pollBattery() {
+    const owner = this.owner;
+    if (!owner || this.state !== 'ready' || this.pending) return;
+    // Reading EOS config also invokes libgphoto2's capability-gated KeepDeviceOn.
+    this.batteryInFlight = true;
+    try {
+      const config = await this.operation(owner.signal, camera => camera.getConfig());
+      if (!owner.signal.aborted) this.updateBattery(config);
+    } catch (cause) {
+      if (!owner.signal.aborted) {
+        this.battery = '';
+        // A critical rejection poisons the web-gphoto2 queue for this connection.
+        if (!(cause instanceof Error && cause.constructor === Error)) void this.release(errorMessage(cause));
+      }
+    } finally {
+      this.batteryInFlight = false;
+    }
   }
 
   private async step<T>(stage: string, operation: () => Promise<T>) {
@@ -76,6 +106,7 @@ export class BoothUsb {
       if (!ops.captureImage || !ops.capturePreview || !ops.config) throw new Error('Камера не поддерживает съёмку с Live View.');
       owner.signal.throwIfAborted();
       const settings = await this.step('Настройки камеры', () => camera.getConfig());
+      this.updateBattery(settings);
       if (!writableSettings(settings).viewfinder) throw new Error('Камера не позволяет отключить видоискатель.');
       owner.signal.throwIfAborted();
       this.viewfinder = true;
@@ -86,6 +117,7 @@ export class BoothUsb {
       owner.signal.throwIfAborted();
       this.state = 'ready';
       this.stage = '';
+      this.batteryTimer = window.setInterval(() => void this.pollBattery(), 15_000);
     })();
     void this.track(opening).catch(cause => {
       if (!owner.signal.aborted) void this.release(errorMessage(cause));
@@ -111,11 +143,12 @@ export class BoothUsb {
     if (this.state === 'idle' || this.state === 'closing') return;
     const opening = this.state === 'connecting';
     this.state = 'closing';
+    window.clearInterval(this.batteryTimer);
     this.owner?.abort();
     this.detail = reason;
     try {
       // An outstanding connect can be blocked inside an owned WinUSB handle.
-      if ((opening || this.previewInFlight) && this.device?.opened) await this.device.close().catch(() => {});
+      if ((opening || this.previewInFlight || this.batteryInFlight) && this.device?.opened) await this.device.close().catch(() => {});
       await this.tail;
       await this.toggleAck;
       if (this.viewfinder && this.camera && this.device?.opened) {
@@ -130,6 +163,7 @@ export class BoothUsb {
       this.camera = undefined;
       this.device = undefined;
       this.viewfinder = false;
+      this.battery = '';
       this.stage = '';
       this.state = 'idle';
     }
@@ -172,8 +206,10 @@ export class BoothUsb {
   capture(_session: string, _pose: number, _live: boolean, signal: AbortSignal) {
     return this.operation(signal, async (camera, active) => {
       this.viewfinder = false;
+      this.pending++;
       this.toggleAck = this.step('Отключение видоискателя', () => camera.setConfigValue('viewfinder', false))
-        .catch(cause => { this.viewfinder = true; void this.release(errorMessage(cause)); });
+        .catch(cause => { this.viewfinder = true; void this.release(errorMessage(cause)); })
+        .finally(() => { this.pending--; });
       await pause(100, active);
       if (document.hidden) throw new Error('Съёмка приостановлена.');
       this.uncertain = true;
