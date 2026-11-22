@@ -5,13 +5,14 @@
  * from the current capability matrix. Source: docs/slot-setup/matrix.md.
  */
 import { snapshotPosePlan, type SlotSnapshot } from '../../shared/capture.js';
-import { legacySlotSchema, recastId, wanEditId, slotSchema } from '../../shared/scenarios.js';
+import { legacySlotSchema, recastId, wanEditId, slotSchema, retiredKlingEditIds, savedKlingEditSchema } from '../../shared/scenarios.js';
 
 export interface GenerationMedia { photos: string[]; video?: string; videoDuration?: number; references: string[] }
 export function buildModelInput(snapshot: SlotSnapshot, media: GenerationMedia): Record<string, unknown> {
   const value = { ...snapshot.generation, description: snapshot.description,
     thumbnailId: snapshot.thumbnailId, demoId: snapshot.demoId, visible: true };
-  const configured = snapshot.posePlan === undefined ? undefined : slotSchema.parse(value);
+  const schema = retiredKlingEditIds.includes(value.model) ? savedKlingEditSchema : slotSchema;
+  const configured = snapshot.posePlan === undefined ? undefined : schema.parse(value);
   const input = configured ?? legacySlotSchema.parse(value);
   const plan = snapshotPosePlan(snapshot);
   const expected = configured

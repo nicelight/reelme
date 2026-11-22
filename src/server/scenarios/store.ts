@@ -4,7 +4,7 @@
  * test may snapshot a hidden slot and retain its private test-photo source.
  * Raw legacy records stay distinct from editor defaults. Source: docs/slot-setup/matrix.md. */
 import type { DB } from '../db.js';
-import { hasSlotSetup, normalizeSlotForEditor, recastId, slotSchema, type Slot } from '../../shared/scenarios.js';
+import { hasSlotSetup, normalizeSlotForEditor, recastId, retiredKlingEditIds, slotSchema, type Slot } from '../../shared/scenarios.js';
 import type { CatalogItem, SlotSnapshot } from '../../shared/capture.js';
 import { buildPosePlan } from '../../shared/slot-setup.js';
 import { HttpError } from '../errors.js';
@@ -21,12 +21,14 @@ export function visibleSlot(db: DB, id: string): Slot {
   if (!slot.visible || !slotReady(slot)) throw new HttpError(404, 'NOT_FOUND', 'Сюжет не найден');
   return slot;
 }
-export function slotReady(slot: Slot): boolean { return slot.mode !== 'V2V' || !!slot.videoId; }
+export function slotReady(slot: Slot): boolean { return !retiredKlingEditIds.includes(slot.model) && (slot.mode !== 'V2V' || !!slot.videoId); }
 /** Projection only: never save inferred setup back into a legacy row here. */
 export function editorSlot(db: DB, slot: Slot): Slot {
   if (hasSlotSetup(slot)) return slot;
   const video = slot.videoId ? readMedia(db, slot.videoId) : undefined;
-  return normalizeSlotForEditor(slot, video && video.height > video.width ? 'portrait' : 'landscape');
+  const orientation = video && video.height > video.width ? 'portrait' : 'landscape';
+  if (retiredKlingEditIds.includes(slot.model)) return { ...slot, participants: 1, photosPerParticipant: 4, orientation };
+  return normalizeSlotForEditor(slot, orientation);
 }
 export function catalogItem(db: DB, slot: Slot): CatalogItem {
   const previewId = slot.mode === 'V2V' ? slot.videoId : slot.demoId;
@@ -38,11 +40,12 @@ export function catalogItem(db: DB, slot: Slot): CatalogItem {
 export function snapshotSlot(db: DB, id: string, manualTest = false): SlotSnapshot {
   const slot = readSlot(db, id);
   if (!manualTest && !slot.visible) throw new HttpError(404, 'NOT_FOUND', 'Сюжет не найден');
+  if (retiredKlingEditIds.includes(slot.model)) throw new HttpError(400, 'MODEL_RETIRED', 'Модель снята с выбора. Выберите другую модель в редакторе сюжета.');
   if (!slotReady(slot)) throw new HttpError(400, 'TEMPLATE_VIDEO_REQUIRED', 'Для запуска нужен шаблонный ролик слота');
   const configured = hasSlotSetup(slot);
   if (configured) { const { id: _id, ...input } = slot; slotSchema.parse(input); }
   const posePlan = configured ? buildPosePlan(slot, readCaptureGuides(db)) : undefined;
-  const { id: slotId, description, thumbnailId, demoId, testPhotoId, testPhotoIds, visible: _visible, ...generation } = slot;
+  const { id: slotId, description, comment, thumbnailId, demoId, testPhotoId, testPhotoIds, visible: _visible, ...generation } = slot;
   if (manualTest) {
     if (posePlan) {
       if (!testPhotoIds || testPhotoIds.length !== posePlan.length) throw new HttpError(400, 'TEST_PHOTOS_REQUIRED', 'Добавьте отдельное тестовое фото для каждого кадра');
@@ -53,6 +56,7 @@ export function snapshotSlot(db: DB, id: string, manualTest = false): SlotSnapsh
     }
   }
   return {
+    ...(comment ? { comment } : {}),
     slotId, description, thumbnailId, ...(demoId ? { demoId } : {}), ...(manualTest ? posePlan ? { testPhotoIds: [...testPhotoIds!] } : { testPhotoId } : {}),
     expectedPhotos: posePlan?.length ?? (generation.model === recastId ? 1 : 4),
     ...(posePlan ? { posePlan } : {}),

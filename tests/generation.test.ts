@@ -418,7 +418,7 @@ test('two visitors reuse the saved video and reference without further fal stora
   const f = await fixture();
   t.after(() => f.close());
   const cookie = await f.login();
-  const model = 'fal-ai/kling-video/o1/video-to-video/edit';
+  const model = 'kling/v4/flash/video-to-video';
   const video = await videoBytes(f.root, 5);
   const clip = await f.importTemplate(cookie, video, randomUUID(), model);
   const reference = await imageBytes();
@@ -454,9 +454,9 @@ test('two visitors reuse the saved video and reference without further fal stora
     generation: { client: createFalTransport('test-key', transport), intervalMs: 15, download: async () => new Response(video) },
   });
   t.after(() => app.close());
-  const save = await app.inject({ method: 'POST', url: '/api/admin/slots', headers: { cookie, origin: f.config.origin },
-    payload: { id: clip.slotId, description: 'Two visitors', visible: true, thumbnailId: image.id, model, mode: 'V2V',
-      participants: 1, photosPerParticipant: 2, orientation: 'landscape', prompt: '@Element1 in @Image1', videoId: clip.id, referenceIds: [image.id] } });
+  const slot = { id: clip.slotId, description: 'Two visitors', visible: true, thumbnailId: image.id, model, mode: 'V2V',
+    participants: 1, photosPerParticipant: 2, orientation: 'landscape', resolution: '720p', prompt: '@Element1 in @Image1', videoId: clip.id, referenceIds: [image.id] };
+  const save = await app.inject({ method: 'POST', url: '/api/admin/slots', headers: { cookie, origin: f.config.origin }, payload: slot });
   assert.equal(save.statusCode, 201, save.body);
   await eventually(() => assert.equal(puts.length, 2));
   const videoUrl = puts.find(put => put.bytes.equals(video))?.url;
@@ -475,6 +475,34 @@ test('two visitors reuse the saved video and reference without further fal stora
     assert.equal(payload.video_url, videoUrl);
     assert.deepEqual(payload.image_urls, [referenceUrl]);
     assert.equal(payload.elements.length, 1);
+    const staffCookie = index === 0 ? cookie : await f.login('operator');
+    const history = (await app.inject({ url: '/api/statuses/' + session + '?requests=1', headers: { cookie: staffCookie } })).json();
+    const record = history.entries.find((entry: {event:string}) => entry.event === 'submit_started');
+    const [first, second, ref, original] = history.media;
+    assert.deepEqual(record.detail.providerRequest, { endpoint: model, input: {
+      ...payload, video_url: original.href, image_urls: [ref.href],
+      elements: [{ frontal_image_url: first.href, reference_image_urls: [second.href] }],
+    } });
+    assert.equal(history.reconstructed, undefined);
+    assert.doesNotMatch(JSON.stringify(history), /provider-media|cdn\.test/);
+    for (const [file, bytes] of [[first, photos[0]], [second, photos[1]], [ref, reference], [original, video]]) {
+      const served = await app.inject({ url: file.href, headers: { cookie: staffCookie } });
+      assert.equal(served.statusCode, 200);
+      assert.deepEqual(served.rawPayload, bytes);
+      assert.equal((await app.inject(file.href)).statusCode, 401);
+      assert.equal((await app.inject({ url: file.href, headers: installation })).statusCode, 403);
+    }
+    assert.equal((await app.inject({ url: '/api/statuses/' + session + '/materials/' + randomUUID(), headers: { cookie } })).statusCode, 404);
+    const listed = (await app.inject({ url: '/api/statuses?requests=1&number=' + history.session.number, headers: { cookie } })).json();
+    assert.deepEqual(listed.sessions.map((item: {id: string}) => item.id), [session]);
+    // A pre-journal session has the same source files, but no recorded body.
+    const db = openDatabase(f.config.dataDir);
+    try {
+      db.prepare("UPDATE session_history SET detail=json_remove(detail,'$.providerRequest') WHERE id=?").run(record.id);
+      const legacy = (await app.inject({ url: '/api/statuses/' + session + '?requests=1', headers: { cookie } })).json();
+      assert.deepEqual(legacy.reconstructed, record.detail.providerRequest);
+      assert.ok(legacy.entries.every((entry: { detail: { providerRequest?: unknown } }) => !entry.detail.providerRequest));
+    } finally { db.close(); }
     const element = payload.elements[0];
     const urls = [element.frontal_image_url, ...element.reference_image_urls];
     assert.equal(urls.length, photos.length);
@@ -488,6 +516,24 @@ test('two visitors reuse the saved video and reference without further fal stora
       assert.deepEqual(served.rawPayload, photos[pose]);
     }
   }
+
+  const testPhotos = await Promise.all(['blue','green'].map(visitorJpeg));
+  const testPhotoIds = [];
+  for (const bytes of testPhotos) testPhotoIds.push((await f.upload(cookie, bytes, 'image/jpeg', 'test.jpg')).id);
+  const headers = { cookie, origin: f.config.origin };
+  const { id, ...settings } = slot;
+  assert.equal((await app.inject({ method:'PUT', url:'/api/admin/slots/' + id, headers, payload:{ ...settings, testPhotoIds } })).statusCode, 200);
+  const manual = await app.inject({ method:'POST', url:`/api/admin/slots/${id}/test-generations`, headers, payload:{ startRequestId:randomUUID() } });
+  assert.equal(manual.statusCode, 201);
+  const manualId = manual.json().sessionId;
+  await eventually(async () => assert.equal((await state(f, manualId)).state, 'ready'));
+  const manualHistory = (await app.inject({url:'/api/statuses/' + manualId + '?requests=1', headers})).json();
+  const attempt = manualHistory.entries.find((entry: {event:string}) => entry.event === 'submit_started');
+  assert.equal(attempt.detail.mode, 'manual_test');
+  assert.deepEqual(attempt.detail.providerRequest.input.elements, [{
+    frontal_image_url: manualHistory.media[0].href, reference_image_urls: [manualHistory.media[1].href],
+  }]);
+  assert.deepEqual((await app.inject({url:manualHistory.media[1].href, headers})).rawPayload, testPhotos[1]);
 });
 
 test('save warms the CDN, sessions share uploads and a replacement can submit and poll while the original is uploading', async t => {

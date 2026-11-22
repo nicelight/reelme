@@ -81,6 +81,7 @@ export interface CaptureStatus extends StartReceipt {
  * contains future model inputs; a P2V demo is never a generation input. */
 export const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
 export interface SlotSnapshot {
+  comment?: string;
   captureSettings?: CaptureSettings;
   /** Only manual tests retain their immutable source for retry; never a model input. */
   testPhotoId?: string;
@@ -93,7 +94,7 @@ export interface SlotSnapshot {
   expectedPhotos: number;
   /** Absence identifies a legacy snapshot; do not normalize it on read. */
   posePlan?: Pose[];
-  generation: Omit<SlotInput, 'description' | 'thumbnailId' | 'visible' | 'demoId' | 'testPhotoId' | 'testPhotoIds'>;
+  generation: Omit<SlotInput, 'description' | 'comment' | 'thumbnailId' | 'visible' | 'demoId' | 'testPhotoId' | 'testPhotoIds'>;
 }
 /** Always return a copy; saved plans never follow later guide/catalog edits. */
 export function snapshotPosePlan(snapshot: SlotSnapshot): Pose[] {

@@ -6,10 +6,14 @@ import type { DB } from '../db.js';
 import { HttpError } from '../errors.js';
 import { isBillableRequest, requestIdPattern, type CostReader } from './fal-costs.js';
 import { createBalanceReader } from './fal-balance.js';
-import { eventDate } from './index.js';
-import { captureHeartbeatTimeoutMs } from '../../shared/capture.js';
-import { isTestVideo } from '../../shared/scenarios.js';
-import type { HistoryEntry, SessionHistory, SessionStatus, StatusPage } from '../../shared/statuses.js';
+import { eventDate, readSession } from './index.js';
+import { captureHeartbeatTimeoutMs, type SlotSnapshot } from '../../shared/capture.js';
+import { describeProviderRequest } from './history.js';
+import { buildModelInput } from './model-input.js';
+import { isTestVideo, wanEditId } from '../../shared/scenarios.js';
+import { readMedia, sendMedia } from '../scenarios/media.js';
+import { sessionAvailable } from './availability.js';
+import { statusMaterialPath, statusPhotoPath, type HistoryEntry, type SessionHistory, type SessionStatus, type StatusPage } from '../../shared/statuses.js';
 
 interface EntryRow {
   id: number; at: number; last_at: number; source: string; step: string; event: string;
@@ -85,7 +89,7 @@ function describe(entry: EntryRow, detail: HistoryEntry['detail']) {
   if (entry.step === 'fal.status' && detail.providerStatus === 'IN_QUEUE') return 'fal принял задание, в очереди';
   if (entry.step === 'fal.status' && detail.providerStatus === 'IN_PROGRESS') return 'fal выполняет задание';
   if (entry.step === 'delivery.download' && transferEvents[entry.event]) {
-    return `${transfers[detail.method] ?? prefix} · ${transferEvents[entry.event]}`;
+    return `${transfers[detail.method ?? ''] ?? prefix} · ${transferEvents[entry.event]}`;
   }
   if (entry.step === 'smtp.send') {
     const method = detail.method === 'link' ? 'ссылка' : 'вложение';
@@ -139,16 +143,31 @@ function status(row: Row, latest?: EntryRow): SessionStatus {
   if (ready && ['delivery.download','delivery.share'].includes(last?.step ?? '') && row.email_state === 'not_requested') label = 'Видео готово · ' + last!.label;
   const contactAt = row.state === 'capturing' && row.page_seen_at !== null
     ? row.page_seen_at + (row.page_offline ? captureHeartbeatTimeoutMs : 0) : 0;
-  return { id: row.id, date: row.event_date, eventName: row.event_name, number: row.number, state: row.state, mode, stage, issue, label,
+  return { id: row.id, story: snapshot.description, date: row.event_date, eventName: row.event_name, number: row.number, state: row.state, mode, stage, issue, label,
     costUsd: billable ? row.cost_usd : undefined,
     updatedAt: Math.max(row.created_at, contactAt, latest?.last_at ?? 0, row.ready_at ?? 0, row.opened_at ?? 0, row.sent_at ?? 0, row.submitted_at ?? 0) };
 }
 
-export function registerStatuses(app: FastifyInstance, db: DB, access: Access, now: () => number, costs: CostReader, billingKey?: string) {
+export function registerStatuses(app: FastifyInstance, db: DB, dataDir: string, access: Access, now: () => number, costs: CostReader, billingKey?: string) {
   async function account(request: FastifyRequest, reply: FastifyReply) {
     const role = access.context(request, reply);
     if (role !== 'admin' && role !== 'operator') throw new HttpError(403, 'FORBIDDEN', 'Нужен аккаунт сотрудника');
   }
+  app.get('/api/statuses/:id/photos/:number', { preHandler: account }, (request, reply) => {
+    const { id, number } = z.object({ id: z.string().uuid(), number: z.coerce.number().int().min(1).max(8) }).parse(request.params);
+    const photo = db.prepare('SELECT path,size,width,height FROM capture_photos WHERE session_id=? AND pose_index=?')
+      .get(id, number - 1) as { path: string; size: number; width: number; height: number } | undefined;
+    if (!photo || !sessionAvailable(db, id)) throw new HttpError(404, 'NOT_FOUND', 'Снимок недоступен');
+    reply.header('Cache-Control', 'private, no-store');
+    return sendMedia(dataDir, { ...photo, id, kind: 'image', mime: 'image/jpeg' }, request, reply);
+  });
+  app.get('/api/statuses/:id/materials/:mediaId', { preHandler: account }, (request, reply) => {
+    const { id, mediaId } = z.object({ id: z.string().uuid(), mediaId: z.string().uuid() }).parse(request.params);
+    const input = readSession(db, id).snapshot.generation;
+    if (input.videoId !== mediaId && !input.referenceIds.includes(mediaId)) throw new HttpError(404, 'NOT_FOUND', 'Материал недоступен');
+    reply.header('Cache-Control', 'private, no-store');
+    return sendMedia(dataDir, readMedia(db, mediaId), request, reply);
+  });
   const readBalance = createBalanceReader(billingKey);
   app.get('/api/statuses/fal-balance', { preHandler: account }, () => readBalance());
   let latestQuery: ReturnType<typeof db.prepare<[string], EntryRow>>;
@@ -162,7 +181,8 @@ export function registerStatuses(app: FastifyInstance, db: DB, access: Access, n
     costs.refresh(pending);
     return sessions;
   }
-  const list = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), number: z.coerce.number().int().positive().optional(),
+  const requestsFilter = z.literal('1').optional();
+  const list = z.object({ requests: requestsFilter, date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), number: z.coerce.number().int().positive().optional(),
     before: z.coerce.number().int().positive().optional(), issues: z.literal('1').optional() }).strict();
   app.get('/api/statuses', { preHandler: account }, (request): StatusPage => {
     const q = list.parse(request.query);
@@ -173,6 +193,7 @@ export function registerStatuses(app: FastifyInstance, db: DB, access: Access, n
     const cutoff = time - captureHeartbeatTimeoutMs;
     const values: (string | number)[] = [cutoff, date];
     if (q.issues) where.push(issue);
+    if (q.requests) where.push("(g.submitted_at IS NOT NULL OR g.request_id IS NOT NULL) AND COALESCE(json_extract(s.snapshot,'$.generation.simulateGeneration'),0)=0");
     if (q.number) { where.push('s.number=?'); values.push(q.number); }
     if (q.before) { where.push('s.number<?'); values.push(q.before); }
     const rows = db.prepare(`${selection} WHERE ${where.join(' AND ')} ORDER BY s.number DESC LIMIT 31`).all(...values) as Row[];
@@ -181,16 +202,42 @@ export function registerStatuses(app: FastifyInstance, db: DB, access: Access, n
     return { date, eventName: event?.name ?? null, serverNow: time, issues: count.n, sessions: views(rows.slice(0,30), available), nextBefore: rows.length > 30 ? rows[29].number : null };
   });
   app.get<{ Params: { id: string } }>('/api/statuses/:id', { preHandler: account }, (request): SessionHistory => {
-    const { after } = z.object({ after: z.coerce.number().int().nonnegative().default(0) }).strict().parse(request.query);
+    const { after, requests } = z.object({ requests: requestsFilter, after: z.coerce.number().int().nonnegative().default(0) }).strict().parse(request.query);
     const row = db.prepare(`${selection} WHERE s.id=?`).get(now() - captureHeartbeatTimeoutMs, request.params.id) as Row | undefined;
     if (!row) throw new HttpError(404, 'NOT_FOUND', 'Сессия недоступна');
     const available = hasHistory();
-    const rows = available ? db.prepare<[string,number], EntryRow>('SELECT * FROM session_history WHERE session_id=? AND id>? ORDER BY id LIMIT 101').all(row.id, after) : [];
+    const rows = available ? db.prepare<[string,number], EntryRow>(`SELECT * FROM session_history WHERE session_id=? AND id>? ${requests ? "AND step='fal.submit'" : ''} ORDER BY id LIMIT 101`).all(row.id, after) : [];
     const partial = !available || !db.prepare("SELECT 1 FROM session_history WHERE session_id=? AND step='capture.start' AND outcome='succeeded' LIMIT 1").get(row.id);
-    return { version: 1, session: views([row], available)[0], partial,
-      facts: { createdAt: iso(row.created_at)!, model: JSON.parse(row.snapshot).generation?.model ?? null,
+    const entries = rows.slice(0,100).map(entryView);
+    const snapshot = JSON.parse(row.snapshot) as SlotSnapshot;
+    const input = snapshot.generation;
+    const photos = db.prepare<[string], { pose_index: number; width: number; height: number }>(
+      'SELECT pose_index,width,height FROM capture_photos WHERE session_id=? ORDER BY pose_index').all(row.id);
+    const media: SessionHistory['media'] = photos.map(photo => ({
+      kind: 'image' as const, label: `Фото ${photo.pose_index + 1} · ${photo.width}×${photo.height}`,
+      href: statusPhotoPath(row.id, photo.pose_index + 1),
+    }));
+    for (const [index, mediaId] of (input?.referenceIds ?? []).entries()) {
+      media.push({ kind: 'image', label: `Референс сюжета ${index + 1}`, href: statusMaterialPath(row.id, mediaId) });
+    }
+    if (input?.videoId) media.push({ kind: 'video', label: 'Исходное видео', href: statusMaterialPath(row.id, input.videoId) });
+    // Prior deployments recorded receipts, but not request bodies. Keep this estimate separate from the log.
+    let reconstructed: SessionHistory['reconstructed'];
+    if (requests && after === 0 && input && !input.simulateGeneration && (row.submitted_at !== null || row.request_id) &&
+        !entries.some(entry => entry.detail.providerRequest)) {
+      try {
+        reconstructed = describeProviderRequest(input.model, buildModelInput(snapshot, {
+          photos: photos.map(photo => statusPhotoPath(row.id, photo.pose_index + 1)),
+          references: input.referenceIds.map(id => statusMaterialPath(row.id, id)),
+          video: input.videoId ? statusMaterialPath(row.id, input.videoId) : undefined,
+          videoDuration: input.model === wanEditId && input.videoId ? readMedia(db, input.videoId).duration : undefined,
+        }));
+      } catch { /* Partial historical inputs can still be inspected individually. */ }
+    }
+    return { version: 1, media, reconstructed, session: views([row], available)[0], partial,
+      facts: { createdAt: iso(row.created_at)!, model: input?.model ?? null,
         requestId: row.request_id && requestIdPattern.test(row.request_id) ? row.request_id : null, submittedAt: iso(row.submitted_at), readyAt: iso(row.ready_at), openedAt: iso(row.opened_at),
         emailState: row.email_state, sentAt: iso(row.sent_at), errorCode: row.error_code ?? row.email_error },
-      entries: rows.slice(0,100).map(entryView), nextAfter: rows.length > 100 ? rows[99].id : null };
+      entries, nextAfter: rows.length > 100 ? rows[99].id : null };
   });
 }

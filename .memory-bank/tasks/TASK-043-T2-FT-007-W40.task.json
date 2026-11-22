@@ -1,0 +1,25 @@
+{
+  "id": "TASK-043-T2-FT-007-W40",
+  "title": "Журнал запросов к fal с оригиналами фото по номеру посетителя",
+  "status": "done",
+  "wave": "W40",
+  "feature": "FT-007",
+  "tier": "T2",
+  "reqs": ["REQ-023"],
+  "depends_on": ["TASK-035-T2-FT-007-W32"],
+  "source_artifacts": [".memory-bank/features/FT-007-session-statuses.md#ft-007-ac-002"],
+  "normative_inputs": [".memory-bank/states/lifecycle-map.md", ".memory-bank/contracts/http-api.md"],
+  "constraints": ["Оператор и администратор открывают фотографии после входа. URL доступа провайдера и ключи остаются закрыты."],
+  "invariants": ["Копия JSON снимается при вызове реального submit. Реконструкция старого запроса явно обозначена."],
+  "verification_targets": ["Сравнение тела с отправкой SDK, порядок снимков, просмотр и копирование из браузера, права на исходные файлы."],
+  "touched_files": ["src/server/sessions/generation.ts", "src/server/sessions/history.ts", "src/server/sessions/statuses.ts", "src/client/cloud/ProviderRequests.svelte"],
+  "docs": ["docs/MANUAL.md", ".memory-bank/contracts/http-api.md"],
+  "evidence_required": ["Проверка байтов исходных файлов и структурированной записи с имитатором fal."],
+  "gates": [],
+  "verify": [{
+    "date": "2026-11-22",
+    "result": "PASS",
+    "summary": "Проверены типы, сборка, тесты сервера и Chromium. Проверено соответствие реальной структуре SDK на подменённом транспорте и чтение файлов обеими ролями.",
+    "evidence": ["tests/generation.test.ts", "tests/statuses.spec.ts"]
+  }]
+}

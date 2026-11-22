@@ -13,6 +13,7 @@ export interface DisplaySession {
 }
 /** Staff player caption from the saved generation, scoped to an available display video. */
 export interface ResultVideoDetails {
+  comment?: string;
   number: number;
   model: string | null;
   prompt: string | null;

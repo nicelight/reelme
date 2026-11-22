@@ -22,8 +22,7 @@ test('representative prompts cover model families, identity roles and reference 
   // Deliberately bounded selection; do not enumerate the complete prompt catalog.
   const samples: Array<[string, SlotPromptSelection['participants'], number, number]> = [
     ['recast', 1, 1, 0], ['recast', 2, 1, 0],
-    ['kling-o1-edit', 1, 2, 0], ['kling-o1-edit', 2, 4, 2], ['kling-o1-edit', 'group', 1, 3],
-    ['kling-o3-edit', 'group', 4, 0], ['kling-o3-edit-standard', 2, 4, 2], ['kling-o3-reference', 2, 3, 5],
+    ['kling-o3-reference', 2, 3, 5],
     ['kling-v4-edit', 2, 4, 10], ['kling-v4-flash-edit', 'group', 4, 6],
     ['kling-v4-reference', 1, 2, 0], ['kling-v4-flash-reference', 'group', 1, 0],
     ['wan-3-edit', 2, 4, 2], ['wan-3-edit', 'group', 2, 1],
@@ -43,7 +42,7 @@ test('representative prompts cover model families, identity roles and reference 
     const camera = people * photos;
     assert.equal(variant.cameraPhotos, camera);
     assert.equal(variant.elementsCount, kling && !group ? people : 0);
-    const budget = recast ? 0 : v4 ? 10 : kling ? model.mode === 'V2V' ? 4 : 7
+    const budget = recast ? 0 : v4 ? 10 : kling ? 7
       : key === 'h3-reference' ? 9 : key === 'vidu-q4-reference' ? 12 : 10;
     const used = recast || (v4 && !group) ? 0 : kling && !group ? people : camera;
     assert.equal(variant.additionalReferenceLimit, budget - used, key);
@@ -60,7 +59,7 @@ test('representative prompts cover model families, identity roles and reference 
     if (kling) {
       assert.deepEqual(tokens(text, /@Element(\d+)/g), group ? [] : sequence(people), selected.file);
       assert.deepEqual(tokens(text, /@Image(\d+)/g), sequence(references + (group ? camera : 0)), selected.file);
-      assert.deepEqual(tokens(text, /@Video(\d+)/g), model.mode === 'V2V' && key !== 'kling-o1-edit' ? [1] : [], selected.file);
+      assert.deepEqual(tokens(text, /@Video(\d+)/g), model.mode === 'V2V' ? [1] : [], selected.file);
       assert.doesNotMatch(text, /IMAGE_REF_|reference_image_|\bImage \d/, selected.file);
     } else {
       assert.doesNotMatch(text, /@Element|@Image\d|@Video|VIDEO_REF_/, selected.file);
@@ -85,10 +84,10 @@ test('ready prompt distinguishes two people from a group and offsets scene refer
 });
 
 test('selection rejects unsupported tuples instead of silently choosing another prompt', () => {
-  const valid: SlotPromptSelection = { model: 'fal-ai/kling-video/o1/video-to-video/edit', mode: 'V2V',
+  const valid: SlotPromptSelection = { model: 'kling/v4/flash/video-to-video', mode: 'V2V',
     participants: 2, photosPerParticipant: 4, additionalReferenceCount: 2 };
   for (const change of [{ model: 'unknown' }, { mode: 'P2V' }, { photosPerParticipant: 1 }, { photosPerParticipant: 2.5 },
-    { participants: 3 }, { participants: '2' }, { additionalReferenceCount: -1 }, { additionalReferenceCount: 3 },
+    { participants: 3 }, { participants: '2' }, { additionalReferenceCount: -1 }, { additionalReferenceCount: 11 },
     { additionalReferenceCount: 0.5 }, { additionalReferenceCount: NaN }, { additionalReferenceCount: Infinity }]) {
     assert.throws(() => selectSlotPrompt({ ...valid, ...change } as SlotPromptSelection), JSON.stringify(change));
   }

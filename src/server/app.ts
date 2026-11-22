@@ -75,7 +75,7 @@ export async function createApp(config: Config, options: { now?: () => number; l
   registerProviderMedia(app, db, config.dataDir);
   const costs = createCostReader(db, config.falBillingKey, status => app.log.warn({ status }, 'Не удалось получить стоимость генерации из fal'), fetch, options.now);
   app.addHook('onClose', async () => { await costs.idle(); });
-  registerStatuses(app, db, access, options.now ?? Date.now, costs, config.falBillingKey);
+  registerStatuses(app, db, config.dataDir, access, options.now ?? Date.now, costs, config.falBillingKey);
   registerDisplay(app, db, config.dataDir, config.origin, access, options.now ?? Date.now, costs);
   const cleanup = createEventCleanup(db, config.dataDir, app.log, options.now ?? Date.now, { ...options.cleanup, deleteOutput });
   registerEvents(app, db, config.dataDir, access, options.now ?? Date.now, cleanup);
@@ -133,7 +133,7 @@ export async function createApp(config: Config, options: { now?: () => number; l
     return reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8'));
   });
   app.get('/admin', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
-  app.get('/statuses', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
+  for (const path of ['/statuses', '/requests']) app.get(path, async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
   app.get('/operator', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
   app.get('/results', async (_request, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(await readFile(join(config.clientDir, 'index.html'), 'utf8')));
   app.get('/capture-loader.js', async (_request, reply) => {

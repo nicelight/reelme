@@ -17,7 +17,7 @@ import type { CaptureGuide } from '../src/shared/slot-setup.js';
 import type { StartReceipt } from '../src/shared/capture.js';
 const installation = { authorization: `Bearer ${'a'.repeat(43)}` };
 const recast = 'minimax/h3-max/recast';
-const o1 = 'fal-ai/kling-video/o1/video-to-video/edit';
+const flash = 'kling/v4/flash/video-to-video';
 const p2v = 'kling/v4/reference-to-video';
 
 test('named source imports preserve draft identity, provenance, ranges and old session bytes', async t => {
@@ -74,7 +74,7 @@ test('named source imports preserve draft identity, provenance, ranges and old s
   await writeFile(join(f.config.templateVideosDir, `${id}__portrait.mp4`), bytes);
   assert.equal((await f.app.inject({ method: 'POST', url: importUrl, headers: admin, payload: { orientation: 'portrait', model: recast } })).json().code, 'VIDEO_ORIENTATION');
   await writeFile(join(f.config.templateVideosDir, `${id}__landscape.mp4`), await videoBytes(f.root, 1));
-  assert.equal((await f.app.inject({ method: 'POST', url: importUrl, headers: admin, payload: { orientation: 'landscape', model: o1 } })).json().code, 'MODEL_LIMIT');
+  assert.equal((await f.app.inject({ method: 'POST', url: importUrl, headers: admin, payload: { orientation: 'landscape', model: flash } })).json().code, 'MODEL_LIMIT');
   await truncate(join(f.config.templateVideosDir, `${id}__landscape.mp4`), 200_000_001);
   const oversized = await f.app.inject({ method: 'POST', url: importUrl, headers: admin, payload: { orientation: 'landscape', model: recast } });
   assert.equal(oversized.statusCode, 413);

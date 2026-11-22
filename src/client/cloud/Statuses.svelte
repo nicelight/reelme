@@ -161,15 +161,18 @@
               <p>Номер присвоен в {clock.format(new Date(history.facts.createdAt))} НСК{history.facts.model ? ' · ' + history.facts.model : ''}</p>
               {#if history.facts.requestId}<p>Request ID <code>{history.facts.requestId}</code></p>{/if}
               {#if history.facts.errorCode}<p>Код ошибки <code>{history.facts.errorCode}</code></p>{/if}
+              {#if (history.facts.submittedAt || history.facts.requestId) && !['Эмуляция', 'Тестовое видео'].includes(row.mode)}
+                <a href={'/requests?date=' + row.date + '&session=' + row.id}>Запросы и материалы генерации № {row.number}</a>
+              {/if}
               <ol>{#each history.entries as entry (entry.id)}
-                <li><time datetime={entry.at}>{clock.format(new Date(entry.at))}</time><span>{entry.label}
+                <li><time datetime={entry.at}>{clock.format(new Date(entry.at))}</time><div>{entry.label}
                   {#if entry.repeats > 1} · ×{entry.repeats}, до {clock.format(new Date(entry.lastAt))}{/if}
                   {#if entry.detail.profile}<small>Профиль {entry.detail.profile}</small>{/if}
                   {#if entry.detail.code}<small>{entry.detail.code}</small>{/if}
                   {#if entry.detail.httpStatus}<small>HTTP {entry.detail.httpStatus}</small>{/if}
                   {#if entry.detail.providerReason}<small>Ответ fal{entry.detail.providerField ? ` · ${entry.detail.providerField}` : ''} — {entry.detail.providerReason}</small>{/if}
                   {#if entry.detail.attempt}<small>Попытка {entry.detail.attempt}</small>{/if}
-                </span></li>
+                </div></li>
               {/each}</ol>
               {#if history.nextAfter !== null}<button onclick={() => historyPages++}>Ещё события</button>{/if}
               <button disabled={copying} onclick={() => copy(row.id)}>Скопировать JSON</button>
@@ -216,7 +219,7 @@
   .step {grid-column:1 / -1;font-size:.92rem;font-weight:500;overflow-wrap:anywhere}
   .chevron {grid-area:1 / 3;color:var(--muted);font-size:1.15rem}
   .history {padding:12px 14px 18px;border-top:1px solid var(--line);overflow-wrap:anywhere}
-  ol {padding:0;list-style:none} li {display:grid;grid-template-columns:auto 1fr;gap:10px;padding:4px 0}
+  ol {padding:0;list-style:none} ol > li {display:grid;grid-template-columns:auto 1fr;gap:10px;padding:4px 0}
   small {display:block} time,.when {font-variant-numeric:tabular-nums}
   .empty,.paging {padding:16px 0}
 </style>

@@ -95,11 +95,12 @@ export function registerDisplay(app: FastifyInstance, db: DB, dataDir: string, o
       number: number; snapshot: string; request_id: string | null; cost_usd: number | null; submittedAt: number;
     } | undefined;
     if (!row) throw new HttpError(404, 'NOT_FOUND', 'Результат недоступен на общем экране');
-    const generation: Partial<SlotSnapshot['generation']> = JSON.parse(row.snapshot).generation ?? {};
+    const snapshot: Partial<SlotSnapshot> = JSON.parse(row.snapshot);
+    const generation: Partial<SlotSnapshot['generation']> = snapshot.generation ?? {};
     const billable = isBillableRequest(row.request_id, generation.simulateGeneration);
     if (billable && row.cost_usd === null) costs.refresh([{ id, requestId: row.request_id!, submittedAt: row.submittedAt }]);
     return { number: row.number, model: generation.model ?? null, testVideo: isTestVideo(generation),
-      costUsd: billable ? row.cost_usd : undefined,
+      costUsd: billable ? row.cost_usd : undefined, comment: snapshot.comment,
       prompt: generation.simulateGeneration ? null : (generation.prompt?.trim() || null) };
   });
   app.get<{ Params: { id: string } }>('/api/display/:id/video', { preHandler: account }, (request, reply) => {

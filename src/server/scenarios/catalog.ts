@@ -9,19 +9,21 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Access } from '../access/index.js';
 import type { DB } from '../db.js';
-import type { Slot } from '../../shared/scenarios.js';
+import { retiredKlingEditIds, type Slot } from '../../shared/scenarios.js';
 import type { CatalogPage } from '../../shared/capture.js';
 import { catalogItem, visibleSlot } from './store.js';
 import { readMedia, sendMedia } from './media.js';
 import { HttpError } from '../errors.js';
 const pageQuery = z.object({ page: z.coerce.number().int().min(1).max(1_000_000).default(1) }).strict();
-const available = "deleted=0 AND json_extract(config,'$.visible')=1 AND (json_extract(config,'$.mode')<>'V2V' OR json_extract(config,'$.videoId') IS NOT NULL)";
+const available = `deleted=0 AND json_extract(config,'$.visible')=1
+  AND json_extract(config,'$.model') NOT IN (${retiredKlingEditIds.map(() => '?').join(',')})
+  AND (json_extract(config,'$.mode')<>'V2V' OR json_extract(config,'$.videoId') IS NOT NULL)`;
 export function registerCatalog(app: FastifyInstance, db: DB, dataDir: string, access: Access) {
   function list(request: FastifyRequest): CatalogPage {
     const { page } = pageQuery.parse(request.query);
     const pageSize = 12;
-    const { total } = db.prepare(`SELECT COUNT(*) AS total FROM slots WHERE ${available}`).get() as { total: number };
-    const rows = db.prepare(`SELECT id,config FROM slots WHERE ${available} ORDER BY rowid LIMIT ? OFFSET ?`).all(pageSize, (page - 1) * pageSize) as { id: string; config: string }[];
+    const { total } = db.prepare(`SELECT COUNT(*) AS total FROM slots WHERE ${available}`).get(...retiredKlingEditIds) as { total: number };
+    const rows = db.prepare(`SELECT id,config FROM slots WHERE ${available} ORDER BY rowid LIMIT ? OFFSET ?`).all(...retiredKlingEditIds, pageSize, (page - 1) * pageSize) as { id: string; config: string }[];
     const result: CatalogPage = {
       items: rows.map(row => catalogItem(db, { ...JSON.parse(row.config), id: row.id } as Slot)),
       page, pageSize, total, totalPages: Math.ceil(total / pageSize),

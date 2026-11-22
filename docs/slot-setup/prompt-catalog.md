@@ -1,7 +1,7 @@
 # Готовые промпты и машинная матрица
 
-[Машинная матрица](../../src/shared/slot-setup-matrix.json) связывает 13 моделей,
-130 вариантов съёмки и **936 готовых файлов `.md`** в
+[Машинная матрица](../../src/shared/slot-setup-matrix.json) связывает 10 моделей,
+100 вариантов съёмки и **843 готовых файлов `.md`** в
 [public/slot-prompts](../../public/slot-prompts). Каждый файл содержит только
 окончательный текст для поля промпта: без frontmatter, заголовков, переменных,
 инструкций по сборке и code fences. Два файла Recast намеренно пусты.
@@ -50,7 +50,6 @@ Vite копирует `public/slot-prompts` в `dist/client/slot-prompts`; те�
 | Вариант | Готовый файл |
 |---|---|
 | H3, 2 человека × 4 кадра, 1 дополнительное фото | [открыть](../../public/slot-prompts/h3-reference/people-2__photos-4__refs-1.md) |
-| Kling O3 V2V, 2 человека × 4 кадра, 2 дополнительных фото | [открыть](../../public/slot-prompts/kling-o3-edit/people-2__photos-4__refs-2.md) |
 | Kling 4 P2V, группа, 4 кадра, 6 дополнительных фото | [открыть](../../public/slot-prompts/kling-v4-reference/group__photos-4__refs-6.md) |
 | Gemini, 2 человека × 4 кадра, 2 дополнительных фото | [открыть](../../public/slot-prompts/gemini-omni-reference/people-2__photos-4__refs-2.md) |
 | Recast, 2 человека × 1 кадр | [пустой файл](../../public/slot-prompts/recast/people-2__photos-1__refs-0.md) |
@@ -73,7 +72,7 @@ Vite копирует `public/slot-prompts` в `dist/client/slot-prompts`; те�
 По решению оператора тесты всех 800+ вариантов **не требуются**. Команда
 `node --import tsx --test tests/slot-prompt-selection.test.ts` проверяет небольшую
 выборку разных API-ветвей, людей/группы, границ references и пустого Recast.
-Не расширять её до полного перебора и не планировать 936 UI/API/платных прогонов.
+Не расширять её до полного перебора и не планировать 843 UI/API/платных прогонов.
 
 `npm run check:slot-prompts` остаётся отдельной утилитой полного сравнения с
 генератором; не запускать её по умолчанию и не делать обязательным условием задач/CI.

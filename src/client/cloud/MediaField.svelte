@@ -4,7 +4,8 @@
    * Source: docs/slot-setup/matrix.md. Each test position uploads its own material. */
   import ServerUploadStatus from './ServerUploadStatus.svelte';
   import FileButton from './FileButton.svelte';
-  import { api, mediaUrl } from './api';
+  import { reportEditorIssues } from './editor-feedback';
+  import { api, ApiError, mediaUrl } from './api';
   import { MAX_PHOTO_BYTES } from '../../shared/capture';
   import { MAX_VIDEO_UPLOAD_MB, MAX_VIDEO_UPLOAD_BYTES, videoUploadLimitMessage, type Media } from '../../shared/scenarios';
   let { label, buttonLabel, kind, id, hint = '', optional = false, jpegOnly = false, onUploaded, onRemove, onError, onBusy }: {
@@ -13,7 +14,8 @@
     onError: (error: unknown) => void; onBusy: (busy: boolean) => void;
   } = $props();
   let uploading = $state(false);
-  let sizeError = $state('');
+  let uploadError = $state('');
+  const inEditor = reportEditorIssues(() => [uploadError ? `${label} — ${uploadError}` : undefined]);
   const inputId = $props.id();
   const accept = $derived(jpegOnly ? 'image/jpeg,.jpg,.jpeg' : kind === 'image' ? 'image/jpeg,image/png,image/webp' : 'video/mp4,video/quicktime,.mov');
   const uploadHint = $derived(kind === 'image' && !jpegOnly
@@ -23,9 +25,9 @@
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-    sizeError = '';
+    uploadError = '';
     if (kind === 'video' && file.size > MAX_VIDEO_UPLOAD_BYTES) {
-      sizeError = videoUploadLimitMessage; input.value = ''; return;
+      uploadError = videoUploadLimitMessage; input.value = ''; return;
     }
     uploading = true; onBusy(true);
     try {
@@ -34,7 +36,10 @@
       const media = await api<Media>('/admin/slot-media', { method: 'POST', body });
       if (media.kind !== kind) throw new Error(kind === 'image' ? 'Выберите изображение.' : 'Выберите видео.');
       onUploaded(media);
-    } catch (error) { onError(error); }
+    } catch (error) {
+      if (!inEditor || (error instanceof ApiError && error.status === 401)) onError(error);
+      else uploadError = error instanceof Error ? error.message : 'Не удалось загрузить файл.';
+    }
     finally { uploading = false; onBusy(false); input.value = ''; }
   }
 </script>
@@ -57,8 +62,8 @@
     {:else}
       <input id={inputId} type="file" {accept} disabled={uploading} onchange={upload} aria-describedby={uploadHint ? `${inputId}-hint` : undefined} aria-label={id ? `Заменить: ${label}` : label} />
     {/if}
-    {#if id && onRemove}<button type="button" class="quiet small" onclick={onRemove} disabled={uploading}>Убрать</button>{/if}
+    {#if id && onRemove}<button type="button" class="quiet small" onclick={() => { uploadError = ''; onRemove?.(); }} disabled={uploading}>Убрать</button>{/if}
   </div>
   {#if uploading}<ServerUploadStatus />{/if}
-  {#if sizeError}<p class="error" role="alert">{sizeError}</p>{/if}
+  {#if uploadError}<p class="error" role={inEditor ? undefined : 'alert'}>{uploadError}</p>{/if}
 </div>

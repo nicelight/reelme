@@ -39,12 +39,13 @@ test('admin keeps editor access beside a reloadable results popup; operator sees
   const thumbnailId = (await upload.json()).id;
   const seed = await preparedSession(app.dataDir, await readFile(app.video));
   const prompt = 'Keep the person from Image 1 in focus.\n\nHold the last frame. ' + 'A'.repeat(100);
+  const comment = 'Вариант для вечернего показа';
   const db = openDatabase(app.dataDir);
   try {
     const date = eventDate(Date.now());
     db.prepare(`UPDATE capture_sessions SET event_date=?,
-      snapshot=json_set(snapshot,'$.generation.model','fal-ai/kling-video/o1/video-to-video/edit','$.generation.prompt',?)
-      WHERE id=?`).run(date, prompt, seed.id);
+      snapshot=json_set(snapshot,'$.generation.model','fal-ai/kling-video/o1/video-to-video/edit','$.generation.prompt',?,'$.comment',?)
+      WHERE id=?`).run(date, prompt, comment, seed.id);
     db.prepare('UPDATE slots SET config=? WHERE id=(SELECT slot_id FROM capture_sessions WHERE id=?)')
       .run(JSON.stringify({ ...blankSlot(), description: 'Готовая история для проверки', thumbnailId, visible: false }), seed.id);
     await publishReady(db, app.dataDir, seed.id, app.origin);
@@ -112,6 +113,7 @@ test('admin keeps editor access beside a reloadable results popup; operator sees
     await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
     await expect(metadata).toBeHidden();
     await disclosure.click();
+    await expect(metadata.getByText(comment, { exact: true })).toBeVisible();
     await expect(video.getByText('Kling O1 Edit Pro', { exact: true })).toBeVisible();
     const promptText = video.locator('dl').filter({ hasText: 'Промпт генерации' }).locator('dd');
     await expect(promptText).toBeVisible();

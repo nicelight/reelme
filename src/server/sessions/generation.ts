@@ -9,7 +9,8 @@
  * Deletion blocks new work and publication; late local output is discarded.
  * Errors retain the session/photos; public errors are fixed safe messages.
  * Source: docs/slot-setup/matrix.md. Completeness follows the saved capture plan. */
-import { nextSubmitAttempt, recordHistory, type HistoryDetail, type HistoryOutcome } from './history.js';
+import { statusMaterialPath, statusPhotoPath } from '../../shared/statuses.js';
+import { describeProviderRequest, nextSubmitAttempt, recordHistory, type HistoryDetail, type HistoryOutcome } from './history.js';
 import type { TemplateCache } from './template-cache.js';
 import { snapshotPosePlan } from '../../shared/capture.js';
 import { open, rm } from 'node:fs/promises';
@@ -83,6 +84,7 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
         // Also recover an accepted ID if a prior record already contains it.
         if (job.request_id && !inputOnly) { db.prepare("UPDATE capture_sessions SET state='observing' WHERE id=?").run(id); return; }
         const photos = db.prepare('SELECT pose_index,path FROM capture_photos WHERE session_id=? ORDER BY pose_index').all(id) as { pose_index: number; path: string }[];
+        const staffMedia = new Map<string, string>();
         let payload: Record<string, unknown>;
         try {
           const plan = snapshotPosePlan(session.snapshot);
@@ -92,7 +94,11 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
           if (templates && !urls) { observe('waiting', 'waiting'); return; }
           if (urls && urls.size) observe('available', 'succeeded');
           step = 'generation.inputs';
-          const templateUrl = (mediaId: string) => urls ? urls.get(mediaId)! : slotProviderUrl(db, origin, mediaId);
+          const templateUrl = (mediaId: string) => {
+            const url = urls ? urls.get(mediaId)! : slotProviderUrl(db, origin, mediaId);
+            staffMedia.set(url, statusMaterialPath(id, mediaId));
+            return url;
+          };
           const paths = photos.map(photo => photo.path);
           if (!urls) {
             for (const mediaId of [input.videoId, ...input.referenceIds]) {
@@ -106,7 +112,11 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
             } finally { await file.close(); }
           }
           payload = buildModelInput(session.snapshot, {
-            photos: photos.map(photo => photoProviderUrl(db, origin, id, photo.pose_index)),
+            photos: photos.map(photo => {
+              const url = photoProviderUrl(db, origin, id, photo.pose_index);
+              staffMedia.set(url, statusPhotoPath(id, photo.pose_index + 1));
+              return url;
+            }),
             video: input.videoId ? templateUrl(input.videoId) : undefined,
             videoDuration: input.model === wanEditId && input.videoId ? readMedia(db, input.videoId).duration : undefined,
             references: input.referenceIds.map(templateUrl),
@@ -130,7 +140,8 @@ export function createGenerationWorker(db: DB, dataDir: string, origin: string, 
         try {
           db.prepare('UPDATE generation_jobs SET submitted_at=? WHERE session_id=?').run((options.now ?? Date.now)(), id);
           context.attempt = nextSubmitAttempt(db, id);
-          observe('submit_started', 'started');
+          const providerRequest = testVideo ? undefined : describeProviderRequest(input.model, payload, staffMedia);
+          observe('submit_started', 'started', { providerRequest });
           submitting = true;
           accepted = await transport.client.submit(input.model, payload);
         }

@@ -66,7 +66,7 @@ test('Wan 3.0 saves a 14-second template and a positional edit prompt', async ({
     `color=c=blue:s=320x240:d=14:r=${fps}`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', clip]);
   makeClip(10);
   await chooseFile(page, 'Добавить референсное видео', clip);
-  await expect(page.getByText('Видео для Wan 3.0 должно иметь частоту не менее 16 кадров/с')).toBeVisible();
+  await expect(page.locator('.editor-footer').getByRole('alert')).toContainText('Видео для Wan 3.0 должно иметь частоту не менее 16 кадров/с');
   makeClip(24);
   await chooseFile(page, 'Добавить референсное видео', clip);
   await expect(page.getByText('Длительность результата: 14 с')).toBeVisible();
@@ -85,6 +85,24 @@ test('Kling edit duration can be saved and reset without rebuilding the prompt',
   await lock(page);
   await upload(page, 'Изображение сюжета', app.image);
   await page.getByLabel('Описание', { exact: true }).fill('Танец');
+  const shortClip = join(app.dataDir, 'too-short.mp4');
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=s=320x240:d=1:r=24', '-c:v', 'libx264', shortClip]);
+  await chooseFile(page, 'Добавить референсное видео', shortClip);
+  const summary = page.locator('.editor-footer').getByRole('alert');
+  await expect(summary).toContainText('Исходное видео: 3–30 с');
+  const prompt = page.locator('#prompt');
+  await prompt.fill('   ');
+  await expect(summary).toContainText('Введите промпт');
+  await expect(summary).toContainText('Исходное видео: 3–30 с');
+  await prompt.fill('x'.repeat(26001));
+  await expect(summary).toContainText('Промпт: не более 26000 символов');
+  await expect(prompt).toHaveValue('x'.repeat(26001));
+  await page.getByRole('button', { name: 'Сохранить сюжет', exact: true }).click();
+  await expect(page.locator('.slot-open')).toHaveCount(0);
+  await prompt.fill('Keep the original dance.');
+  await expect(summary).not.toContainText('Промпт:');
+  await chooseFile(page, 'Добавить референсное видео', app.video);
+  await expect(summary).toHaveCount(0);
   const duration = page.getByLabel('Длительность результата');
   await expect(duration).toHaveValue('');
   await page.locator('#prompt').fill('Keep the original dance.');
@@ -180,14 +198,22 @@ test('sequential setup exposes real capacities, locks fields, saves both modes a
   const source = await page.locator('.materials video').getAttribute('src');
   await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click(); await lock(page);
   await expect(page.locator('.materials video')).toHaveAttribute('src', source!);
-  await page.getByRole('switch', { name: 'Фиксация параметров генерации', exact: true }).click();
-  await page.getByLabel('Модель', { exact: true }).selectOption('fal-ai/kling-video/o1/video-to-video/edit');
+  const legacyDb = openDatabase(app.dataDir);
+  try {
+    legacyDb.prepare(`UPDATE slots SET config=json_remove(json_set(config,'$.model',?,'$.photosPerParticipant',2,'$.prompt','old prompt'),'$.resolution','$.recastShotsConfirmed') WHERE id=?`)
+      .run('fal-ai/kling-video/o3/standard/video-to-video/edit', draftId);
+  } finally { legacyDb.close(); }
+  await page.reload();
+  await page.getByRole('button',{name:/Исходный ролик для портрета.*Kling O3 Edit Standard/}).click();
+  await expect(page.getByText('Kling O3 Edit Standard снята с выбора.', {exact:false})).toBeVisible();
+  await expect(page.getByRole('switch', { name: 'Фиксация параметров генерации' })).toBeDisabled();
+  await expect(page.locator('#model option').filter({ hasText: /Kling O[13] Edit/ })).toHaveCount(0);
+  await page.getByLabel('Модель', { exact: true }).selectOption('kling/v4/flash/video-to-video');
   await page.getByLabel('Участники', { exact: true }).selectOption('2');
   await expect(page.locator('#photos-per-person option[value="1"]')).toBeDisabled();
   await page.locator('#photos-per-person').selectOption('4');
-  await expect(page.getByLabel('Распределение фотографий')).toContainText('Фото камеры: 8. Elements: 2. Дополнительные фото: 2');
-  await page.getByLabel('Модель', { exact: true }).selectOption({ label: 'Kling O3 Edit Standard' });
-  await expect(page.locator('#resolution')).toHaveCount(0); await lock(page);
+  await expect(page.getByLabel('Распределение фотографий')).toContainText('Фото камеры: 8. Elements: 2. Дополнительные фото: 10');
+  await page.locator('#resolution').selectOption('720p'); await lock(page);
   await expect(page.locator('#prompt')).toHaveValue(/Edit @Video1\.[\s\S]+@Element2/);
   await expect(page.locator('.materials h4')).toHaveText(['Референсное видео', 'Референсные фото', 'Исходное видео']);
   await expect(page.locator('.materials video')).toHaveAttribute('src', source!); await chooseFile(page, 'Добавить референс 1', app.image); await save(page);
@@ -275,6 +301,8 @@ test('prompt history restores model-labelled versions across model changes and b
   await page.getByLabel('Описание', { exact: true }).fill(title);
   const prompt = page.locator('#prompt');
   await prompt.fill(savedPrompt);
+  const comment = 'Для вечернего показа';
+  await page.getByLabel('Комментарий к слоту').fill(comment);
   await save(page);
   const history = page.getByLabel('История промптов', { exact: true });
   const historyLabel = await history.locator('option').nth(1).textContent();
@@ -312,6 +340,7 @@ test('prompt history restores model-labelled versions across model changes and b
     ]);
     await otherHistory.selectOption({ label: historyLabel! });
     await expect(other.locator('#prompt')).toHaveValue(savedPrompt);
+    await expect(other.getByLabel('Комментарий к слоту')).toHaveValue(comment);
     expect(await other.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     if (process.env.REELME_BROWSER_ARTIFACTS) {
       await otherHistory.scrollIntoViewIfNeeded();

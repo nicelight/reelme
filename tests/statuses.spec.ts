@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { openDatabase } from '../src/server/db.js';
+import sharp from 'sharp';
 import { once } from 'node:events';
 
 test('телефон оператора видит сбой за пределами первой страницы, восстановление и историю', async ({ page, playwright }) => {
@@ -101,6 +102,35 @@ test('телефон оператора видит сбой за предела�
     await page.getByLabel('Номер посетителя').fill('1');
     await expect(page.locator('.row')).toContainText('№ 1');
     await expect(page.locator('.row')).not.toHaveClass(/problem/);
+    const journalId = randomUUID();
+    session.run(journalId, randomUUID(), date, 36, JSON.stringify({ description:'Танец', expectedPhotos:1, generation:{model:'kling-test',referenceIds:[]} }), time);
+    job.run(journalId,'journal-request',null);
+    const photoPath = `sessions/${journalId}/one.jpg`;
+    const photoHref = `/api/statuses/${journalId}/photos/1`;
+    await mkdir(join(dataDir,'media','sessions',journalId), { recursive:true });
+    const jpeg = await sharp({create:{width:120,height:160,channels:3,background:'#456745'}}).jpeg().toBuffer();
+    await writeFile(join(dataDir,'media',photoPath), jpeg);
+    db.prepare('INSERT INTO capture_photos(session_id,pose_index,path,size,width,height) VALUES (?,0,?,?,120,160)').run(journalId,photoPath,jpeg.length);
+    const request = {endpoint:'kling-test', input:{prompt:'Use @Element1',elements:[{frontal_image_url:photoHref}]}};
+    db.prepare("INSERT INTO session_history(session_id,at,last_at,source,step,event,outcome,detail,bucket) VALUES (?,?,?,'worker','fal.submit','submit_started','started',?,'pipeline')")
+      .run(journalId,time,time,JSON.stringify({attempt:1,providerRequest:request}));
+    const journal = await page.context().newPage();
+    await journal.goto(origin + '/requests');
+    await journal.getByLabel('Номер посетителя').fill('36');
+    await journal.getByRole('button',{name:'Найти'}).click();
+    await journal.getByRole('link',{name:/№ 36.*Танец/}).click();
+    await expect(journal.getByRole('heading',{name:'Генерация № 36'})).toBeVisible();
+    const photo = journal.getByRole('img',{name:/Фото 1/});
+    await expect.poll(() => photo.evaluate(el => (el as HTMLImageElement).naturalWidth)).toBe(120);
+    await expect(journal.getByRole('link',{name:photoHref})).toHaveAttribute('href',photoHref);
+    await expect(journal.locator('pre')).toContainText('frontal_image_url');
+    await journal.getByRole('button',{name:'Скопировать JSON'}).click();
+    await expect(journal.getByRole('button',{name:'Скопировано'})).toBeVisible();
+    const copiedRequest = JSON.parse(await journal.evaluate(() => navigator.clipboard.readText()));
+    expect(copiedRequest.input.elements[0].frontal_image_url).toBe(origin + photoHref);
+    await journal.setViewportSize({width:360,height:760});
+    expect(await journal.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+    await journal.close();
     db.exec('DROP TABLE session_history');
     expect((await (await page.request.get(origin+'/api/statuses')).json()).issues).toBe(1);
     const partial = await (await page.request.get(origin+'/api/statuses/id-2')).json();

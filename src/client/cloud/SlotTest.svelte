@@ -3,6 +3,7 @@
    * uncertain request ID across retry/reload; polling reads a known session and
    * never generates. One sequential polling loop refreshes test status and the last
    * retained real video; it stops at the terminal test. The server owns preparation. */
+  import { reportEditorIssues } from './editor-feedback';
   import { onMount } from 'svelte';
   import type { LastSlotVideo } from '../../shared/scenarios';
   import type { CaptureStatus, SessionState } from '../../shared/capture';
@@ -17,6 +18,7 @@
   let error = $state('');
   let lastVideo = $state<LastSlotVideo | null>(null);
   let videoError = $state('');
+  reportEditorIssues(() => [error, videoError, status?.error?.message]);
   let videoLoaded = $state(false);
   const dateFormat = new Intl.DateTimeFormat('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Novosibirsk', timeZoneName: 'shortOffset' });
   function elapsed(ms: number) {
@@ -104,7 +106,7 @@
       {#if status.error}<p class="error">{status.error.message}</p>{/if}
     </div>
   {/if}
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
+  {#if error}<p class="error">{error}</p>{/if}
   <section class="last-video" aria-label="Последнее реальное видео">
     <h4>Последнее реальное видео</h4>
     {#if lastVideo}
@@ -116,7 +118,7 @@
       <p class="hint">Время включает очередь fal, скачивание и проверку видео.</p>
     {:else if slotId && !videoLoaded}<p class="hint">Загружаем последний результат…</p>
     {:else if !videoError}<p class="hint">Пока нет готового реального видео.</p>{/if}
-    {#if videoError}<p class="error" role="alert">{videoError}</p>{/if}
+    {#if videoError}<p class="error">{videoError}</p>{/if}
   </section>
 </div>
 <style>

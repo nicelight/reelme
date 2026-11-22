@@ -20,7 +20,7 @@ import { photoProviderUrl } from '../src/server/sessions/provider-media.js';
 
 const installation = { authorization: `Bearer ${'a'.repeat(43)}` };
 const wan = 'alibaba/wan-3.0/reference-to-video';
-const o1 = 'fal-ai/kling-video/o1/video-to-video/edit';
+const flashEdit = 'kling/v4/flash/video-to-video';
 const o3 = 'fal-ai/kling-video/o3/pro/reference-to-video';
 const v4 = 'kling/v4/reference-to-video';
 const h3 = 'minimax/h3-max/reference-to-video';
@@ -39,7 +39,7 @@ test('setup uses accepted Element/group/flat budgets and API-only output setting
   for (const [total, photos, additional, error] of [[5, [4, 1], 0, unequalPhotoMessage], [12, [4, 4], 4, undefined], [2, [2, 0], 0, unequalPhotoMessage]] as const) {
     assert.deepEqual(allocatePhotoBudget(total, 2, 4), { photos, additionalReferences: additional, error });
   }
-  for (const [model, participants, count, extra] of [[o1, 2, 4, 2], [o3, 2, 4, 5], [v4, 2, 4, 10], [h3, 2, 4, 1], [wan, 2, 4, 2], [wan, 'group', 2, 8], [v4, 'group', 4, 6]] as const) {
+  for (const [model, participants, count, extra] of [[flashEdit, 2, 4, 10], [o3, 2, 4, 5], [v4, 2, 4, 10], [h3, 2, 4, 1], [wan, 2, 4, 2], [wan, 'group', 2, 8], [v4, 'group', 4, 6]] as const) {
     const input = { ...config(model), participants, photosPerParticipant: count };
     assert.equal(getSlotSetup(input).variant.additionalReferenceLimit, extra);
     assert.equal(slotSchema.safeParse({ ...input, referenceIds: Array.from({ length: extra }, () => randomUUID()) }).success, true);
@@ -48,15 +48,15 @@ test('setup uses accepted Element/group/flat budgets and API-only output setting
   const valid = config(v4);
   for (const patch of [{ participants: undefined }, { photosPerParticipant: undefined }, { orientation: undefined }, { photosPerParticipant: 1 }, { participants: 3 }, { orientation: 'portrait', aspectRatio: '16:9' }, { aspectRatio: 'auto' }, { resolution: '4k' }, { duration: 31 }]) assert.equal(slotSchema.safeParse({ ...valid, ...patch }).success, false, JSON.stringify(patch));
   assert.equal(slotSchema.safeParse({ ...valid, orientation: 'portrait', aspectRatio: '9:16' }).success, true);
-  assert.equal(slotSchema.safeParse({ ...config(o1), aspectRatio: '16:9' }).success, false);
-  assert.equal(slotSchema.safeParse({ ...config(o1), resolution: '720p' }).success, false);
+  assert.equal(slotSchema.safeParse({ ...config(flashEdit), aspectRatio: '16:9' }).success, false);
+  assert.equal(slotSchema.safeParse({ ...config(flashEdit), resolution: '1080p' }).success, false);
   assert.equal(slotSchema.safeParse({ ...config('kling/v4/flash/reference-to-video'), resolution: '1080p' }).success, false);
   assert.equal(slotSchema.safeParse({ ...config('minimax/h3-max/recast'), participants: 'group' }).success, false);
   for (const [id, max] of [['kling/v4/video-to-video/edit', 30], ['kling/v4/flash/video-to-video', 20]] as const) {
     for (const duration of [undefined, 3, max]) assert.ok(slotSchema.safeParse({ ...config(id), duration }).success);
     for (const duration of [2, 3.5, max + 1]) assert.equal(slotSchema.safeParse({ ...config(id), duration }).success, false);
   }
-  for (const id of [o1, 'fal-ai/kling-video/o3/pro/video-to-video/edit', 'fal-ai/kling-video/o3/standard/video-to-video/edit', 'minimax/h3-max/recast']) {
+  for (const id of [wan, 'minimax/h3-max/recast']) {
     assert.equal(slotSchema.safeParse({ ...config(id), duration: 5 }).success, false);
   }
   const plan = buildPosePlan({ ...valid, participants: 2, photosPerParticipant: 4 });
@@ -162,11 +162,46 @@ test('all configured endpoints receive ordered new plans through real intake and
   assert.throws(() => buildModelInput({ ...groupSnapshot, posePlan: groupSnapshot.posePlan!.map((pose, index) => ({ ...pose, participant: index === 1 ? 2 : 'group' })) }, { photos: ['a','b','c'], references: ['scene'] }), /participant/);
 });
 
+test('retired Kling edits are excluded from selection and new starts, with prior session inputs still readable', async t => {
+  const f = await fixture(); t.after(() => f.close());
+  const cookie = await f.login();
+  const admin = { cookie, origin: f.config.origin };
+  const db = openDatabase(f.config.dataDir); t.after(() => db.close());
+  const image = await f.upload(cookie, await imageBytes());
+  const clip = await f.upload(cookie, await videoBytes(f.root, 5), 'video/mp4', 'old.mp4');
+  const endpoints = (await f.app.inject({url:'/api/admin/models', headers:admin})).json().map((item: {id:string}) => item.id);
+  const retired = ['fal-ai/kling-video/o1/video-to-video/edit', 'fal-ai/kling-video/o3/pro/video-to-video/edit', 'fal-ai/kling-video/o3/standard/video-to-video/edit'];
+  for (const model of retired) {
+    assert.ok(!endpoints.includes(model));
+    assert.ok(!slotSetupMatrix.models.some(item => item.id === model));
+    const id = randomUUID();
+    const generation = { model, mode:'V2V' as const, simulateGeneration:false, videoId:clip.id, referenceIds:[], prompt:'Use @Element1' };
+    const slot = { ...generation, visible:true, description:'Old slot', thumbnailId:image.id };
+    db.prepare('INSERT INTO slots(id,config) VALUES (?,?)').run(id, JSON.stringify(slot));
+    const editor = await f.app.inject({url:'/api/admin/slots/' + id, headers:admin});
+    assert.equal(editor.statusCode, 200); assert.equal(editor.json().model, model);
+    assert.equal((await f.app.inject({url:'/api/public/catalog'})).json().total, 0);
+    assert.equal((await f.app.inject({url:'/api/catalog/' + id, headers:installation})).statusCode, 404);
+    assert.equal((await f.app.inject({method:'POST', url:'/api/capture/sessions', headers:installation, payload:{slotId:id, startRequestId:randomUUID()}})).json().code, 'MODEL_RETIRED');
+    assert.equal((await f.app.inject({method:'POST', url:`/api/admin/slots/${id}/test-generations`, headers:admin, payload:{startRequestId:randomUUID()}})).json().code, 'MODEL_RETIRED');
+    const setup = {participants:1 as const, photosPerParticipant:2, orientation:'landscape' as const};
+    assert.equal((await f.app.inject({method:'PUT', url:'/api/admin/slots/' + id, headers:admin, payload:{ ...slot, ...setup }})).statusCode, 400);
+    const snapshot = {slotId:id, description:slot.description, thumbnailId:image.id, generation, expectedPhotos:4};
+    const media = {photos:['front','side','third','fourth'], references:[], video:'source'};
+    assert.equal(buildModelInput(snapshot, media).video_url, 'source');
+    const posePlan = buildPosePlan({...setup, model:flashEdit, mode:'V2V'});
+    const configured = {...snapshot, posePlan, expectedPhotos:2, generation:{...generation, ...setup}};
+    assert.deepEqual(buildModelInput(configured, {...media, photos:['front','side']}).elements,
+      [{frontal_image_url:'front', reference_image_urls:['side']}]);
+  }
+  assert.ok(endpoints.includes(o3));
+});
+
 test('V2V drafts are saved but unavailable to catalog/start/test; direct invalid setup is rejected', async t => {
   const f = await fixture(); t.after(() => f.close()); const cookie = await f.login();
   const admin = { cookie, origin: f.config.origin };
   const thumbnail = await f.upload(cookie, await imageBytes());
-  const draft = { ...config(o1), thumbnailId: thumbnail.id, videoId: undefined };
+  const draft = { ...config(flashEdit), thumbnailId: thumbnail.id, videoId: undefined };
   const saved = await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: admin, payload: draft });
   assert.equal(saved.statusCode, 201, saved.body); const id = saved.json().id;
   assert.equal((await f.app.inject({ url: '/api/catalog', headers: installation })).json().total, 0);
@@ -177,7 +212,7 @@ test('V2V drafts are saved but unavailable to catalog/start/test; direct invalid
   }
   assert.equal((await f.app.inject({ method: 'POST', url: '/api/admin/slots', headers: admin, payload: { ...draft, participants: undefined } })).statusCode, 400);
   const video = await f.upload(cookie, await videoBytes(f.root, 5), 'video/mp4', 'landscape.mp4');
-  const source = await f.importTemplate(cookie, await videoBytes(f.root, 5), id, o1);
+  const source = await f.importTemplate(cookie, await videoBytes(f.root, 5), id, flashEdit);
   assert.equal((await f.app.inject({ method: 'PUT', url: `/api/admin/slots/${id}`, headers: admin, payload: { ...draft, videoId: source.id, orientation: 'portrait' } })).statusCode, 400);
   assert.equal((await f.app.inject({ method: 'PUT', url: `/api/admin/slots/${id}`, headers: admin, payload: { ...draft, videoId: source.id } })).statusCode, 200);
   const rejectedTest = await f.app.inject({ method: 'POST', url: `/api/admin/slots/${id}/test-generations`, headers: admin, payload: { startRequestId: randomUUID() } });

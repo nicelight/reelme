@@ -6,13 +6,14 @@
    * saved versions from this slot. Test status/result remains mounted across
    * resets. Source: docs/slot-setup/matrix.md. */
   import { onMount, onDestroy } from 'svelte';
-  import { models, recastId, wanEditId, slotSchema, MAX_VIDEO_UPLOAD_MB, MAX_VIDEO_UPLOAD_BYTES, videoUploadLimitMessage, type Media, type Mode, type SlotInput, type SlotPromptVersion } from '../../shared/scenarios';
+  import { models, modelName, retiredKlingEditIds, recastId, wanEditId, promptProblem, slotSchema, MAX_VIDEO_UPLOAD_MB, MAX_VIDEO_UPLOAD_BYTES, videoUploadLimitMessage, type Media, type Mode, type SlotInput, type SlotPromptVersion } from '../../shared/scenarios';
   import { slotSetupMatrix, selectSlotPrompt } from '../../shared/slot-prompt-selection';
   import { allocatePhotoBudget, buildPosePlan, defaultSlotSetup, getSlotSetup, type Orientation } from '../../shared/slot-setup';
   import type { Pose } from '../../shared/capture';
   import ServerUploadStatus from './ServerUploadStatus.svelte';
   import FileButton from './FileButton.svelte';
   import MediaField from './MediaField.svelte';
+  import { reportEditorIssues } from './editor-feedback';
   import SlotTest from './SlotTest.svelte';
   import { api, mediaUrl } from './api';
 
@@ -23,7 +24,7 @@
   } = $props();
   // Initial values are intentional: an open-slot key creates a fresh editor.
   // svelte-ignore state_referenced_locally
-  let modelChosen = $state(!!slotId);
+  let modelChosen = $state(!!slotId && !retiredKlingEditIds.includes(draft.model));
   // svelte-ignore state_referenced_locally
   let peopleChosen = $state(!!slotId);
   // svelte-ignore state_referenced_locally
@@ -51,8 +52,12 @@
   let controller: AbortController | undefined;
   const currentModel = $derived(models.find(item => item.id === draft.model)!);
   const matrixModel = $derived(slotSetupMatrix.models.find(item => item.id === draft.model)!);
+  const invalidPrompt = $derived(locked && !promptLoading && !promptError
+    ? promptProblem(draft.model, draft.prompt, matrixModel.promptMaxLength) : undefined);
+  const historyMessage = 'Не удалось загрузить историю промптов. Откройте сюжет заново.';
+  reportEditorIssues(() => [setupError, sourceError, sourceProblem, promptError, invalidPrompt, historyError ? historyMessage : undefined]);
   const capabilities = $derived(matrixModel.capabilities);
-  const variant = $derived(matrixModel.captureVariants.find(item => item.participants === draft.participants && item.photosPerParticipant === draft.photosPerParticipant));
+  const variant = $derived(matrixModel?.captureVariants.find(item => item.participants === draft.participants && item.photosPerParticipant === draft.photosPerParticipant));
   const plan = $derived.by(() => {
     if (!modelChosen || !peopleChosen || !photosChosen || !variant) return [];
     return buildPosePlan({ model: draft.model, mode: draft.mode, participants: draft.participants!, photosPerParticipant: draft.photosPerParticipant! });
@@ -64,9 +69,13 @@
   function positionKey(pose: Pose) { return pose.participant === 'group' ? `group:${pose.index}` : `${pose.participant}:${pose.guideNumber}`; }
   function initialCache() {
     const saved = { ...(photoCaches.get(cacheKey) ?? {}) };
-    if (slotId && draft.participants && draft.photosPerParticipant && variant) {
-      const savedPlan = buildPosePlan({ model: draft.model, mode: draft.mode, participants: draft.participants, photosPerParticipant: draft.photosPerParticipant });
-      savedPlan.forEach((pose, index) => { if (draft.testPhotoIds?.[index]) saved[positionKey(pose)] = draft.testPhotoIds[index]; });
+    if (slotId && draft.participants && draft.photosPerParticipant) {
+      // Saved test photos keep their positions even after the model leaves the matrix.
+      const count = draft.photosPerParticipant;
+      for (const [index, id] of (draft.testPhotoIds ?? []).entries()) {
+        const key = draft.participants === 'group' ? `group:${index}` : `${1 + Math.floor(index / count)}:${1 + index % count}`;
+        saved[key] = id;
+      }
       // A legacy JPEG fills only the first individual position, never an entire set.
       if (!draft.testPhotoIds?.length && draft.testPhotoId) saved['1:1'] = draft.testPhotoId;
     }
@@ -227,7 +236,6 @@
     promptError = '';
     promptSourceModel = sourceModel;
   }
-  function modelName(id: string) { return models.find(model => model.id === id)?.name ?? id; }
   function promptPreview(text: string) {
     const line = text.trim().replace(/\s+/g, ' ');
     return line.length > 56 ? line.slice(0, 56) + '…' : line;
@@ -252,6 +260,7 @@
   <fieldset disabled={locked} aria-label="Выбор модели и съёмки">
     <label for="mode">Режим</label><select id="mode" value={draft.mode} onchange={event => changeMode(event.currentTarget.value as Mode)}><option value="V2V">Video2Video — на основе видео</option><option value="P2V">Photo2Video — на основе фото</option></select>
     <label for="model">Модель</label><select id="model" value={modelChosen ? draft.model : ''} onchange={event => changeModel(event.currentTarget.value)}><option value="" disabled>Выберите модель</option>{#each models.filter(item => item.mode === draft.mode) as model}<option value={model.id}>{model.name}</option>{/each}</select>
+    {#if retiredKlingEditIds.includes(draft.model)}<p class="hint">{modelName(draft.model)} снята с выбора. Выберите другую модель для этого сюжета.</p>{/if}
     {#if modelChosen}
       <div class="capacity-note" aria-label="Возможности модели">
         <h4>Возможности API</h4>
@@ -294,7 +303,7 @@
     </div>
     {#if locked}<p class="hint">Параметры зафиксированы. Материалы и промпт относятся к этому набору.</p>{/if}
   </div>
-  {#if setupError}<p class="error" role="alert">{setupError}</p>{/if}
+  {#if setupError}<p class="error">{setupError}</p>{/if}
   {#if locked}
     <div class="materials">
       {#if draft.mode === 'V2V'}
@@ -317,8 +326,8 @@
               {/each}
             </select>
           {/if}
-          {#if sourceError && !sourceFromFolder}<p class="error" role="alert">{sourceError}</p>{/if}
-          {#if sourceProblem}<p class="error" role="alert">{sourceProblem}</p>{/if}
+          {#if sourceError && !sourceFromFolder}<p class="error">{sourceError}</p>{/if}
+          {#if sourceProblem}<p class="error">{sourceProblem}</p>{/if}
           {#if draft.model === recastId && draft.videoId}<label class="checkbox-label shot-confirmation"><input type="checkbox" bind:checked={draft.recastShotsConfirmed} />Подтверждаю: каждый непрерывный кадр длится не более 15 секунд</label>{/if}
         </section>
       {/if}
@@ -341,17 +350,18 @@
           <p class="hint">Файл: <code>{draftId}__{draft.orientation}.mp4</code></p>
           <p class="hint">Подготовьте его в папке шаблонных роликов. {sourceLimits}.</p>
           <button type="button" class="small" disabled={sourceLoading} onclick={() => importSource()}>{sourceLoading && sourceFromFolder ? 'Проверяем исходник…' : draft.videoId ? 'Обновить исходник из файла' : 'Подключить исходник из файла'}</button>
-          {#if sourceError && sourceFromFolder}<p class="error" role="alert">{sourceError}</p>{/if}
+          {#if sourceError && sourceFromFolder}<p class="error">{sourceError}</p>{/if}
           {#if !draft.videoId}<p class="hint">Сюжет можно сохранить как черновик. Для запуска нужен исходный ролик.</p>{/if}
         </section>
       {:else}<MediaField label="Демовидео" kind="video" id={draft.demoId} optional hint="Показывается гостям как пример. В генерацию не передаётся." onUploaded={media => draft.demoId = media.id} onRemove={() => draft.demoId = undefined} {onError} {onBusy} />{/if}
     </div>
     <label for="prompt">Промпт{#if draft.model === recastId}<span class="optional">необязательно</span>{/if}</label>
     {#if draft.model === recastId}<p class="hint recast-warning">РЕКОМЕНДУЕТСЯ ОСТАВИТЬ ПРОМПТ ПУСТЫМ!</p>{/if}
-    <textarea id="prompt" rows="7" value={draft.prompt ?? ''} oninput={event => editPrompt(event.currentTarget.value)} required={draft.model !== recastId} maxlength={matrixModel.promptMaxLength} aria-describedby="prompt-hint"></textarea>
+    <textarea id="prompt" rows="7" value={draft.prompt ?? ''} oninput={event => editPrompt(event.currentTarget.value)} required={draft.model !== recastId} aria-invalid={!!invalidPrompt} aria-describedby={invalidPrompt ? 'prompt-hint prompt-error' : 'prompt-hint'}></textarea>
     <p class="hint" id="prompt-hint">{manualPrompt ? 'Ваш текст сохраняется при изменении референсов.' : 'Готовый текст для выбранного набора. Его можно редактировать.'}</p>
     {#if promptLoading}<p class="hint" role="status">Загружаем готовый промпт…</p>{/if}
-    {#if promptError}<p class="error" role="alert">{promptError}</p>{/if}
+    {#if invalidPrompt}<p class="error" id="prompt-error">{invalidPrompt}</p>{/if}
+    {#if promptError}<p class="error">{promptError}</p>{/if}
     {#if referenceNotice}<p class="hint reference-notice" role="status">{referenceNotice}</p>{/if}
     <button type="button" class="quiet small" onclick={() => loadPrompt()} disabled={promptLoading}>Восстановить готовый промпт</button>
     {#if promptHistory.length}
@@ -367,8 +377,10 @@
       {/if}
     {/if}
     {#if historyError}
-      <p class="hint" role="status">Не удалось загрузить историю промптов. Откройте сюжет заново.</p>
+      <p class="error">{historyMessage}</p>
     {/if}
+    <label for="slot-comment">Комментарий к слоту <span class="optional">необязательно</span></label>
+    <textarea id="slot-comment" rows="2" value={draft.comment ?? ''} oninput={event => draft.comment = event.currentTarget.value || undefined}></textarea>
   {/if}
 </section>
 <section class="form-section" aria-label="Тестирование сюжета">

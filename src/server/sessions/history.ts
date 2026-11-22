@@ -1,14 +1,19 @@
 // Best-effort observations. Call only outside business transactions. The bounded
 // delivery bucket cannot displace evidence from capture or a paid submit.
+import type { HistoryDetail } from '../../shared/statuses.js';
+export type { HistoryDetail } from '../../shared/statuses.js';
 import type { DB } from '../db.js';
 
 type Source = 'capture' | 'worker' | 'server' | 'browser' | 'smtp';
 export type HistoryOutcome = 'started' | 'succeeded' | 'waiting' | 'failed' | 'retry' | 'unknown' | 'cancelled';
-export interface HistoryDetail {
-  code?: string; httpStatus?: number; pose?: number; accepted?: number; total?: number;
-  model?: string; requestId?: string; attempt?: number; method?: string;
-  providerStatus?: string; bytes?: number; mode?: string; profile?: string; operationId?: string;
-  providerReason?: string; providerField?: string;
+// Keep the exact keys, order and scalar parameters used by the SDK. Media capabilities
+// are interchangeable with authenticated links only in this diagnostic copy.
+export function describeProviderRequest(endpoint: string, input: Record<string, unknown>, media?: ReadonlyMap<string, string>) {
+  const json = JSON.stringify(input, (_key, value: unknown) => {
+    if (typeof value !== 'string') return value;
+    return media?.get(value) ?? value.replace(/https?:\/\/[^\s"'<>]+|\/provider-media\/[\w-]+/gi, '[URL]');
+  });
+  return { endpoint, input: JSON.parse(json) as Record<string, unknown> };
 }
 let warnedAt = 0;
 function warn() {
@@ -25,8 +30,9 @@ function writer(db: DB) {
     ON CONFLICT(session_id,report_key) DO NOTHING`);
   const bump = db.prepare('UPDATE session_history SET last_at=?,repeats=repeats+1 WHERE id=?');
   // Retain the first observations and the latest window; preserve a visible gap marker.
-  const overflow = db.prepare('SELECT id FROM session_history WHERE session_id=? AND bucket=? ORDER BY id LIMIT 1 OFFSET 192');
-  const oldest = db.prepare("SELECT id FROM session_history WHERE session_id=? AND bucket=? AND event<>'history_truncated' ORDER BY id LIMIT 1 OFFSET 32");
+  // Preserve individual submit attempts and receipts while trimming repetitive observations.
+  const overflow = db.prepare("SELECT id FROM session_history WHERE session_id=? AND bucket=? AND step<>'fal.submit' ORDER BY id LIMIT 1 OFFSET 192");
+  const oldest = db.prepare("SELECT id FROM session_history WHERE session_id=? AND bucket=? AND step<>'fal.submit' AND event<>'history_truncated' ORDER BY id LIMIT 1 OFFSET 32");
   const trim = db.prepare('DELETE FROM session_history WHERE id=?');
   const markGap = db.prepare("UPDATE session_history SET source='server',step='history',event='history_truncated',outcome='unknown',detail='{}',report_key=NULL WHERE id=?");
   const omitted = db.prepare("SELECT id FROM session_history WHERE session_id=? AND bucket=? AND event='history_truncated'");

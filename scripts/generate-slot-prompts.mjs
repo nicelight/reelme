@@ -23,9 +23,6 @@ const ratios = (landscape = ['16:9'], portrait = ['9:16']) => ({
 });
 const models = [
   { key: 'recast', capabilities: {"peopleLimit":4,"photosPerPerson":1}, id: 'minimax/h3-max/recast', mode: 'V2V', referenceStrategy: 'recast', resolutionOptions: ['768P', '1080P'], ...sourceVideo, promptMaxLength: 2000 },
-  { key: 'kling-o1-edit', capabilities: {"combinedReferenceLimit":4,"photosPerElement":{"min":2,"max":4}}, id: 'fal-ai/kling-video/o1/video-to-video/edit', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: [], ...sourceVideo, promptMaxLength: 2500 },
-  { key: 'kling-o3-edit', capabilities: {"combinedReferenceLimit":4,"photosPerElement":{"min":2,"max":4}}, id: 'fal-ai/kling-video/o3/pro/video-to-video/edit', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: [], ...sourceVideo, promptMaxLength: 2500 },
-  { key: 'kling-o3-edit-standard', capabilities: {"combinedReferenceLimit":4,"photosPerElement":{"min":2,"max":4}}, id: 'fal-ai/kling-video/o3/standard/video-to-video/edit', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: [], ...sourceVideo, promptMaxLength: 2500 },
   { key: 'kling-v4-edit', capabilities: {"elementLimit":7,"ordinaryImageLimit":10,"assetLimit":15,"photosPerElement":{"min":2,"max":4}}, id: 'kling/v4/video-to-video/edit', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: ['720p', '1080p'], ...ratios(['16:9', '21:9']), promptMaxLength: 26000 },
   { key: 'kling-v4-flash-edit', capabilities: {"elementLimit":7,"ordinaryImageLimit":10,"assetLimit":15,"photosPerElement":{"min":2,"max":4}}, id: 'kling/v4/flash/video-to-video', mode: 'V2V', referenceStrategy: 'elements', resolutionOptions: ['720p'], ...sourceVideo, promptMaxLength: 26000 },
   { key: 'kling-v4-reference', capabilities: {"elementLimit":7,"ordinaryImageLimit":10,"assetLimit":15,"photosPerElement":{"min":2,"max":4}}, id: 'kling/v4/reference-to-video', mode: 'P2V', referenceStrategy: 'elements', resolutionOptions: ['720p', '1080p'], ...ratios(['16:9', '21:9']), promptMaxLength: 26000 },
@@ -44,7 +41,7 @@ function referenceLimit(model, people, photos) {
   const group = people === 'group';
   if (model.key.startsWith('kling-v4')) return 10 - (group ? photos : 0);
   if (model.referenceStrategy === 'elements') {
-    const budget = model.key === 'kling-o3-reference' ? 7 : 4;
+    const budget = model.capabilities.combinedReferenceLimit;
     return budget - (group ? photos : people);
   }
   const budget = model.capabilities.ordinaryImageLimit;
@@ -59,29 +56,6 @@ function klingPrompt(key, people, photos, additional) {
   const subject = (one, two, many) => group ? many : people === 1 ? one : two;
   const optional = text => additional ? text : '';
   switch (key) {
-    case 'kling-o1-edit':
-      return lines(
-        'Edit the source video.',
-        subject(
-          "Replace the main person in the source video with @Element1. Preserve the person's facial identity and appearance throughout the clip.",
-          'Replace the left main person in the source video with @Element1 and the right main person with @Element2, using their positions at the first shared appearance. Keep the two identities distinct throughout the clip.',
-          `Use ${groupRefs} as ${photos === 1 ? 'a photograph of the group' : 'different photographs of the same group'}. Recreate that group in the source video's scene, preserving the visible people's individual appearances and their relative arrangement. Do not interpret reference photographs as additional people.`,
-        ),
-        optional(`Use ${sceneRefs} only for compatible prop and appearance details within the existing environment. Keep the source video's setting and do not introduce additional main characters.`),
-        'Preserve the source environment, camera movement, action timing, and shot sequence. Keep faces stable and avoid merging or duplicating people.',
-      );
-    case 'kling-o3-edit-standard':
-    case 'kling-o3-edit':
-      return lines(
-        'Edit @Video1.',
-        subject(
-          "Replace the main person in @Video1 with @Element1. Preserve this person's facial identity and appearance in every shot.",
-          'Replace the left main person in @Video1 with @Element1 and the right main person with @Element2, based on their first shared appearance. Maintain these identities throughout the video and keep them distinct.',
-          `Use ${groupRefs} as ${photos === 1 ? 'a reference view of the group' : 'multiple views of the same group'}. Recreate the group in @Video1, preserving the visible people's individual appearances and relative arrangement. The reference photographs represent one group, not additional groups.`,
-        ),
-        optional(`Use ${sceneRefs} only for compatible prop and appearance details within the existing environment. Keep the setting of @Video1 and do not introduce additional main characters.`),
-        "Preserve the source video's environment, action timing, camera movement, and shot sequence. Preserve each person's identity and avoid duplicated people or merged faces.",
-      );
     case 'kling-o3-reference':
       return lines(
         subject(
@@ -222,7 +196,7 @@ const catalog = {
     return { ...model, captureVariants };
   }),
 };
-if (captureCount !== 130 || files.size !== 936) throw new Error(`Incomplete catalog: ${captureCount} captures, ${files.size} prompts`);
+if (captureCount !== 100 || files.size !== 843) throw new Error(`Incomplete catalog: ${captureCount} captures, ${files.size} prompts`);
 const expected = new Map([[matrixPath, `${JSON.stringify(catalog, null, 2)}\n`],
   ...Array.from(files, ([path, text]) => [join(assetRoot, path), text])]);
 

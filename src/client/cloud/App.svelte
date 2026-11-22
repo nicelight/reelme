@@ -7,16 +7,18 @@
    * processing remain outside this editor. Source: docs/slot-setup/matrix.md. */
   import { onMount } from 'svelte';
   import { compactStoryTitle } from '../../shared/capture';
-  import { models, blankSlot, slotSchema, videoProblem } from '../../shared/scenarios';
+  import { models, modelName, blankSlot, slotSchema, videoProblem } from '../../shared/scenarios';
   import type { Media, Slot, SlotInput } from '../../shared/scenarios';
   import { api, ApiError, mediaUrl } from './api';
   import FinishEvent from './FinishEvent.svelte';
   import Archive from './Archive.svelte';
+  import ProviderRequests from './ProviderRequests.svelte';
   import Statuses from './Statuses.svelte';
   import ResultVideo from './results/ResultVideo.svelte';
   import Display from './Display.svelte';
   import MediaField from './MediaField.svelte';
   import TemplateUploadDialog from './TemplateUploadDialog.svelte';
+  import EditorForm from './EditorForm.svelte';
   import SlotEditor from './SlotEditor.svelte';
   import CaptureGuides from './CaptureGuides.svelte';
   import CaptureSettingsForm from './CaptureSettingsForm.svelte';
@@ -32,6 +34,7 @@
   let archiveVersion = $state(0);
   let parameters = $state(false);
   let photobooth = $state(false);
+  const requestsRoute = location.pathname === '/requests';
   const statusRoute = location.pathname === '/statuses';
   const dedicatedScreen = location.pathname === '/results';
   const videoId = dedicatedScreen ? new URLSearchParams(location.search).get('video') : null;
@@ -57,11 +60,19 @@
   let baseline = $state(JSON.stringify(blankSlot()));
   let videoMedia = $state<Media | undefined>();
   let editorCanSave = $state(false);
+  let saveAttempted = $state(false);
+  const validation = $derived(slotSchema.safeParse(draft));
+  const validationMessages = $derived(saveAttempted && editorCanSave && !validation.success
+    ? validation.error.issues.map(issue => {
+        if (issue.path[0] === 'thumbnailId') return 'Добавьте изображение сюжета.';
+        if (issue.path[0] === 'description') return 'Введите описание сюжета (до 5000 символов).';
+        return issue.message;
+      }) : []);
   const photoCaches = new Map<string, Record<string, string>>();
   let theme = $state<'light' | 'dark'>('dark');
-  const currentModel = $derived(models.find(model => model.id === draft.model)!);
+  const currentModel = $derived(models.find(model => model.id === draft.model));
   const dirty = $derived(JSON.stringify(draft) !== baseline);
-  const sourceProblem = $derived(videoMedia && draft.mode === 'V2V' ? videoProblem(currentModel, videoMedia) : undefined);
+  const sourceProblem = $derived(currentModel && videoMedia && draft.mode === 'V2V' ? videoProblem(currentModel, videoMedia) : undefined);
   const formDisabled = $derived(busy || uploads > 0);
 
   function fail(value: unknown) {
@@ -96,13 +107,13 @@
     busy = true;
     try {
       await api('/auth/logout', { method: 'POST' });
-      role = null; archive = false; parameters = false; photobooth = false; slots = []; selectedId = null; draftId = crypto.randomUUID(); slotSelection++; photoCaches.clear(); draft = blankSlot(); baseline = JSON.stringify(draft); notice = ''; error = ''; videoMedia = undefined;
+      role = null; archive = false; parameters = false; photobooth = false; slots = []; selectedId = null; draftId = crypto.randomUUID(); slotSelection++; saveAttempted = false; photoCaches.clear(); draft = blankSlot(); baseline = JSON.stringify(draft); notice = ''; error = ''; videoMedia = undefined;
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
   function fresh() { if (canLeave()) resetDraft(); }
   function resetDraft() {
-    selectedId = null; draftId = crypto.randomUUID(); slotSelection++; draft = blankSlot(); baseline = JSON.stringify(draft); videoMedia = undefined; error = ''; notice = '';
+    selectedId = null; draftId = crypto.randomUUID(); slotSelection++; saveAttempted = false; draft = blankSlot(); baseline = JSON.stringify(draft); videoMedia = undefined; error = ''; notice = '';
   }
   async function openSlot(id: string) {
     if (!canLeave()) return;
@@ -110,23 +121,22 @@
     try {
       const { id: slotId, ...config } = await api<Slot>(`/admin/slots/${id}`);
       const metadata = config.videoId ? await api<Media>(`/admin/slot-media/${config.videoId}/info`) : undefined;
-      selectedId = slotId; draftId = slotId; slotSelection++; draft = config; videoMedia = metadata; baseline = JSON.stringify(config);
+      selectedId = slotId; draftId = slotId; slotSelection++; saveAttempted = false; draft = config; videoMedia = metadata; baseline = JSON.stringify(config);
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
   async function save(event: SubmitEvent) {
     event.preventDefault(); error = ''; notice = '';
     if (!editorCanSave) { error = 'Зафиксируйте настройки и дождитесь готового промпта.'; return; }
-    if (!draft.thumbnailId) { error = 'Добавьте изображение сюжета.'; return; }
-    const result = slotSchema.safeParse(draft);
-    if (!result.success) { error = result.error.issues.map(issue => issue.message).join('. '); return; }
-    if (sourceProblem) { error = sourceProblem; return; }
+    saveAttempted = true;
+    const result = validation;
+    if (!result.success || sourceProblem) return;
     saving = true; busy = true;
     try {
       const saved = await api<Slot>(selectedId ? `/admin/slots/${selectedId}` : '/admin/slots', { method: selectedId ? 'PUT' : 'POST', body: JSON.stringify(selectedId ? result.data : { ...result.data, id: draftId }) });
       const { id, ...config } = saved;
       selectedId = id; draft = config; baseline = JSON.stringify(config);
-      slotSaveVersion++;
+      saveAttempted = false; slotSaveVersion++;
       await loadSlots(); notice = 'Сюжет сохранён.';
     } catch (value) { fail(value); }
     finally { busy = false; saving = false; }
@@ -161,7 +171,7 @@
 </script>
 
 <svelte:window onbeforeunload={beforeUnload} />
-<svelte:head><title>ReelMe — {statusRoute ? 'Статусы видео' : photobooth ? 'Фотобудка' : videoId ? 'Просмотр генерации' : dedicatedScreen ? 'Экран результатов' : parameters ? 'Параметры' : archive ? 'Архив' : adminWorkspace ? 'Сюжеты' : role ? 'Ваши видео' : 'Вход'}</title></svelte:head>
+<svelte:head><title>ReelMe — {requestsRoute ? 'Запросы к fal' : statusRoute ? 'Статусы видео' : photobooth ? 'Фотобудка' : videoId ? 'Просмотр генерации' : dedicatedScreen ? 'Экран результатов' : parameters ? 'Параметры' : archive ? 'Архив' : adminWorkspace ? 'Сюжеты' : role ? 'Ваши видео' : 'Вход'}</title></svelte:head>
 
 <div class:admin-shell={adminWorkspace} data-admin-theme={theme}>
 {#if adminWorkspace}<TemplateUploadDialog {saving} onunauthorized={() => role = null} />{/if}
@@ -174,13 +184,14 @@
   </div>
 </header>
 
-{#if ready && role && !adminDenied && !statusRoute}
+{#if ready && role && !adminDenied && !statusRoute && !requestsRoute}
   <nav style="flex-wrap:wrap" class="surface-nav" aria-label="Разделы">
     <button class="quiet" aria-current={!archive && !parameters && !photobooth ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = false; parameters = false; photobooth = false; }}>{adminWorkspace ? 'Сюжеты' : 'Сегодня'}</button>
     {#if adminWorkspace}<button class="quiet" aria-current={parameters ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { parameters = true; photobooth = false; archive = false; } }}>Параметры</button>{/if}
     {#if adminWorkspace}<button class="quiet" aria-current={photobooth ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { photobooth = true; archive = false; parameters = false; } }}>Фотобудка</button>{/if}
     {#if adminWorkspace}<a class="button" href="/operator">Сегодня / Архив</a>{:else}<button class="quiet" aria-current={archive ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = true; parameters = false; photobooth = false; }}>Архив</button>{/if}
     <a class="button" href="/statuses" target="_blank" rel="noopener">Статусы видео</a>
+    <a class="button" href="/requests" target="_blank" rel="noopener">Запросы к fal</a>
     <a class="button" href="/results" target="_blank" rel="noopener">Открыть экран</a>
     {#if !adminWorkspace}<FinishEvent onfinished={() => { archiveVersion++; archive = true; }} onunauthorized={() => role = null} />{/if}
   </nav>
@@ -191,6 +202,8 @@
   <main class="centered"><p role="status">Открываем ReelMe…</p></main>
 {:else if !role}
   <Login bind:username bind:password {busy} {error} onsubmit={login} />
+{:else if requestsRoute}
+  <ProviderRequests onunauthorized={() => role = null} />
 {:else if statusRoute}
   <Statuses onunauthorized={() => role = null} />
 {:else if publicScreen && videoId}
@@ -224,7 +237,7 @@
         {#each slots as slot (slot.id)}
           <li class:selected={selectedId === slot.id}>
             <button class="slot-open" onclick={() => openSlot(slot.id)} disabled={formDisabled} aria-pressed={selectedId === slot.id}>
-              <img src={mediaUrl(slot.thumbnailId)} alt="" /><span><strong>{slot.description}</strong><small>{slot.mode} · {models.find(model => model.id === slot.model)?.name}</small></span>
+              <img src={mediaUrl(slot.thumbnailId)} alt="" /><span><strong>{slot.description}</strong><small>{slot.mode} · {modelName(slot.model)}</small></span>
             </button>
             <div class="slot-actions"><label class="visibility-toggle"><input type="checkbox" checked={slot.visible} disabled={formDisabled} onchange={event => toggleVisibility(slot, event.currentTarget)} /><span>Отображать клиенту</span></label>
               <button type="button" class="delete-slot quiet" aria-label="Удалить сюжет" title={`Удалить сюжет «${slot.description}»`} disabled={formDisabled} onclick={() => deleteSlot(slot)}>
@@ -238,7 +251,11 @@
 
     <section class="editor" aria-label="Редактор сюжета">
       <div class="editor-heading"><div class="editor-title"><h2>{selectedId ? 'Настройка сюжета' : 'Новый сюжет'}</h2>{#if draft.simulateGeneration}<div class="testing-warning" role="status"><strong>Тестирование!</strong><p>отключите тесты чтобы слот заработал</p></div>{/if}</div><span class="save-status">{dirty ? 'Есть изменения' : selectedId ? 'Сохранено' : 'Черновик'}</span></div>
-      <form onsubmit={save} novalidate>
+      <EditorForm onsubmit={save} disabled={formDisabled || !editorCanSave} {saving} {error} {notice} validation={validationMessages}
+        hint={uploads ? 'Проверяем материалы…' : editorCanSave && draft.mode === 'V2V' && !draft.videoId
+          ? 'Без исходного видео сюжет сохранится как черновик и не появится в выборе гостей.'
+          : !editorCanSave ? 'Для сохранения зафиксируйте параметры и подготовьте промпт.' : ''}>
+        {#key slotSelection}
         <fieldset disabled={formDisabled}>
           <section class="form-section">
             <div class="section-heading"><span>01</span><h3>Карточка сюжета</h3></div>
@@ -248,15 +265,10 @@
             <label class="checkbox-label"><input type="checkbox" bind:checked={draft.visible} />Отображать клиенту</label>
           </section>
 
-          {#key slotSelection}
-            <SlotEditor bind:draft bind:videoMedia bind:canSave={editorCanSave} slotId={selectedId} {slotSaveVersion} {draftId} cacheKey={selectedId ?? `draft:${slotSelection}`} {photoCaches} disabled={formDisabled} {dirty} {sourceProblem} onError={fail} onBusy={uploadBusy} />
-          {/key}
+          <SlotEditor bind:draft bind:videoMedia bind:canSave={editorCanSave} slotId={selectedId} {slotSaveVersion} {draftId} cacheKey={selectedId ?? `draft:${slotSelection}`} {photoCaches} disabled={formDisabled} {dirty} {sourceProblem} onError={fail} onBusy={uploadBusy} />
         </fieldset>
-        <div class="editor-footer">
-          <div aria-live="polite">{#if error}<p class="error" role="alert">{error}</p>{:else if notice}<p class="success" role="status">{notice}</p>{:else}<p class="hint">{uploads ? 'Проверяем материалы…' : 'Изменения применятся после сохранения.'}</p>{/if}</div>
-          <button class="primary" type="submit" disabled={formDisabled || !editorCanSave}>{busy ? 'Сохраняем…' : 'Сохранить сюжет'}</button>
-        </div>
-      </form>
+        {/key}
+      </EditorForm>
     </section>
   </main>
 {/if}

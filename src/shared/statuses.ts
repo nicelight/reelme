@@ -1,4 +1,5 @@
 export interface SessionStatus {
+  story?: string;
   eventName?: string | null;
   id: string;
   date: string;
@@ -22,6 +23,21 @@ export interface StatusPage {
   nextBefore: number | null;
 }
 
+export interface HistoryDetail {
+  code?: string; httpStatus?: number; pose?: number; accepted?: number; total?: number;
+  model?: string; requestId?: string; attempt?: number; method?: string;
+  providerStatus?: string; bytes?: number; mode?: string; profile?: string; operationId?: string;
+  providerRequest?: { endpoint: string; input: Record<string, unknown> };
+  providerReason?: string; providerField?: string;
+}
+
+export function statusPhotoPath(sessionId: string, photoNumber: number) {
+  return `/api/statuses/${sessionId}/photos/${photoNumber}`;
+}
+export function statusMaterialPath(sessionId: string, mediaId: string) {
+  return `/api/statuses/${sessionId}/materials/${mediaId}`;
+}
+
 export interface HistoryEntry {
   id: number;
   at: string;
@@ -30,7 +46,7 @@ export interface HistoryEntry {
   step: string;
   event: string;
   outcome: string;
-  detail: Record<string, string | number>;
+  detail: HistoryDetail;
   repeats: number;
   label: string;
 }
@@ -49,6 +65,8 @@ export interface SessionHistory {
     sentAt: string | null;
     errorCode: string | null;
   };
+  reconstructed?: HistoryDetail['providerRequest'];
+  media: { kind: 'image' | 'video'; label: string; href: string }[];
   partial: boolean;
   entries: HistoryEntry[];
   nextAfter: number | null;

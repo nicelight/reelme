@@ -18,8 +18,6 @@ import { models, slotSchema, type SlotInput } from '../src/shared/scenarios.js';
 import { buildModelInput } from '../src/server/sessions/model-input.js';
 
 const endpoints = [
-  'fal-ai/kling-video/o1/video-to-video/edit', 'fal-ai/kling-video/o3/pro/video-to-video/edit',
-  'fal-ai/kling-video/o3/standard/video-to-video/edit',
   'kling/v4/video-to-video/edit', 'kling/v4/flash/video-to-video',
   'kling/v4/reference-to-video', 'fal-ai/kling-video/o3/pro/reference-to-video',
   'kling/v4/flash/reference-to-video', 'minimax/h3-max/reference-to-video',

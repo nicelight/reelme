@@ -119,9 +119,6 @@ test('slot prompt history migrates the saved prompt, retains its model and stays
 // not silently change both the input and its expected result in these tests.
 const cases: Array<[string, 'V2V' | 'P2V', string | undefined, number]> = [
   ['minimax/h3-max/recast', 'V2V', '768P', 30],
-  ['fal-ai/kling-video/o1/video-to-video/edit', 'V2V', undefined, 10],
-  ['fal-ai/kling-video/o3/pro/video-to-video/edit', 'V2V', undefined, 15],
-  ['fal-ai/kling-video/o3/standard/video-to-video/edit', 'V2V', undefined, 15],
   ['kling/v4/video-to-video/edit', 'V2V', '1080p', 30],
   ['alibaba/wan-3.0/reference-to-video', 'V2V', '720p', 15],
   ['kling/v4/flash/video-to-video', 'V2V', '720p', 20],

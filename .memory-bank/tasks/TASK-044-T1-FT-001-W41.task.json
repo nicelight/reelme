@@ -1,0 +1,25 @@
+{
+  "id": "TASK-044-T1-FT-001-W41",
+  "title": "Снять три модели Kling Edit с выбора V2V",
+  "status": "done",
+  "wave": "W41",
+  "feature": "FT-001",
+  "tier": "T1",
+  "reqs": ["REQ-002"],
+  "depends_on": ["TASK-016-T2-FT-001-W13"],
+  "source_artifacts": [".memory-bank/features/FT-001-scenarios.md#ft-001-ac-001"],
+  "normative_inputs": ["docs/slot-setup/matrix.md"],
+  "constraints": ["Снять O1 Edit Pro, O3 Edit Pro и O3 Edit Standard из редактора, серверного выбора и матрицы с готовыми промптами."],
+  "invariants": ["Старые слоты можно перенастроить. Начатые сессии сохраняют исходную модель и план."],
+  "verification_targets": ["Матрица, доступность новых стартов, перенастройка старого слота и чтение прежних снимков сессий."],
+  "touched_files": ["src/shared/scenarios.ts", "src/shared/slot-setup-matrix.json", "scripts/generate-slot-prompts.mjs", "src/server/scenarios/store.ts", "src/server/scenarios/catalog.ts", "src/server/sessions/model-input.ts", "src/client/cloud/SlotEditor.svelte"],
+  "docs": ["docs/slot-setup/matrix.md", "docs/slot-setup/prompt-catalog.md", "docs/MANUAL.md"],
+  "evidence_required": ["Проверка каталога промптов, серверных контрактов и редактирования прежнего сюжета в браузере."],
+  "gates": [],
+  "verify": [{
+    "date": "2026-11-22",
+    "result": "PASS",
+    "summary": "Каталог содержит 10 моделей, 100 планов съёмки и 843 файла. Проверены отказ нового старта, сборка прежнего запроса из снимка, выбор замены в редакторе и отображение старой модели в результате.",
+    "evidence": ["tests/slot-setup.test.ts", "tests/editor.spec.ts", "tests/results-access.spec.ts"]
+  }]
+}

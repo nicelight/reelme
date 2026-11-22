@@ -21,11 +21,14 @@ export interface Model {
 }
 export const wanEditId = 'alibaba/wan-3.0/reference-to-video';
 const klingHint = 'Посетитель: @Element1. Фото сюжета: @Image1, @Image2, @Image3.';
-const legacyModels: readonly Model[] = [
-  { id: 'minimax/h3-max/recast', name: 'MiniMax H3 Max Recast', mode: 'V2V', resolutions: ['768P', '1080P'], defaultResolution: '768P', prompt: false, hint: 'Один главный персонаж. Непрерывный кадр — не более 15 секунд.', minSeconds: 5, maxSeconds: 30 },
+const retiredKlingEdits: readonly Model[] = [
   { id: 'fal-ai/kling-video/o1/video-to-video/edit', name: 'Kling O1 Edit Pro', mode: 'V2V', resolutions: [], prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 10, maxVideoMB: 200 },
   { id: 'fal-ai/kling-video/o3/pro/video-to-video/edit', name: 'Kling O3 Edit Pro', mode: 'V2V', resolutions: [], prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 15, maxVideoMB: 200 },
   { id: 'fal-ai/kling-video/o3/standard/video-to-video/edit', name: 'Kling O3 Edit Standard', mode: 'V2V', resolutions: [], prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 15, maxVideoMB: 200 },
+];
+export const retiredKlingEditIds = retiredKlingEdits.map(model => model.id);
+const legacyModels: readonly Model[] = [
+  { id: 'minimax/h3-max/recast', name: 'MiniMax H3 Max Recast', mode: 'V2V', resolutions: ['768P', '1080P'], defaultResolution: '768P', prompt: false, hint: 'Один главный персонаж. Непрерывный кадр — не более 15 секунд.', minSeconds: 5, maxSeconds: 30 },
   { id: 'kling/v4/video-to-video/edit', name: 'Kling 4 Editing', mode: 'V2V', resolutions: ['720p', '1080p'], defaultResolution: '720p', prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 30, maxVideoMB: 300, editableVideoDuration: true },
   { id: 'kling/v4/flash/video-to-video', name: 'Kling 4 Flash Editing', mode: 'V2V', resolutions: ['720p'], defaultResolution: '720p', prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 20, maxVideoMB: 300, editableVideoDuration: true },
   { id: 'kling/v4/reference-to-video', name: 'Kling 4 Reference', mode: 'P2V', resolutions: ['720p', '1080p'], defaultResolution: '720p', prompt: true, hint: klingHint, minSeconds: 3, maxSeconds: 30 },
@@ -40,6 +43,9 @@ const wanEdit: Model = { id: wanEditId, name: 'Wan 3.0', mode: 'V2V', resolution
 export const models: readonly Model[] = [...legacyModels, wanEdit].map(model => ({ ...model,
   resolutions: slotSetupMatrix.models.find(item => item.id === model.id)!.resolutionOptions,
 }));
+export function modelName(id: string) {
+  return models.find(model => model.id === id)?.name ?? retiredKlingEdits.find(model => model.id === id)?.name ?? id;
+}
 export const recastId = models[0].id;
 const id = z.string().uuid();
 /** Read only: accepted snapshots and raw slots written before configurable plans. */
@@ -56,7 +62,7 @@ export const legacySlotSchema = z.object({
 }).strict().superRefine((slot, ctx) => {
   const fail = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message });
   if (slot.simulationOutput && !slot.simulateGeneration) fail('simulationOutput', 'Тестовое видео требует режима эмуляции');
-  const model = legacyModels.find(m => m.id === slot.model);
+  const model = legacyModels.find(m => m.id === slot.model) ?? retiredKlingEdits.find(m => m.id === slot.model);
   if (!model || model.mode !== slot.mode) { fail('model', 'Модель не соответствует режиму'); return; }
   if (model.prompt && !slot.prompt) fail('prompt', 'Введите промпт');
   const promptLimit = model.id.startsWith('fal-ai/kling-video/') ? 2500 : model.id === 'fal-ai/vidu/q4/reference-to-video' ? 5000 : 10000;
@@ -78,6 +84,7 @@ export const legacySlotSchema = z.object({
 /** New saves and new-plan input preparation share one strict contract. */
 const slotFields = z.object({
   description: z.string().trim().min(1).max(5000), visible: z.boolean(), thumbnailId: id,
+  comment: z.string().trim().optional(),
   simulateGeneration: z.boolean().default(false), simulationOutput: z.literal('video').optional(), testPhotoId: id.optional(), testPhotoIds: z.array(id).max(8).optional(),
   mode: z.enum(['V2V', 'P2V']), model: z.string(),
   participants: z.union([z.literal(1), z.literal(2), z.literal('group')]),
@@ -87,6 +94,20 @@ const slotFields = z.object({
   prompt: z.string().trim().optional(), resolution: z.string().optional(), duration: z.number().finite().optional(),
   recastShotsConfirmed: z.boolean().optional(), promptExpansionMode: z.literal('disabled').optional(),
 }).strict();
+// Read-only contract for jobs accepted before these edit endpoints were retired.
+export const savedKlingEditSchema = slotFields.extend({
+  mode: z.literal('V2V'), videoId: id, prompt: z.string().trim().min(1).max(2500),
+  resolution: z.never().optional(), duration: z.never().optional(), aspectRatio: z.never().optional(),
+}).refine(slot => slot.participants === 'group'
+  ? slot.photosPerParticipant + slot.referenceIds.length <= 4
+  : slot.photosPerParticipant >= 2 && slot.participants + slot.referenceIds.length <= 4);
+
+export function promptProblem(model: string, text: string | undefined, limit: number) {
+  const length = text?.trim().length ?? 0;
+  if (model !== recastId && !length) return 'Введите промпт';
+  if (length > limit) return `Промпт: не более ${limit} символов`;
+}
+
 export const slotSchema = slotFields.superRefine((slot, ctx) => {
   const fail = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message });
   if (slot.simulationOutput && !slot.simulateGeneration) fail('simulationOutput', 'Тестовое видео требует режима эмуляции');
@@ -98,8 +119,8 @@ export const slotSchema = slotFields.superRefine((slot, ctx) => {
   const { model, variant } = setup;
   if (slot.testPhotoIds?.length && (slot.testPhotoIds.length !== variant.cameraPhotos || new Set(slot.testPhotoIds).size !== slot.testPhotoIds.length)) fail('testPhotoIds', 'Каждому кадру нужно отдельное тестовое фото JPEG; сохраните полный набор');
   if (slot.referenceIds.length > variant.additionalReferenceLimit) fail('referenceIds', `Дополнительные фото: не более ${variant.additionalReferenceLimit}`);
-  if (slot.model !== recastId && !slot.prompt) fail('prompt', 'Введите промпт');
-  if (slot.prompt && slot.prompt.length > model.promptMaxLength) fail('prompt', `Промпт: не более ${model.promptMaxLength} символов`);
+  const promptError = promptProblem(slot.model, slot.prompt, model.promptMaxLength);
+  if (promptError) fail('prompt', promptError);
   if (model.resolutionOptions.length ? !model.resolutionOptions.includes(slot.resolution ?? '') : slot.resolution !== undefined) fail('resolution', 'Недопустимое разрешение модели');
   if (model.orientationMode === 'source-video') {
     if (slot.aspectRatio !== undefined) fail('aspectRatio', 'Соотношение сторон определяется исходным видео');
@@ -122,7 +143,7 @@ export const slotSchema = slotFields.superRefine((slot, ctx) => {
 });
 export type ConfiguredSlotInput = z.infer<typeof slotSchema>;
 /** Optional setup fields describe raw legacy records; every new save uses slotSchema. */
-export type SlotInput = z.infer<typeof legacySlotSchema> & Partial<Pick<ConfiguredSlotInput, 'participants' | 'photosPerParticipant' | 'orientation' | 'aspectRatio' | 'testPhotoIds'>>;
+export type SlotInput = z.infer<typeof legacySlotSchema> & Partial<Pick<ConfiguredSlotInput, 'participants' | 'photosPerParticipant' | 'orientation' | 'aspectRatio' | 'testPhotoIds' | 'comment'>>;
 export function hasSlotSetup(slot: SlotInput): slot is ConfiguredSlotInput { return slot.participants !== undefined; }
 export function normalizeSlotForEditor<T extends SlotInput>(slot: T, orientation: Orientation = 'landscape'): T & ConfiguredSlotInput {
   return { ...defaultSlotSetup(slot.model, slot.mode, orientation), ...slot } as T & ConfiguredSlotInput;

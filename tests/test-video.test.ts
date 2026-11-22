@@ -66,13 +66,16 @@ async function setup(t: TestContext) {
 
 test('test-video snapshots survive edits and every worker restart, deliver both orientations, preserve the last real result and clean without fal', async t => {
   const h = await setup(t); const { f, db } = h;
-  const slot = await h.save({ ...h.input, simulateGeneration: false, simulationOutput: undefined });
+  const comment = 'Оставить этот вариант для вечера.';
+  const slot = await h.save({ ...h.input, comment, simulateGeneration: false, simulationOutput: undefined });
+  assert.equal(slot.comment, comment);
   const real = await h.start(slot.id);
   await h.save({ ...h.input, prompt: 'Edited after capture', simulateGeneration: false, simulationOutput: undefined }, slot.id);
   const bytes = await readFile(join(h.directory, 'landscape.mp4'));
   let submittedPrompt: unknown;
   let worker = h.worker({ client: { submit: async (_model, input) => {
     submittedPrompt = input.prompt;
+    assert.ok(!JSON.stringify(input).includes(comment));
     return { request_id: 'real-fixture' };
   }, status: async () => ({ status: 'COMPLETED' }), result: async () => ({ video: { url: 'https://fixture.test/real.mp4' } }) }, download: async () => new Response(bytes) });
   await worker.runOnce(); await worker.runOnce(); await worker.runOnce(); await worker.stop();
@@ -82,9 +85,11 @@ test('test-video snapshots survive edits and every worker restart, deliver both 
   const realDetails = await details(real);
   assert.equal(realDetails.statusCode, 200);
   assert.equal(realDetails.json().prompt, submittedPrompt);
+  assert.equal(realDetails.json().comment, comment);
   const guestDetails = await f.app.inject(`/api/receive/${h.delivery(real).receive_token}`);
   assert.equal(guestDetails.statusCode, 200);
   assert.ok(!guestDetails.body.includes(h.input.prompt!));
+  assert.ok(!guestDetails.body.includes(comment));
   const ids: string[] = [];
   for (const orientation of ['landscape', 'portrait'] as const) {
     await h.save({ ...h.input, orientation, aspectRatio: orientation === 'portrait' ? '9:16' : '16:9' }, slot.id);

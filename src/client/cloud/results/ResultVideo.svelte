@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { api, ApiError } from '../api';
   import { formatUsd } from '../money';
-  import { models } from '../../../shared/scenarios';
+  import { modelName } from '../../../shared/scenarios';
   import type { ResultVideoDetails } from '../../../shared/display';
   import '../results-prototype/assets/fonts.css';
 
@@ -13,7 +13,7 @@
   let mediaError = $state(false);
   let detailsOpen = $state(false);
   const base = $derived('/display/' + encodeURIComponent(id));
-  const model = $derived(models.find(item => item.id === details?.model)?.name ?? details?.model ?? 'Не указана');
+  const model = $derived(details?.model ? modelName(details.model) : 'Не указана');
 
   onMount(() => {
     const controller = new AbortController();
@@ -64,6 +64,12 @@
               <dl class="prompt">
                 <dt>Промпт генерации</dt>
                 <dd>{details.prompt}</dd>
+              </dl>
+            {/if}
+            {#if details.comment}
+              <dl class="prompt">
+                <dt>Комментарий к слоту</dt>
+                <dd>{details.comment}</dd>
               </dl>
             {/if}
           </div>
