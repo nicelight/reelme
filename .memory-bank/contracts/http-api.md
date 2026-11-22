@@ -34,7 +34,7 @@ status: active
 | PUT /admin/email-settings | Admin + разрешённый Origin | Сохранить и выбрать профиль. Для mailru передаются provider, user и пароль при первом сохранении. Для smtpbz также host, port, from |
 | POST /admin/email-settings/test | Admin + разрешённый Origin | `{profile, to}` → 204 после принятия тестового письма сервисом. Настройки и очередь не меняются |
 | GET /admin/capture-settings | Admin | Настройки новых фотосессий |
-| PUT /admin/capture-settings | Admin + разрешённый Origin | `startMode` (manual/automatic), `countdownSeconds`, `reviewSeconds`, `receiptSeconds` (целые 1–60), `sendCaptureLogs` (boolean, по умолчанию false), `photoMaxEdge` (0, 1024 или 2048 пикселей по длинной стороне, по умолчанию 0 — исходный JPEG) → сохранённые значения |
+| PUT /admin/capture-settings | Admin + разрешённый Origin | `startMode` (manual/automatic), `countdownSeconds`, `reviewSeconds`, `receiptSeconds` (целые 1–60), `sendCaptureLogs` (boolean, по умолчанию false), `photoMaxEdge` (0, 1024 или 2048 пикселей по длинной стороне, по умолчанию 0 — полное разрешение), `rotateWebUsb180` (boolean, по умолчанию false, поворот превью и JPEG фотобудки WebUSB) → сохранённые значения |
 | PUT /admin/capture-guides/:number | Admin + разрешённый Origin | Обновляет переданные поля `mediaId` (UUID или null) и `caption` (до 120 символов, пустая строка очищает подпись) |
 
 Каталог возвращает `CatalogPage` (`items`, `page`, `pageSize=12`, `total`, `totalPages`),
@@ -199,7 +199,7 @@ StartReceipt и CaptureStatus содержат `story: {slotId, description, thu
 |---|---|---|
 | GET /display/today | Оператор/администратор | Сегодняшние номера, этапы, ошибки и карточки |
 | POST /display/:id/load-failure | Оператор/администратор + разрешённый Origin | `{attempts: 4, reason: "timeout"\|"image"}` → 204; предупреждение `DISPLAY_CARD_DEPRECATED` для видимого ready-номера текущего дня, без изменения сессии |
-| GET /display/:id/{photo,frame,qr} | Оператор/администратор | Медиа видимой готовой карточки текущего дня |
+| GET /display/:id/{photo,cover,frame,qr} | Оператор/администратор | Медиа видимой готовой карточки текущего дня |
 | GET /display/:id/video | Оператор/администратор | Исходный MP4 сегодняшней готовой истории, inline с поддержкой Range. Доступен для активного снимка после истечения срока по email. Ручное скрытие закрывает этот маршрут |
 | GET /display/:id/video-details | Оператор/администратор | В том же окне доступа, что и видео. `{number, model, prompt, testVideo, costUsd?}`. Промпт из snapshot сессии либо `null` для видео без промпта и эмуляций |
 | POST /display/:id/hide | Оператор/администратор и разрешённый Origin | Идемпотентное скрытие готовой истории сегодняшнего мероприятия из показа, 204 |
@@ -227,7 +227,7 @@ StartReceipt и CaptureStatus содержат `story: {slotId, description, thu
 догадкой. Порядок ответа остаётся по номеру/id, очередь готовности клиента использует
 `readyAt` и стабильный порядок номера/id при отсутствии времени.
 
-API карточки возвращает URL исходного фото, кадра результата, QR и защищённый
+API карточки возвращает URL исходного фото, миниатюры первого снимка (`frameUrl` → `/cover`, JPEG до 640 px по длинной стороне), QR и защищённый
 `videoUrl` для действия «Посмотреть». Композиция, меню и очереди —
 [правила экрана](../states/results-display.md). Медиа проверяют права
 соответствующего экрана; просмотр карточки не считается открытием формы посетителя.

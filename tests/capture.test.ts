@@ -136,8 +136,8 @@ test('session snapshots preserve replaced settings and bytes across restart; P2V
   const slotId = await s.save(s.recast);
   const a = await start(f, slotId);
   const old = snapshot(f, a.sessionId);
-  const defaults = { photoMaxEdge: 0, sendCaptureLogs: false, startMode: 'manual', countdownSeconds: 5, reviewSeconds: 3, receiptSeconds: 5 };
-  const updated = { photoMaxEdge: 2048, sendCaptureLogs: true, startMode: 'automatic', countdownSeconds: 2, reviewSeconds: 1, receiptSeconds: 4 };
+  const defaults = { rotateWebUsb180: false, photoMaxEdge: 0, sendCaptureLogs: false, startMode: 'manual', countdownSeconds: 5, reviewSeconds: 3, receiptSeconds: 5 };
+  const updated = { rotateWebUsb180: true, photoMaxEdge: 2048, sendCaptureLogs: true, startMode: 'automatic', countdownSeconds: 2, reviewSeconds: 1, receiptSeconds: 4 };
   const settingsUrl = '/api/admin/capture-settings';
   const headers = { cookie: s.cookie, origin: f.config.origin };
   assert.deepEqual((await f.app.inject({ url: settingsUrl, headers })).json(), defaults);
@@ -145,7 +145,7 @@ test('session snapshots preserve replaced settings and bytes across restart; P2V
   assert.equal((await f.app.inject({ method: 'PUT', url: settingsUrl, headers, payload: { ...updated, countdownSeconds: 0 } })).statusCode, 400);
   assert.equal((await f.app.inject({ method: 'PUT', url: settingsUrl, headers, payload: updated })).statusCode, 200);
   assert.equal((await f.app.inject({ method: 'PUT', url: settingsUrl, headers, payload: { ...updated, photoMaxEdge: 4096 } })).statusCode, 400);
-  const { sendCaptureLogs: _omit, photoMaxEdge: _omitEdge, ...legacyUpdate } = updated;
+  const { rotateWebUsb180: _omitRotation, sendCaptureLogs: _omit, photoMaxEdge: _omitEdge, ...legacyUpdate } = updated;
   assert.deepEqual((await f.app.inject({ method: 'PUT', url: settingsUrl, headers, payload: legacyUpdate })).json(), updated);
   assert.deepEqual(a.captureSettings, defaults);
   assert.deepEqual(old, { captureSettings: defaults, slotId, description: s.recast.description, thumbnailId: s.thumbnail.id, expectedPhotos: 1, posePlan: a.posePlan, generation: { participants: 1, photosPerParticipant: 1, orientation: 'landscape', simulateGeneration: false, mode: 'V2V', model: s.recast.model, referenceIds: [], videoId: s.clip.id, resolution: '768P', recastShotsConfirmed: true } });

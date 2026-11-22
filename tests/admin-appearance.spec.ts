@@ -24,6 +24,9 @@ test('admin workspace: responsive editor, themes and shared sections', async ({ 
   await expect(page.getByLabel('Длительность отображения каждой страницы')).toBeEnabled();
   const logging = page.getByRole('switch', { name: 'Отправлять на сервер логи захвата кадра' });
   await expect(logging).not.toBeChecked();
+  const rotation = page.getByRole('switch', { name: 'Поворачивать изображение WebUSB-камеры на 180°' });
+  await expect(rotation).not.toBeChecked();
+  await rotation.check();
   const photoSize = page.getByLabel('Ужимать фото перед отправкой на сервер');
   await expect(photoSize).toHaveValue('0');
   await photoSize.selectOption('2048');
@@ -37,6 +40,7 @@ test('admin workspace: responsive editor, themes and shared sections', async ({ 
   await page.reload();
   await page.getByRole('button', { name: 'Параметры', exact: true }).click();
   await expect(page.getByRole('switch', { name: 'Автоматический запуск фотосессии' })).toBeChecked();
+  await expect(rotation).toBeChecked();
   await expect(logging).toBeChecked();
   await expect(photoSize).toHaveValue('2048');
   await expect(page.getByLabel('Показ номера посетителя, сек.')).toHaveValue('4');

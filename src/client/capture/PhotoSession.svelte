@@ -10,6 +10,7 @@
    * Source: docs/slot-setup/matrix.md. SQLite/files remain owned by the server. */
   import { onMount } from 'svelte';
   import { captureHeartbeatIntervalMs, defaultCaptureSettings, type CaptureStatus, type StartReceipt } from '../../shared/capture';
+  import { boothCamera } from './camera-context';
   import { prepareUploadPhoto, type CapturedPhoto } from './photos';
   import Capture from './Capture.svelte';
   import { ApiError, request } from './api';
@@ -19,6 +20,7 @@
   let error = $state('');
   let busy = false;
   let photos: (CapturedPhoto & { uploadBlob?: Blob })[] = [];
+  const webUsb = !!boothCamera()?.usb;
   const lifecycle = new AbortController();
   const transferStorage = 'reelme.captureTransfer';
   const cancelStorage = 'reelme.captureCancel';
@@ -96,12 +98,12 @@
         phase = 'lost'; return;
       }
       phase = 'transfer';
-      const maxEdge = status.captureSettings?.photoMaxEdge ?? defaultCaptureSettings.photoMaxEdge;
+      const settings = status.captureSettings ?? defaultCaptureSettings;
       for (const pose of status.posePlan) {
         if (status.acceptedPoseIndices.includes(pose.index)) continue;
         const photo = photos.find(photo => photo.sessionId === receipt.sessionId && photo.poseIndex === pose.index);
         if (!photo) throw new Error('Не найден снятый кадр');
-        photo.uploadBlob ??= await prepareUploadPhoto(photo.blob, maxEdge);
+        photo.uploadBlob ??= await prepareUploadPhoto(photo.blob, settings.photoMaxEdge, webUsb && settings.rotateWebUsb180);
         const body = new FormData(); body.set('file', photo.uploadBlob, `pose-${pose.index}.jpg`);
         // A JPEG can be up to 20 MiB; allow a slower uplink than for status JSON.
         status = await readResponse(await request(`${path()}/photos/${pose.index}`, installationKey, { method: 'PUT', body, signal: AbortSignal.any([lifecycle.signal, AbortSignal.timeout(120_000)]) }));

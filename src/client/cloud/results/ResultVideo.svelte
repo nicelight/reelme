@@ -11,6 +11,7 @@
   let details = $state<ResultVideoDetails>();
   let error = $state('');
   let mediaError = $state(false);
+  let detailsOpen = $state(false);
   const base = $derived('/display/' + encodeURIComponent(id));
   const model = $derived(models.find(item => item.id === details?.model)?.name ?? details?.model ?? 'Не указана');
 
@@ -52,17 +53,20 @@
           {#if mediaError}<p class="notice" role="alert">Не удалось воспроизвести видео. <a href={location.href}>Попробовать снова</a></p>{/if}
         </div>
         <div class="caption">
-          <h1><span>Генерация</span>№ {String(details.number).padStart(3, '0')}</h1>
-          <dl>
-            <div><dt>Модель</dt><dd>{details.testVideo ? 'Тестовое видео' : model}</dd></div>
-            <div><dt>Цена генерации</dt><dd class="price" aria-live="polite">{details.testVideo ? 'Без списания' : details.costUsd === null ? 'Уточняется' : details.costUsd === undefined ? 'Нет данных' : formatUsd(details.costUsd)}</dd></div>
-          </dl>
-          {#if details.prompt}
-            <dl class="prompt">
-              <dt>Промпт генерации</dt>
-              <dd>{details.prompt}</dd>
+          <h1>Генерация № {String(details.number).padStart(3, '0')}</h1>
+          <button class="details-toggle" aria-expanded={detailsOpen} aria-controls="generation-details" onclick={() => detailsOpen = !detailsOpen}>Details</button>
+          <div id="generation-details" hidden={!detailsOpen}>
+            <dl>
+              <div><dt>Модель</dt><dd>{details.testVideo ? 'Тестовое видео' : model}</dd></div>
+              <div><dt>Цена генерации</dt><dd class="price" aria-live="polite">{details.testVideo ? 'Без списания' : details.costUsd === null ? 'Уточняется' : details.costUsd === undefined ? 'Нет данных' : formatUsd(details.costUsd)}</dd></div>
             </dl>
-          {/if}
+            {#if details.prompt}
+              <dl class="prompt">
+                <dt>Промпт генерации</dt>
+                <dd>{details.prompt}</dd>
+              </dl>
+            {/if}
+          </div>
         </div>
       </article>
     {:else if error}
@@ -87,7 +91,7 @@
   a { color:#ead6e6; text-underline-offset:.25em }
   .masthead a { text-decoration:none; font-size:14px; padding:8px 0 }
   .masthead a:hover { color:#fff; text-decoration:underline }
-  a:focus-visible, video:focus-visible { outline:2px solid #f5a4df; outline-offset:3px }
+  a:focus-visible, video:focus-visible, .details-toggle:focus-visible { outline:2px solid #f5a4df; outline-offset:3px }
   .film { margin:0; padding:clamp(6px,1vw,12px); border-radius:24px; border:1px solid transparent;
     background:linear-gradient(135deg,#321e32,#1c1521 58%,#321e30) padding-box,
       linear-gradient(135deg,#f9c1d8,#65455e 18%,#4b354a 72%,#ce83af) border-box;
@@ -95,21 +99,24 @@
   .screening { position:relative; overflow:hidden; background:#08070a; border-radius:16px }
   video { display:block; width:100%; height:auto; max-height:66svh; object-fit:contain; background:#08070a }
   .notice { position:absolute; inset:0; display:grid; place-content:center; text-align:center; background:#17101a; margin:0; padding:1rem }
-  .caption { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:20px 40px; padding:clamp(18px,3vw,34px) }
+  .caption { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:baseline; gap:12px; padding:clamp(12px,2vw,24px) }
+  .details-toggle { justify-self:end; min-height:32px; padding:6px 2px; border:0; background:transparent; color:#bfa9b9; font:inherit; font-size:12px; cursor:pointer }
+  .details-toggle:hover, .details-toggle[aria-expanded="true"] { color:#ead6e6; text-decoration:underline }
+  #generation-details { grid-column:1/-1; min-width:0; border-top:1px solid #5b4155; padding-top:16px }
   h1,dt,dd,dl { margin:0 }
-  h1 { color:inherit; font-size:clamp(32px,4vw,52px); font-weight:700; letter-spacing:-.035em; line-height:1.1 }
-  h1 span,dt { display:block; color:#d6bdcf; font-size:14px; font-weight:500; letter-spacing:0; line-height:1.5; margin-bottom:4px }
+  h1 { color:inherit; font-size:clamp(18px,2vw,26px); font-weight:700; letter-spacing:-.035em; line-height:1.1 }
+  dt { display:block; color:#d6bdcf; font-size:14px; font-weight:500; letter-spacing:0; line-height:1.5; margin-bottom:4px }
   dl { display:flex; align-items:baseline; gap:clamp(22px,5vw,72px); flex-wrap:wrap }
   dd { font-size:clamp(16px,2vw,23px); font-weight:600; overflow-wrap:anywhere }
   .price { color:#ffc6e5; font-variant-numeric:tabular-nums }
-  dl.prompt { display:block; flex:0 0 100%; min-width:0; border-top:1px solid #5b4155; padding-top:16px }
+  dl.prompt { display:block; min-width:0; margin-top:16px }
   .prompt dd { max-width:72ch; font-size:1rem; font-weight:400; line-height:1.6; white-space:pre-wrap }
   .message { padding:32px 0; color:#ead6e6 }
   @media(max-width:600px) {
     .cinema { padding:24px 12px }
     .masthead { padding-inline:5px }
-    .caption { display:block; padding:20px 12px }
-    dl { border-top:1px solid #5b4155; padding-top:15px; margin-top:17px; gap:14px 24px }
+    .caption { padding:12px }
+    dl { gap:14px 24px }
     .film { border-radius:18px } .screening { border-radius:12px }
   }
 </style>

@@ -11,3 +11,10 @@ export async function inspectJpeg(path: string, limitInputPixels?: number) {
   await image.resize({ width: 1, height: meta.height, fit: 'fill', kernel: 'linear' }).raw().toBuffer();
   return { width: meta.width, height: meta.height };
 }
+
+/** Small display cover from the first captured pose, with its visible orientation baked in. */
+export function makeDisplayCover(photoPath: string) {
+  return sharp(photoPath).autoOrient()
+    .resize({ width: 640, height: 640, fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 82 }).toBuffer();
+}

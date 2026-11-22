@@ -1,0 +1,25 @@
+{
+  "id": "TASK-042-T1-FT-004-W39",
+  "title": "Обложка из первого снимка фотосессии и большой QR на чёрном фоне",
+  "status": "done",
+  "wave": "W39",
+  "feature": "FT-004",
+  "tier": "T1",
+  "reqs": ["REQ-011"],
+  "depends_on": ["TASK-027-T1-FT-004-W24"],
+  "source_artifacts": [".memory-bank/features/FT-004-public-delivery.md#ft-004-ac-002"],
+  "normative_inputs": [".memory-bank/states/results-display.md", "DESIGN.md"],
+  "constraints": ["Миниатюра первого снимка с учётом EXIF, до 640 px по длинной стороне."],
+  "invariants": ["Старые готовые истории получают обложку из своей первой позы. Доступ к миниатюре ограничен правами на показ результата."],
+  "verification_targets": ["Обложка карточки и читаемость QR на чёрном фоне в двух ориентациях."],
+  "touched_files": ["src/server/sessions/receive.ts", "src/server/sessions/jpeg.ts", "src/server/sessions/display.ts", "src/client/cloud/results/ResultsScreen.svelte"],
+  "docs": ["docs/MANUAL.md", ".memory-bank/contracts/http-api.md"],
+  "evidence_required": ["Проверка миниатюры по пикселям и размеру, декодирование QR со скриншота."],
+  "gates": [],
+  "verify": [{
+    "date": "2026-11-22",
+    "result": "PASS",
+    "summary": "Проверка типов, сборка, 149 серверных тестов и 10 браузерных сценариев прошли. Проверены EXIF и размеры миниатюры, выдача старой истории, права и кэш. QR декодирован со скриншотов Chromium 1672×941 и 390×844.",
+    "evidence": ["tests/display.test.ts", "tests/results-access.spec.ts", "tests/results-card-loading.spec.ts"]
+  }]
+}

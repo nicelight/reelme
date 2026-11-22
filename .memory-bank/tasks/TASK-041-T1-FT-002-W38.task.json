@@ -1,0 +1,26 @@
+{
+  "id": "TASK-041-T1-FT-002-W38",
+  "title": "Поворот изображения перевёрнутой WebUSB-камеры на 180°",
+  "status": "done",
+  "wave": "W38",
+  "feature": "FT-002",
+  "tier": "T1",
+  "reqs": ["REQ-004", "REQ-005", "REQ-006"],
+  "depends_on": ["TASK-022-T2-FT-002-W19"],
+  "source_artifacts": [".memory-bank/features/FT-002-photo-session.md#ft-002-ac-001"],
+  "normative_inputs": [".memory-bank/contracts/http-api.md"],
+  "constraints": ["Выключен по умолчанию и действует только на WebUSB."],
+  "invariants": ["Параметры закреплены при старте серии. Зеркальность применяется только к Live View."],
+  "verification_targets": ["Поворот в интерфейсе и пикселях JPEG с учётом EXIF, полного размера, уменьшения и повторной отправки."],
+  "touched_files": ["src/client/cloud/CaptureSettingsForm.svelte", "src/client/capture/PhotoSession.svelte", "src/client/capture/session/PhotoSessionView.svelte", "src/client/capture/session/session.css", "src/client/capture/photos.ts", "src/shared/capture.ts", "src/server/sessions/index.ts"],
+  "docs": ["docs/MANUAL.md"],
+  "evidence_required": ["Ориентация асимметричного кадра после сохранения на сервере."],
+  "gates": [],
+  "verify": [{
+    "date": "2026-11-22",
+    "result": "PASS",
+    "summary": "Проверка типов и сборка прошли. 149 серверных тестов и 5 сценариев Chromium прошли. Проверены сохранение настройки, поворот с EXIF при полном размере и с лимитом 1024, повторная передача и исходные байты digiCamControl.",
+    "evidence": ["tests/booth.spec.ts", "tests/camera.spec.ts", "tests/admin-appearance.spec.ts", "tests/capture.test.ts"],
+    "limitations": ["Имитаторы камер, локальный сервер. В первом прогоне страница /booth один раз вернула 500 до съёмки, повторный прогон прошёл."]
+  }]
+}

@@ -41,6 +41,7 @@ export const photoPoses: readonly Pose[] = [
   { index: 3, key: 'profile-left', instruction: 'Поверните голову влево, в профиль' },
 ];
 export interface CaptureSettings {
+  rotateWebUsb180: boolean;
   photoMaxEdge: 0 | 1024 | 2048;
   sendCaptureLogs: boolean;
   startMode: 'manual' | 'automatic';
@@ -49,6 +50,7 @@ export interface CaptureSettings {
   receiptSeconds: number;
 }
 export const defaultCaptureSettings: CaptureSettings = {
+  rotateWebUsb180: false,
   photoMaxEdge: 0,
   sendCaptureLogs: false, startMode: 'manual', countdownSeconds: 5, reviewSeconds: 3, receiptSeconds: 5,
 };

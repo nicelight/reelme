@@ -16,7 +16,7 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
   await mkdir(artifacts, { recursive: true });
   const admin = await apiRequest.newContext({ baseURL: app.origin, extraHTTPHeaders: { Origin: app.origin } });
   expect((await admin.post('/api/auth/login', { data: { username: 'admin', password: app.password } })).status()).toBe(200);
-  const timing = { startMode: 'manual', countdownSeconds: 3, reviewSeconds: 3, receiptSeconds: 5 };
+  const timing = { rotateWebUsb180: true, startMode: 'manual', countdownSeconds: 3, reviewSeconds: 3, receiptSeconds: 5 };
   expect((await admin.put('/api/admin/capture-settings', { data: timing })).status()).toBe(200);
   const upload = async (path: string, mimeType: string) => {
     const response = await admin.post('/api/admin/slot-media', { multipart: { file: { name: path.split('/').pop()!, mimeType, buffer: await readFile(path) } } });
@@ -97,6 +97,7 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
   await page.getByRole('button', { name: 'Выбрать этот сюжет' }).click();
   await expect(page.locator('.live-preview')).toBeVisible();
   await expect.poll(() => page.locator('.live-preview').evaluate(image => getComputedStyle(image).transform)).toBe('matrix(-1, 0, 0, 1, 0, 0)');
+  await expect(page.locator('.live-preview')).toHaveCSS('rotate', 'none');
   const firstReceipt = await page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!).receipt);
   expect(firstReceipt.posePlan).toHaveLength(1);
   await page.screenshot({ path: `${artifacts}/camera-live-desktop.png`, fullPage: true });
@@ -112,6 +113,7 @@ test('camera plans 1/4, delayed JPEG, same-file retry, sequential visitors and p
   await page.screenshot({ path: `${artifacts}/camera-original.png`, fullPage: true });
   await page.getByRole('button', { name: 'Завершить фотосессию' }).click();
   await expect(page.getByRole('heading', { name: /^Ищите видео под номером \d{3} на промоэкране$/ })).toBeVisible();
+  expect((await app.photos(firstReceipt.sessionId))[0].bytes).toEqual(frames[1]);
   const first = await page.evaluate(() => (window as typeof window & { cameraObservations: Observations }).cameraObservations);
   expect(first.beeps).toBe(3); expect(first.countdowns).toEqual(['3', '2', '1']);
   expect(first.frames).toHaveLength(1); expect(Buffer.from(first.frames[0].bytes)).toEqual(frames[1]);

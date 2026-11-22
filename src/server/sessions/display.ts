@@ -18,6 +18,7 @@ import { HttpError } from '../errors.js';
 import { eventKey } from '../../shared/events.js';
 import type { SlotSnapshot } from '../../shared/capture.js';
 import { eventDate } from './index.js';
+import { makeDisplayCover } from './jpeg.js';
 import { readyCard } from './receive.js';
 import { matchesPrivateCache, sendMedia } from '../scenarios/media.js';
 import { pageDurationOptions, stageLabels, type DisplaySettings, type DisplaySession, type TodayDisplay, type ResultVideoDetails } from '../../shared/display.js';
@@ -57,7 +58,7 @@ function projection(row: Row): DisplaySession {
     error: row.state === 'failed' ? failure
       : row.email_state === 'failed' ? 'Письмо не подтверждено. Откройте форму и повторите отправку.' : null,
     hideAt: row.email_confirmed_at === null ? null : row.email_confirmed_at + 180_000,
-    card: row.state === 'ready' ? { photoUrl: `/api/display/${row.id}/photo`, frameUrl: `/api/display/${row.id}/frame`, qrUrl: `/api/display/${row.id}/qr`, videoUrl: `/api/display/${row.id}/video` } : null };
+    card: row.state === 'ready' ? { photoUrl: `/api/display/${row.id}/photo`, frameUrl: `/api/display/${row.id}/cover`, qrUrl: `/api/display/${row.id}/qr`, videoUrl: `/api/display/${row.id}/video` } : null };
 }
 export function registerDisplay(app: FastifyInstance, db: DB, dataDir: string, origin: string, access: Access, now: () => number, costs: CostReader) {
   const settings = () => db.prepare('SELECT page_duration_seconds AS pageDurationSeconds FROM display_settings WHERE id=1').get() as DisplaySettings;
@@ -118,11 +119,24 @@ export function registerDisplay(app: FastifyInstance, db: DB, dataDir: string, o
     app.log.warn({ code: 'DISPLAY_CARD_DEPRECATED', sessionId: row.id, number: row.number, ...failure }, 'Карточка не загрузилась на экране результатов');
     return reply.code(204).send();
   });
-  for (const kind of ['photo', 'frame', 'qr'] as const) {
+  for (const kind of ['photo', 'cover', 'frame', 'qr'] as const) {
     app.get<{ Params: { id: string } }>(`/api/display/:id/${kind}`, { preHandler: account }, async (request, reply) => {
       const time = now();
       const row = db.prepare(`${selection} AND s.id=? AND s.state='ready'`).get(eventDate(time), time, request.params.id) as Row | undefined;
       if (!row) throw new HttpError(404, 'NOT_FOUND', 'Результат недоступен на общем экране');
+      if (kind === 'cover') {
+        // A ready session's first pose is immutable. Revalidate only after checking display access.
+        if (matchesPrivateCache(request, reply, `"${row.id}-cover-v1"`, 'Cookie')) return reply.code(304).send();
+        let cover: Buffer;
+        try { cover = await readFile(join(dataDir, 'media', 'sessions', row.id, 'cover.jpg')); }
+        catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+          const photo = db.prepare('SELECT path FROM capture_photos WHERE session_id=? AND pose_index=0').get(row.id) as { path: string } | undefined;
+          if (!photo) throw new HttpError(404, 'NOT_FOUND', 'Первый снимок недоступен');
+          cover = await makeDisplayCover(join(dataDir, 'media', photo.path));
+        }
+        return reply.type('image/jpeg').send(cover);
+      }
       if (kind === 'qr') {
         let png: Buffer;
         try { png = await readFile(join(dataDir, 'media', 'sessions', row.id, 'qr.png')); }

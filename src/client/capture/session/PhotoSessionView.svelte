@@ -89,7 +89,7 @@
 {/snippet}
 {#snippet corners()}<div class="corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>{/snippet}
 {#snippet counter(live=false)}{#if phase==='countdown'}{#key countdown}<div class="countdown" aria-hidden={!live} role={live?'status':undefined}><strong>{countdown}</strong>{#if live}<span class="sr-only">Смотрите в объектив</span>{/if}</div>{/key}{/if}{/snippet}
-<div class="photo-session-view">
+<div class="photo-session-view" class:rotate-camera={webUsb && settings.rotateWebUsb180}>
 {#if flash}<div class="usb-flash" aria-hidden="true" onanimationend={() => flash = false}></div>{/if}
 <main class="page"><div class="stage" aria-label="Фотосессия">
   <svg class="light-lines" viewBox="0 0 1600 900" preserveAspectRatio="none" aria-hidden="true"><defs>

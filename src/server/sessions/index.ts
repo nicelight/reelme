@@ -86,6 +86,7 @@ async function inspectPhoto(path: string) {
 export function registerSessions(app: FastifyInstance, db: DB, dataDir: string, access: Access, now: () => number) {
   const seconds = z.number().int().min(1).max(60);
   const settingsSchema = z.object({
+    rotateWebUsb180: z.boolean().optional(),
     photoMaxEdge: z.union([z.literal(0), z.literal(1024), z.literal(2048)]).optional(),
     sendCaptureLogs: z.boolean().optional(), startMode: z.enum(['manual', 'automatic']),
     countdownSeconds: seconds, reviewSeconds: seconds, receiptSeconds: seconds,

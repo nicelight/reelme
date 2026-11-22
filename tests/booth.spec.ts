@@ -1,11 +1,13 @@
+import type { APIRequestContext } from '@playwright/test';
+import sharp from 'sharp';
+import { defaultCaptureSettings } from '../src/shared/capture';
 import { readFile } from 'node:fs/promises';
 import { test, expect } from './browser-fixture';
 import { mockUsbCamera } from './usb-camera-fixture';
 
 test.use({ capturePort: 0 });
 
-test('WebUSB booth keeps one connection across screens and recovers a pose without duplicating the shutter', async ({ app, page, request }) => {
-  test.setTimeout(60000);
+async function createUsbSlot(app: { origin: string; password: string; image: string }, request: APIRequestContext, participants: number, photosPerParticipant: number) {
   const headers = { Origin: app.origin };
   await request.post(app.origin + '/api/auth/login', { headers, data: { username: 'admin', password: app.password } });
   const media = await request.post(app.origin + '/api/admin/slot-media', { headers, multipart: {
@@ -13,10 +15,16 @@ test('WebUSB booth keeps one connection across screens and recovers a pose witho
   } });
   const saved = await request.post(app.origin + '/api/admin/slots', { headers, data: {
     description: 'USB портрет', visible: true, thumbnailId: (await media.json()).id, referenceIds: [],
-    mode: 'P2V', model: 'minimax/h3-max/reference-to-video', participants: 2, photosPerParticipant: 2,
+    mode: 'P2V', model: 'minimax/h3-max/reference-to-video', participants, photosPerParticipant,
     orientation: 'landscape', aspectRatio: '16:9', resolution: '768P', duration: 5, prompt: 'Two people', promptExpansionMode: 'disabled'
   } });
   expect(saved.status()).toBe(201);
+  return (await saved.json()).id as string;
+}
+
+test('WebUSB booth keeps one connection across screens and recovers a pose without duplicating the shutter', async ({ app, page, request }) => {
+  test.setTimeout(60000);
+  await createUsbSlot(app, request, 2, 2);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   const jpeg = await readFile(app.jpeg);
@@ -111,3 +119,47 @@ test('WebUSB booth keeps one connection across screens and recovers a pose witho
   expect(photos.every(photo => photo.bytes.equals(jpeg))).toBe(true);
   expect(errors).toEqual([]);
 });
+
+for (const photoMaxEdge of [0, 1024]) {
+  test(`WebUSB rotates the display and uploaded JPEG at edge limit ${photoMaxEdge}`, async ({ app, page, request }) => {
+    const slotId = await createUsbSlot(app, request, 1, 1);
+    const settings = { ...defaultCaptureSettings, rotateWebUsb180: true, photoMaxEdge, reviewSeconds: 30 };
+    expect((await request.put(app.origin + '/api/admin/capture-settings', {
+      headers: { Origin: app.origin }, data: settings
+    })).status()).toBe(200);
+
+    // EXIF 6 moves the red top-left block to the top right. The extra half turn puts it bottom left.
+    const marker = await sharp({ create: { width: 400, height: 200, channels: 3, background: 'red' } }).png().toBuffer();
+    const jpeg = await sharp({ create: { width: 1600, height: 800, channels: 3, background: 'white' } })
+      .composite([{ input: marker, left: 0, top: 0 }]).withMetadata({ orientation: 6 }).jpeg().toBuffer();
+    await mockUsbCamera(page, jpeg);
+    await page.addInitScript(key => localStorage.setItem('reelme.installationKey', key), app.installationKey);
+    await page.goto(app.origin + '/booth#slot=' + slotId);
+    await page.getByRole('button', { name: 'Камера не подключена' }).click();
+    await page.getByRole('button', { name: 'Выбрать камеру' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('status')).toHaveText('Canon OK');
+    await dialog.getByRole('button', { name: 'Закрыть' }).click();
+    await page.getByRole('button', { name: 'Выбрать этот сюжет' }).click();
+    await expect(page.locator('.live-preview')).toHaveCSS('rotate', '180deg');
+    await expect(page.locator('.live-preview')).toHaveCSS('transform', 'matrix(-1, 0, 0, 1, 0, 0)');
+    await page.getByRole('button', { name: 'Снять один кадр' }).click();
+    await expect(page.locator('.captured-frame')).toHaveCSS('rotate', '180deg');
+    await expect(page.locator('.thumb-image')).toHaveCSS('rotate', '180deg');
+
+    await page.route('**/photos/0', route => route.fulfill({ status: 503 }), { times: 1 });
+    await page.getByRole('button', { name: 'Завершить фотосессию' }).click();
+    await page.getByRole('button', { name: 'Повторить', exact: true }).click();
+    await expect(page.getByText('ФОТОГРАФИИ ПРИНЯТЫ')).toBeVisible();
+    expect(await page.evaluate('window.usbTest.shots')).toBe(1);
+    const id = await page.evaluate(() => JSON.parse(sessionStorage.getItem('reelme.captureStart')!).receipt.sessionId);
+    const [photo] = await app.photos(id);
+    const { data, info } = await sharp(photo.bytes).raw().toBuffer({ resolveWithObject: true });
+    expect(info.height).toBe(photoMaxEdge || 1600);
+    expect(info.width).toBe(info.height / 2);
+    const pixel = ((info.height - 20) * info.width + 20) * info.channels;
+    expect(data[pixel]).toBeGreaterThan(240);
+    expect(data[pixel + 1]).toBeLessThan(15);
+    expect(data[pixel + 2]).toBeLessThan(15);
+  });
+}

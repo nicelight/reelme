@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, rm } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import jsQR from 'jsqr';
@@ -18,6 +18,9 @@ test('operator display: six stages, explicit errors, stable order, private media
   const bytes = await videoBytes(f.root, 1);
   const first = await preparedSession(f.config.dataDir, bytes, 1);
   const second = await preparedSession(f.config.dataDir, bytes, 2);
+  // An EXIF-rotated first photo has different proportions and colours from the video frame.
+  const source = await sharp(first.photo).resize(1600, 800, { fit: 'fill' }).withMetadata({ orientation: 6 }).jpeg().toBuffer();
+  await writeFile(join(f.config.dataDir, 'media', 'sessions', first.id, 'photo.jpg'), source);
   await f.restart(); await f.app.ready();
   const db = openDatabase(f.config.dataDir); t.after(() => db.close());
   const row = () => db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(first.id) as Delivery;
@@ -43,13 +46,21 @@ test('operator display: six stages, explicit errors, stable order, private media
     assert.equal(cached.rawPayload.length, 0);
     assert.equal((await f.app.inject({ url, headers })).statusCode, 401);
   }
-  assert.deepEqual((await get(card.photoUrl)).rawPayload, first.photo);
+  assert.deepEqual((await get(card.photoUrl)).rawPayload, source);
   const preview = await f.app.inject({ url: card.videoUrl, headers: { cookie, range: 'bytes=0-15' } });
   assert.equal(preview.statusCode, 206);
   assert.equal(preview.headers['content-type'], 'video/mp4');
   assert.match(String(preview.headers['content-disposition']), /^inline/);
   assert.deepEqual(preview.rawPayload, bytes.subarray(0, 16));
-  assert.deepEqual((await get(card.frameUrl)).rawPayload, await readFile(join(f.config.dataDir, 'media', first.frame_path)));
+  const cover = (await get(card.frameUrl)).rawPayload;
+  const { data, info } = await sharp(cover).raw().toBuffer({ resolveWithObject: true });
+  assert.equal(info.width, 320);
+  assert.equal(info.height, 640);
+  assert.ok(Math.abs(data[0] - 183) <= 3 && Math.abs(data[1] - 201) <= 3 && Math.abs(data[2] - 188) <= 3);
+  const savedCover = join(f.config.dataDir, 'media', 'sessions', first.id, 'cover.jpg');
+  assert.deepEqual(cover, await readFile(savedCover));
+  await rm(savedCover);
+  assert.deepEqual((await get(card.frameUrl)).rawPayload, cover);
   const png = await sharp((await get(card.qrUrl)).rawPayload).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   assert.equal(jsQR(new Uint8ClampedArray(png.data), png.info.width, png.info.height)?.data, `${f.config.origin}/receive/${row().receive_token}`);
   const savedQr = join(f.config.dataDir, 'media', 'sessions', first.id, 'qr.png');

@@ -51,7 +51,7 @@ test('admin keeps editor access beside a reloadable results popup; operator sees
   } finally { db.close(); }
   const expectedMedia = {
     photo: seed.photo,
-    frame: await readFile(join(app.dataDir, 'media', seed.frame_path)),
+    cover: await readFile(join(app.dataDir, 'media', 'sessions', seed.id, 'cover.jpg')),
     qr: await readFile(join(app.dataDir, 'media', 'sessions', seed.id, 'qr.png')),
   };
   async function results(target: Page, role: 'admin' | 'operator') {
@@ -63,6 +63,7 @@ test('admin keeps editor access beside a reloadable results popup; operator sees
       nodes.length === 2 && nodes.every(node => (node as HTMLImageElement).complete && (node as HTMLImageElement).naturalWidth > 0),
     )).toBe(true);
     expect((await (await target.request.get(app.origin + '/api/auth/session')).json()).role).toBe(role);
+    await expect(target.locator('.card .portrait')).toHaveAttribute('src', `/api/display/${seed.id}/cover`);
     for (const [kind, bytes] of Object.entries(expectedMedia)) {
       const response = await target.request.get(`${app.origin}/api/display/${seed.id}/${kind}`);
       expect(response.status()).toBe(200);
@@ -106,6 +107,11 @@ test('admin keeps editor access beside a reloadable results popup; operator sees
     await expect(video).toHaveURL(`${app.origin}/results?video=${seed.id}`);
     watch(video);
     await expect(video.getByRole('heading', { name: /Генерация.*001/ })).toBeVisible();
+    const disclosure = video.getByRole('button', { name: 'Details', exact: true });
+    const metadata = video.locator('#generation-details');
+    await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+    await expect(metadata).toBeHidden();
+    await disclosure.click();
     await expect(video.getByText('Kling O1 Edit Pro', { exact: true })).toBeVisible();
     const promptText = video.locator('dl').filter({ hasText: 'Промпт генерации' }).locator('dd');
     await expect(promptText).toBeVisible();
@@ -121,24 +127,39 @@ test('admin keeps editor access beside a reloadable results popup; operator sees
     await video.screenshot({ path: join(artifacts, 'player-desktop.png') });
     await video.setViewportSize({ width: 390, height: 844 });
     await video.reload();
+    await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+    await expect(metadata).toBeHidden();
+    await disclosure.focus();
+    await video.keyboard.press('Enter');
     await expect(video.getByText('4,53 $', { exact: true })).toBeVisible();
     await expect(promptText).toHaveJSProperty('textContent', prompt);
     expect(await video.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await video.screenshot({ path: join(artifacts, 'player-mobile.png') });
+    await disclosure.click();
+    await expect(metadata).toBeHidden();
+    await expect(video.getByRole('heading', { name: 'Генерация № 001' })).toBeVisible();
     await video.close();
     await showActions();
     await card.getByRole('button', { name: 'Большой QR' }).click();
     const largeQr = operatorPage.getByRole('dialog', { name: /Большой QR.*001/ });
     const image = largeQr.getByRole('img');
     await expect(image).toBeVisible();
+    await expect(largeQr.getByRole('button')).toHaveCSS('background-color', 'rgb(0, 0, 0)');
+    expect((await image.boundingBox())!.width).toBeCloseTo(941 * 0.6, 0);
     await operatorPage.screenshot({ path: join(artifacts, 'results-large-qr.png') });
     const pixels = await sharp(await image.screenshot()).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     const original = await sharp(expectedMedia.qr).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     const expectedUrl = jsQR(new Uint8ClampedArray(original.data), original.info.width, original.info.height)?.data;
     expect(expectedUrl).toContain(app.origin + '/receive/');
     expect(jsQR(new Uint8ClampedArray(pixels.data), pixels.info.width, pixels.info.height)?.data).toBe(expectedUrl);
+    await operatorPage.setViewportSize({ width: 390, height: 844 });
+    await expect(image).toHaveCSS('width', '234px');
+    await operatorPage.screenshot({ path: join(artifacts, 'results-large-qr-mobile.png') });
+    const mobile = await sharp(await image.screenshot()).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    expect(jsQR(new Uint8ClampedArray(mobile.data), mobile.info.width, mobile.info.height)?.data).toBe(expectedUrl);
     await operatorPage.keyboard.press('Escape');
     await expect(largeQr).toHaveCount(0);
+    await operatorPage.setViewportSize({ width: 1672, height: 941 });
     await showActions();
     await card.getByRole('button', { name: 'Убрать с экрана' }).click();
     await expect(operatorPage.getByText(/Убрать №\s*001 с экрана\?/)).toBeVisible();

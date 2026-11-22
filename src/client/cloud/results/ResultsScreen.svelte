@@ -179,7 +179,7 @@
                 aria-expanded={menu?.id === item.id} onfocus={() => openMenu(item.id, index)} onclick={event => activateMenu(event, item.id, index)}></button>
             {/if}
             <div class="card-photo">
-              <img class="portrait" src={item.card.frameUrl} alt={`Кадр видео № ${item.number}`} loading="eager" />
+              <img class="portrait" src={item.card.frameUrl} alt={`Первый снимок фотосессии № ${item.number}`} loading="eager" />
               {#if menu?.id === item.id && menu.index === index && !compact.current}
                 <div class="card-actions" data-card-menu role="group" aria-label={`Действия истории № ${number(item.number)}`}>
                   {@render actions(item)}
@@ -275,10 +275,10 @@
   .confirm-buttons { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
   .confirm-buttons button { min-height:40px; padding:8px 14px; border:1px solid #885573; border-radius:8px; background:transparent; color:#fff4fb; font:650 14px Manrope,sans-serif; cursor:pointer; }
   .confirm-buttons button:last-child { background:#f5a4df; color:#231122; }
-  .action-dialog.qr-dialog { inset:0; width:100%; height:100%; max-width:none; max-height:none; margin:0; padding:0; border:0; border-radius:0; background:white; }
-  .large-qr { width:100%; height:100%; display:grid; place-content:center; justify-items:center; gap:8px; margin:0; padding:0; border:0; border-radius:0; background:white; color:#231122; font:750 clamp(18px,3vmin,34px)/1.25 Manrope,sans-serif; cursor:pointer; }
-  .large-qr:hover:not(:disabled) { background:white; }
-  .qr-image { display:block; width:min(96vw,calc(100dvh - 4rem)); aspect-ratio:1; }
+  .action-dialog.qr-dialog { inset:0; width:100%; height:100%; max-width:none; max-height:none; margin:0; padding:0; border:0; border-radius:0; background:#000; }
+  .large-qr { width:100%; height:100%; display:grid; place-content:center; justify-items:center; gap:8px; margin:0; padding:0; border:0; border-radius:0; background:#000; color:#fff; font:750 clamp(18px,3vmin,34px)/1.25 Manrope,sans-serif; cursor:pointer; }
+  .large-qr:hover:not(:disabled) { background:#000; }
+  .qr-image { display:block; width:min(60vw,60dvh); aspect-ratio:1; }
   .qr-image :global(img) { display:block; width:100%; height:100%; image-rendering:pixelated; }
   .result.concealed { opacity:0; }
   .card.center .result { transition:opacity 300ms ease-out; }

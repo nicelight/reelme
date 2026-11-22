@@ -55,6 +55,7 @@
         <option value={1024}>ужимать до 1024px</option>
         <option value={2048}>ужимать до 2048px</option>
       </select>
+      <label class="mode-switch log-switch"><input type="checkbox" role="switch" bind:checked={draft.rotateWebUsb180} />Поворачивать изображение WebUSB-камеры на 180°</label>
       <label class="mode-switch log-switch"><input type="checkbox" role="switch" bind:checked={draft.sendCaptureLogs} />Отправлять на сервер логи захвата кадра</label>
       <button class="primary" disabled={JSON.stringify(draft)===JSON.stringify(saved)}>Сохранить параметры съёмки</button>
     </fieldset>
