@@ -1,12 +1,24 @@
-#Requires -RunAsAdministrator
-# Restart only the connected Canon USB device seen on the ReelMe Windows station.
+﻿# Only PnPUtil needs elevation. Start this script from Explorer with "Run with PowerShell".
 $ErrorActionPreference = 'Stop'
-$cameras = @(Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -like 'USB\VID_04A9&PID_3217\*' })
-if ($cameras.Count -ne 1) {
-    throw "Expected one connected Canon 04A9:3217. Found $($cameras.Count)."
-}
+$exitCode = 1
+try {
+    $cameras = @(Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -like 'USB\VID_04A9&PID_3217\*' })
+    if ($cameras.Count -ne 1) {
+        throw "Ожидалась одна подключённая Canon 04A9:3217. Найдено устройств: $($cameras.Count)."
+    }
 
-$instanceId = $cameras[0].InstanceId
-Write-Host "Restarting $instanceId"
-& "$env:SystemRoot\System32\pnputil.exe" /restart-device $instanceId
-exit $LASTEXITCODE
+    $instanceId = $cameras[0].InstanceId
+    Write-Host "Перезапуск $instanceId. Подтвердите запрос Windows."
+    $arguments = @('/restart-device', ('"{0}"' -f $instanceId))
+    $process = Start-Process -FilePath "$env:SystemRoot\System32\pnputil.exe" -ArgumentList $arguments -Verb RunAs -Wait -PassThru
+    $exitCode = $process.ExitCode
+    if ($exitCode -eq 0) {
+        Write-Host 'Windows перезапустила устройство Canon. Откройте тестовую страницу и выберите камеру.'
+    } else {
+        Write-Host "PnPUtil вернул код $exitCode. Запишите его для диагностики."
+    }
+} catch {
+    Write-Host $_.Exception.Message
+}
+[void](Read-Host 'Нажмите Enter, чтобы закрыть окно')
+exit $exitCode

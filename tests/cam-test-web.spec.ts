@@ -12,7 +12,10 @@ test('the isolated camera page initializes its same-origin WASM runtime', async 
   const script = page.getByRole('link', { name: 'Скачать скрипт перезапуска Canon' });
   const scriptResponse = await page.request.get(app.origin + await script.getAttribute('href'));
   expect(scriptResponse.status()).toBe(200);
-  expect(await scriptResponse.text()).toContain('/restart-device $instanceId');
+  const scriptText = await scriptResponse.text();
+  expect(scriptText).toContain("'/restart-device'");
+  expect(scriptText).toContain('-Verb RunAs');
+  expect(scriptText).not.toContain('#Requires -RunAsAdministrator');
   const windowsSetup = page.getByRole('region', { name: 'Подключение и драйвер Windows' });
   await expect(windowsSetup.getByRole('link', { name: 'Скачайте Zadig' })).toBeVisible();
   await expect(windowsSetup.getByRole('listitem')).toHaveCount(5);

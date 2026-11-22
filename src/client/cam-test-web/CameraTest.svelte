@@ -494,7 +494,7 @@
       <li>В Chrome или Edge обновите эту страницу, нажмите «Выбрать камеру» и подтвердите выбор Canon.</li>
     </ol>
     <p class="driver-note">Для возврата к digiCamControl может понадобиться восстановить прежний драйвер в диспетчере устройств Windows.</p>
-    <p class="driver-note"><a href="/cam-test-web-assets/restart-canon-usb.ps1" download>Скачать скрипт перезапуска Canon</a> (.ps1). Перед перезапуском сохраните нужные снимки, закройте вкладки камеры и приложения, использующие Canon. Запустите скрипт из PowerShell от имени администратора.</p>
+    <p class="driver-note"><a href="/cam-test-web-assets/restart-canon-usb.ps1?v=2" download="restart-canon-usb.ps1">Скачать скрипт перезапуска Canon</a> (.ps1). Перед перезапуском сохраните нужные снимки, закройте вкладки камеры и приложения, использующие Canon. Щёлкните скачанный файл правой кнопкой, выберите «Выполнить с помощью PowerShell» и подтвердите запрос Windows.</p>
   </section>
 
   <div class="connection">
