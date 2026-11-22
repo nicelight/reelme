@@ -12,7 +12,11 @@ export async function mockUsbCamera(page: Page, bytes: Buffer) {
       async close() { calls.push('close'); this.opened = false; window.dispatchEvent(new Event('camera-handle-closed')); }
     };
     const usb = Object.assign(new EventTarget(), {
-      requestDevice: async () => { calls.push('picker'); return device; },
+      requestDevice: async (options: unknown) => {
+        calls.push('picker');
+        Object.assign(window, { cameraPickerOptions: options });
+        return device;
+      },
       getDevices: async () => { calls.push('list'); return [device]; }
     });
     Object.assign(window, { usbCalls: calls, cameraDevice: device });
@@ -23,7 +27,7 @@ export async function mockUsbCamera(page: Page, bytes: Buffer) {
     body: `
       const jpeg = Uint8Array.from(atob('${bytes.toString('base64')}'), c => c.charCodeAt(0));
       const stats = window.usbTest = { shots: 0, previews: 0, active: 0, overlaps: 0, stops: 0, writes: [],
-        failOff: false, holdShot: false };
+        failOff: false, holdShot: false, previewStarts: [] };
       async function read(ms = 25) {
         if (stats.active++) stats.overlaps++;
         await new Promise(resolve => setTimeout(resolve, ms));
@@ -58,6 +62,7 @@ export async function mockUsbCamera(page: Page, bytes: Buffer) {
           } else await read();
         }
         async capturePreviewAsBlob() {
+          stats.previewStarts.push(performance.now());
           await read(); stats.previews++;
           return new Blob([jpeg], {type:'image/jpeg'});
         }

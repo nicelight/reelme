@@ -39,6 +39,9 @@ test('WebUSB booth keeps one connection across screens and recovers a pose witho
     await panel.getByRole('button', { name: 'Закрыть' }).click();
   }
   await connect();
+  expect(await page.evaluate('window.cameraPickerOptions')).toEqual({
+    filters: [{ vendorId: 0x04a9, classCode: 6, subclassCode: 1 }]
+  });
   await page.setViewportSize({width: 375, height: 812});
   const steps = await page.getByLabel('Этапы создания').boundingBox();
   const button = await ready.boundingBox();
@@ -63,6 +66,7 @@ test('WebUSB booth keeps one connection across screens and recovers a pose witho
   await page.getByRole('button', { name: 'Снять один кадр' }).click();
   await expect(page.getByRole('alert')).toContainText('Проверьте камеру');
   expect(await page.evaluate('window.usbTest.shots')).toBe(1);
+  await page.evaluate("Object.assign(window.cameraDevice, { productId: 0x31ea, productName: 'Canon EOS 550D' })");
   await connect();
   await page.evaluate('window.usbTest.failShot = true');
   await page.getByRole('button', { name: 'Повторить' }).click();

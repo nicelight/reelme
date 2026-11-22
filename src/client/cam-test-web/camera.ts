@@ -20,7 +20,7 @@ export interface Device {
 }
 
 export interface Usb extends EventTarget {
-  requestDevice(options: { filters: { classCode: number; subclassCode: number }[] }): Promise<Device>;
+  requestDevice(options: { filters: { vendorId?: number; classCode: number; subclassCode: number }[] }): Promise<Device>;
   getDevices(): Promise<Device[]>;
 }
 
@@ -70,9 +70,11 @@ export function unsupportedReason(): string {
   return '';
 }
 
-export function chooseCamera(usb: Usb): Promise<Device> {
+export const canonVendorId = 0x04a9;
+
+export function chooseCamera(usb: Usb, vendorId?: number): Promise<Device> {
   // The picker must run in the click handler, before module loading or other awaits.
-  return usb.requestDevice({ filters: [{ classCode: 6, subclassCode: 1 }] });
+  return usb.requestDevice({ filters: [{ vendorId, classCode: 6, subclassCode: 1 }] });
 }
 
 function ptpInterface(config: Configuration) {

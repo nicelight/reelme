@@ -104,6 +104,25 @@ test('connection log can be downloaded while a camera call is pending and retain
   await expect(page.getByRole('button', { name: 'Запустить Live View' })).toBeEnabled();
 });
 
+test('Live View spaces USB preview requests at the selected polling rate', async ({ page, app }) => {
+  await connectCamera(page, app.origin, await readFile(app.jpeg));
+  const rates = page.getByRole('group', { name: 'Частота опроса, кадр/с' });
+  await expect(rates.getByRole('button', { name: '5', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Запустить Live View' }).click();
+  for (const rate of [5, 20, 10]) {
+    await rates.getByRole('button', { name: String(rate), exact: true }).click();
+    const from = await page.evaluate<number>('window.usbTest.previewStarts.length');
+    await expect.poll(() => page.evaluate('window.usbTest.previewStarts.length')).toBeGreaterThanOrEqual(from + 5);
+    const times = (await page.evaluate<number[]>('window.usbTest.previewStarts')).slice(from, from + 5);
+    const gaps = times.slice(1).map((time, i) => time - times[i]);
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(1000 / rate - 2);
+    expect(Math.min(...gaps)).toBeLessThan(1000 / rate + 40);
+  }
+  await page.getByRole('button', { name: 'Остановить Live View' }).click();
+  await expect(page.getByRole('button', { name: 'Запустить Live View' })).toBeEnabled();
+  expect(await page.evaluate('window.usbTest.overlaps')).toBe(0);
+});
+
 test('preview and local originals share the camera without repeating an uncertain shutter', async ({ page, app }) => {
   const bytes = await readFile(app.jpeg);
   const apiRequests: string[] = [];

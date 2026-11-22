@@ -2,7 +2,7 @@
 // last read before viewfinder=false. Its 800 ms JS acknowledgement is outside
 // the native queue. Measure the 100 ms from dispatch and observe both promises.
 // disconnect() deletes the native context outside the queue; drain before delete.
-import { checkSelectedCamera, chooseCamera, createCamera, errorMessage, unsupportedReason, usbApi, writableSettings, type Camera, type Device } from '../cam-test-web/camera';
+import { canonVendorId, checkSelectedCamera, chooseCamera, createCamera, errorMessage, unsupportedReason, usbApi, writableSettings, type Camera, type Device } from '../cam-test-web/camera';
 import { pause, validatedCameraJpeg } from './camera-frame';
 
 export class BoothUsb {
@@ -62,9 +62,8 @@ export class BoothUsb {
     this.attempt = crypto.randomUUID();
     const opening = (async () => {
       // requestDevice must run in the initiating click, before any await.
-      const device = await this.step('Выбор камеры', () => chooseCamera(usb));
+      const device = await this.step('Выбор камеры', () => chooseCamera(usb, canonVendorId));
       owner.signal.throwIfAborted();
-      if (device.vendorId !== 0x04a9 || device.productId !== 0x3217) throw new Error('Выберите Canon EOS 1100D.');
       this.device = device;
       await this.step('Проверка USB', () => checkSelectedCamera(usb, device));
       owner.signal.throwIfAborted();

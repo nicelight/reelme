@@ -17,7 +17,7 @@
    * The 50 ms flash is timer-driven. Its timestamp is independent of exposure.
    */
   import { onMount, tick } from 'svelte';
-  import { checkSelectedCamera, chooseCamera, createCamera, errorMessage, unsupportedReason, usbApi, writableSettings, type ConfigWidget, type Camera, type Device } from './camera';
+  import { canonVendorId, checkSelectedCamera, permittedCameras, chooseCamera, createCamera, errorMessage, unsupportedReason, usbApi, writableSettings, type ConfigWidget, type Camera, type Device } from './camera';
 
   type Phase = 'idle' | 'connecting' | 'ready' | 'preview' | 'stopping' | 'shooting' | 'setting' | 'closing';
   interface Shot { id: number; url: string; thumbnail: string; name: string; size: number; receiveMs: number }
@@ -33,6 +33,7 @@
   let ops = $state({ capturePreview: false, captureImage: false, config: false });
   let uncertain = $state(false);
   let shots = $state.raw<Shot[]>([]);
+  let pollFps = $state(5);
   let fps = $state<number | null>(null);
   let p95 = $state<number | null>(null);
   let frameSeen = $state(false);
@@ -91,11 +92,17 @@
   let busy = $derived(autoArmed || (phase !== 'ready' && !(phase === 'preview' && frameSeen)));
 
   function progress() { lastProgress = performance.now(); slow = false; }
-  function nextPaint() {
+  function waitForNextPoll(ms: number) {
     return new Promise<void>(resolve => {
-      const frame = requestAnimationFrame(() => { wakeFrame = undefined; resolve(); });
-      wakeFrame = () => { cancelAnimationFrame(frame); wakeFrame = undefined; resolve(); };
+      const timer = window.setTimeout(() => { wakeFrame = undefined; resolve(); }, Math.ceil(ms));
+      wakeFrame = () => { clearTimeout(timer); wakeFrame = undefined; resolve(); };
     });
+  }
+  function setPollFps(rate: number) {
+    if (pollFps === rate) return;
+    pollFps = rate;
+    record('Частота опроса Live View · ' + rate + ' кадр/с');
+    wakeFrame?.();
   }
   function clearFrame() {
     wakeFrame?.();
@@ -146,8 +153,9 @@
       finally {
         if (releasePorts) {
           // After failed setup the wrapper may have dropped its device reference.
-          const handles = device ? [device] : (await usbApi()?.getDevices() ?? [])
-            .filter(d => d.vendorId === 0x04a9 && d.productId === 0x3217);
+          const usb = usbApi();
+          const handles = device ? [device] : (usb ? await permittedCameras(usb) : [])
+            .filter(d => d.vendorId === canonVendorId);
           for (const handle of handles.filter(d => d.opened)) {
             await handle.close();
             closedHandles++;
@@ -221,6 +229,7 @@
       'Время событий · ' + localTime.resolvedOptions().timeZone,
       navigator.userAgent,
       'Попытка подключения · ' + attempt,
+      'Частота опроса Live View · ' + pollFps + ' кадр/с',
       ...events.map(event => localTime.format(openedAt + event.at) + ' · +' + event.at + ' мс · ' + event.label
         + (event.duration === undefined ? '' : ' · ' + event.duration + ' мс'))
     ];
@@ -282,7 +291,7 @@
 
   async function viewfinderOff(current: Camera) {
     // Canon EOS exposes this libgphoto2 toggle; reads start it on demand.
-    if (!settings.viewfinder && !(ops.config && device?.vendorId === 0x04a9 && configReadFailed)) return false;
+    if (!settings.viewfinder && !(ops.config && device?.vendorId === canonVendorId && configReadFailed)) return false;
     const at = performance.now();
     record('Команда viewfinder=false отправлена');
     try { await current.setConfigValue('viewfinder', false); }
@@ -294,7 +303,16 @@
   async function readFrames(current: Camera, started: number, firstLabel: string, shutterAt?: number) {
     let failures = 0;
     let first = true;
+    let lastRequest = -Infinity;
     while (phase === 'preview') {
+      // Measure start-to-start. Slow reads skip missed polls.
+      const now = performance.now();
+      const remaining = lastRequest + 1000 / pollFps - now;
+      if (remaining > 0) {
+        await waitForNextPoll(remaining);
+        continue;
+      }
+      lastRequest = now;
       try {
         const image = await current.capturePreviewAsBlob();
         if (phase !== 'preview') return;
@@ -321,7 +339,6 @@
           }
           lastDraw = lastProgress; lastDraws.push(lastDraw);
         } finally { bitmap.close(); }
-        await nextPaint();
       } catch (e) {
         if (phase !== 'preview') return;
         if (e instanceof Error && /busy|занят|-110|temporar/i.test(e.message) && ++failures <= 3) {
@@ -522,7 +539,7 @@
 
 <main>
   <header>
-    <div><h1>Тест USB-камеры</h1><p>Canon EOS 1100D · WebUSB</p></div>
+    <div><h1>Тест USB-камеры</h1><p>Canon · WebUSB</p></div>
   </header>
 
   <section aria-labelledby="setup-heading">
@@ -530,12 +547,12 @@
     <ol>
       <li>Подключите Canon по USB, выберите JPEG и закройте digiCamControl. Если WinUSB уже установлен, перейдите к шагу 5.</li>
       <li><a href="https://zadig.akeo.ie/" target="_blank" rel="noreferrer">Скачайте Zadig</a> и запустите его.</li>
-      <li>В Zadig откройте <b>Options → List All Devices</b>. Выберите именно Canon EOS 1100D и запишите название текущего драйвера.</li>
+      <li>В Zadig откройте <b>Options → List All Devices</b>. Выберите свою камеру Canon и запишите название текущего драйвера.</li>
       <li>Выберите <b>WinUSB</b> и нажмите <b>Replace Driver</b> или <b>Install Driver</b>.</li>
       <li>Для подключения нажмите «Выбрать камеру» и подтвердите выбор Canon.</li>
     </ol>
     <p class="driver-note">Для возврата к digiCamControl может понадобиться восстановить прежний драйвер в диспетчере устройств Windows.</p>
-    <p class="driver-note"><a href="/cam-test-web-assets/restart-canon-usb.ps1?v=3" download="restart-canon-usb.ps1">Скачать скрипт перезапуска Canon</a> (.ps1). Скрипт отключает и снова включает Canon в Windows. Сохраните нужные снимки и закройте приложения, использующие камеру. Щёлкните скачанный файл правой кнопкой, выберите «Выполнить с помощью PowerShell» и подтвердите запрос Windows.</p>
+    <p class="driver-note"><a href="/cam-test-web-assets/restart-canon-usb.ps1?v=3" download="restart-canon-usb.ps1">Скачать скрипт перезапуска Canon</a> (.ps1). Оба скрипта восстановления предназначены для EOS 1100D. Сохраните нужные снимки и закройте приложения, использующие камеру. Щёлкните скачанный файл правой кнопкой, выберите «Выполнить с помощью PowerShell» и подтвердите запрос Windows.</p>
     <p class="driver-note">Если скрипт выше не помог, <a href="/cam-test-web-assets/reset-canon-port.ps1" download="reset-canon-port.ps1">скачайте скрипт сброса USB-порта Canon</a>. Сохраните журнал, закройте вкладку и запустите скрипт через PowerShell. После сброса проверьте, открывается ли новая PTP-сессия.</p>
   </section>
 
@@ -559,6 +576,12 @@
       <button aria-pressed={mode === 'auto'} disabled={busy && phase !== 'idle'} onclick={() => mode = 'auto'}>Автоматический</button>
     </div>
     <div class="heading"><h2 id="live-heading">Live View</h2><output aria-label="Статистика Live View" aria-live="off" title="P95 — интервал, в который укладываются 95% последних межкадровых пауз">{fps ?? '—'} FPS{p95 !== null ? ` · P95 ${p95} мс` : ''}</output></div>
+    <div class="poll-rate" role="group" aria-labelledby="poll-label">
+      <span id="poll-label">Частота опроса, кадр/с</span>
+      {#each [5, 10, 20] as rate}
+        <button aria-pressed={pollFps === rate} onclick={() => setPollFps(rate)}>{rate}</button>
+      {/each}
+    </div>
     <div class="screen" class:white={whiteScreen}>
       <canvas class:visible={frameSeen && !review} bind:this={canvas} aria-label="Изображение с камеры"></canvas>
       {#if review}<img class="review" src={review.url} alt="Полученный JPEG">
@@ -672,6 +695,8 @@
   ol li{margin-top:4px}
   .driver-note,.gallery-note{margin-top:8px;font-size:13px}
   .modes{display:flex;gap:4px;margin-bottom:14px}
+  .poll-rate{display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:10px}
+  .poll-rate span{margin-right:6px}
   button[aria-pressed="true"]{background:#48313e;border-color:#da9ebc}
   .status i.spinner,h3 i.spinner{display:inline-block;vertical-align:middle;box-sizing:border-box;width:16px;height:16px;border:2px solid #655a69;border-top-color:#efc4d8;border-radius:50%;background:none;animation:spin .8s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}

@@ -8,9 +8,9 @@
 {#if usb}
   <button class="camera-status" aria-haspopup="dialog" onclick={() => { onopen?.(); dialog?.showModal(); }}>{label}</button>
   <dialog bind:this={dialog} aria-label="Подключение камеры">
-    <h2>Canon EOS 1100D · WebUSB</h2>
+    <h2>Камера Canon · WebUSB</h2>
     <p role="status">{usb.support || (usb.state === 'connecting' ? usb.stage : label)}</p>
-    {#if !usb.support && usb.state === 'idle'}<p>На Windows для EOS 1100D нужен WinUSB. Перед подключением закройте digiCamControl.</p>{/if}
+    {#if !usb.support && usb.state === 'idle'}<p>В Windows для подключения через WebUSB нужен драйвер WinUSB. Перед подключением закройте digiCamControl.</p>{/if}
     {#if usb.attempt}<small>Код подключения · {usb.attempt.slice(0, 8)}</small>{/if}
     {#if usb.detail}<p role="alert">{usb.detail}</p>{/if}
     <div class="actions">

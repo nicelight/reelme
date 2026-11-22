@@ -22,15 +22,19 @@ previous=$(docker inspect "$container" --format '{{.Config.Image}}')
 running_commit=$(docker inspect "$container" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')
 
 verify_public() {
-  local container_id=$1 expected received code asset
+  local container_id=$1 expected received code asset asset_checksums
   local -a get=(curl --silent --show-error --retry 3 --connect-timeout 6 --max-time 25)
   expected=$(docker exec "$container_id" sha256sum /app/dist/client/index.html | cut -d' ' -f1)
   received=$("${get[@]}" --fail "$origin/statuses" | sha256sum | cut -d' ' -f1)
   test "$expected" = "$received"
-  asset=$(docker exec "$container_id" sh -c 'cd /app/dist/client && ls assets/App-*.js')
-  expected=$(docker exec "$container_id" sha256sum "/app/dist/client/$asset" | cut -d' ' -f1)
-  received=$("${get[@]}" --fail "$origin/$asset" | sha256sum | cut -d' ' -f1)
-  test "$expected" = "$received"
+  asset_checksums=$(docker exec "$container_id" sh -c 'cd /app/dist/client && sha256sum assets/App-*.js')
+  while read -r expected asset; do
+    received=$("${get[@]}" --fail "$origin/$asset" | sha256sum | cut -d' ' -f1)
+    if [[ "$expected" != "$received" ]]; then
+      echo "Не совпала контрольная сумма $origin/$asset" >&2
+      return 1
+    fi
+  done <<< "$asset_checksums"
   "${get[@]}" --fail "$origin/capture-loader.js" -o /dev/null
   for asset in /api/statuses /api/statuses/fal-balance; do
     code=$("${get[@]}" -o /dev/null -w '%{http_code}' "$origin$asset")
