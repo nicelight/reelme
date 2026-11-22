@@ -19,11 +19,30 @@ interface Capabilities {
   config: boolean;
 }
 
+export interface ConfigWidget {
+  name: string;
+  readonly: boolean;
+  value?: string | boolean | number;
+  choices?: string[];
+  children?: Record<string, ConfigWidget>;
+}
+
+export function writableSettings(root: ConfigWidget): Record<string, ConfigWidget> {
+  const settings: Record<string, ConfigWidget> = {};
+  function visit(widget: ConfigWidget) {
+    if (widget.children) Object.values(widget.children).forEach(visit);
+    else if (!widget.readonly) settings[widget.name] = widget;
+  }
+  visit(root);
+  return settings;
+}
+
 export interface Camera {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   getSupportedOps(): Promise<Capabilities>;
-  setConfigValue(name: string, value: boolean): Promise<void>;
+  getConfig(): Promise<ConfigWidget>;
+  setConfigValue(name: string, value: boolean | string): Promise<void>;
   captureImageAsFile(): Promise<File>;
   capturePreviewAsBlob(): Promise<Blob>;
 }

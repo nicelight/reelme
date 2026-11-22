@@ -1,13 +1,29 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { chooseCamera, createCamera, errorMessage, unsupportedReason, usbApi, type Camera, type Device } from './camera';
+  /*
+   * /cam-test-web · EOS 1100D · web-gphoto2 0.4.1
+   * Stop scheduling previews and drain the in-flight read before viewfinder=false.
+   * Enqueue captureImageAsFile() immediately after the toggle. setConfigValue()
+   * starts an 800 ms timer inside its queued operation and awaits it outside the queue.
+   * Observe both promises. disconnect() deletes the context outside the queue: drain first.
+   * captureImageAsFile() runs AF, releases, reads and requests deletion of the original.
+   * autofocusdrive=true is repeatable AF only; a later captureImageAsFile() runs AF again.
+   * eosremoterelease=Immediate releases without AF or JPEG transfer. Never follow it
+   * with captureImageAsFile() to fetch a file. Never retry an uncertain release.
+   * Gate writes by getConfig() widgets/choices. manualfocusdrive is relative (Near/Far 1–3).
+   * One committed gesture = one move. No absolute lens position is available.
+   * Browser timestamps measure dispatch, promise settlement and displayed frames.
+   * A pending preview, camera busy state, AF and shutter mechanics can delay exposure.
+   * The 50 ms flash is timer-driven. Its timestamp is independent of exposure.
+   */
+  import { onMount, tick } from 'svelte';
+  import { chooseCamera, createCamera, errorMessage, unsupportedReason, usbApi, writableSettings, type ConfigWidget, type Camera, type Device } from './camera';
 
-  type Phase = 'idle' | 'connecting' | 'ready' | 'preview' | 'stopping' | 'shooting' | 'closing';
+  type Phase = 'idle' | 'connecting' | 'ready' | 'preview' | 'stopping' | 'shooting' | 'setting' | 'closing';
   interface Shot { id: number; url: string; thumbnail: string; name: string; size: number; receiveMs: number }
   const labels: Record<Phase, string> = {
     idle: 'Камера отключена', connecting: 'Подключение…', ready: 'Камера подключена',
     preview: 'Live View включён', stopping: 'Остановка Live View…',
-    shooting: 'Получаем фотографию…', closing: 'Освобождаем USB…'
+    setting: 'Применяем настройку…', shooting: 'Получаем фотографию…', closing: 'Освобождаем USB…'
   };
   let phase = $state<Phase>('idle');
   let support = $state(unsupportedReason());
@@ -32,9 +48,41 @@
   let slow = $state(false);
   let closing = false;
   let shutterSent = false;
-  let resumeAfterShot = false;
+  let allowResume = false;
+  let mode = $state<'manual' | 'auto'>('manual');
+  let settings = $state<Record<string, ConfigWidget>>({});
+  let configReadFailed = false;
+  let focus = $state(0);
+  let autoArmed = $state(false);
+  let countdown = $state(0);
+  let whiteScreen = $state(false);
+  let flash = $state(false);
+  let review = $state<Shot | null>(null);
+  let countdownTimers: number[] = [];
+  let flashOn: number;
+  let flashOff: number;
+  const countdownMs = 3000, captureLeadMs = 300, flashDelayMs = 200, flashMs = 50, reviewMs = 1000;
+  const origin = performance.now();
+  let events = $state.raw<{ at: number; label: string; duration?: number }[]>([]);
+  function record(label: string, start?: number) {
+    const now = performance.now();
+    events = [...events.slice(-79), { at: Math.round(now - origin), label, duration: start === undefined ? undefined : Math.round(now - start) }];
+    progress();
+  }
+  function report(label: string, error: unknown, start?: number) {
+    const detail = label + ' ' + errorMessage(error);
+    message = [message, detail].filter(Boolean).join(' ');
+    record(detail, start);
+  }
+  function cancelCountdown() {
+    countdownTimers.forEach(clearTimeout);
+    countdownTimers = []; autoArmed = false; countdown = 0;
+  }
+  function clearFlash() {
+    clearTimeout(flashOn); clearTimeout(flashOff); flash = false;
+  }
   let wakeFrame: (() => void) | undefined;
-  let busy = $derived(phase !== 'ready' && phase !== 'preview');
+  let busy = $derived(autoArmed || (phase !== 'ready' && !(phase === 'preview' && frameSeen)));
 
   function progress() { lastProgress = performance.now(); slow = false; }
   function nextPaint() {
@@ -61,11 +109,9 @@
     slow = !['idle', 'ready'].includes(phase) && now - lastProgress > 8000;
   }
 
-  // disconnect() in web-gphoto2 destroys the native context outside its queue.
-  // Drain both the current command and the preview read before releasing USB.
   async function disconnect(reason = '') {
     if (closing || phase === 'idle') return;
-    closing = true;
+    closing = true; cancelCountdown(); clearFlash(); whiteScreen = false;
     phase = 'closing'; progress(); clearFrame();
     if (reason) message = reason;
     await Promise.allSettled([command, frames]);
@@ -73,6 +119,7 @@
     catch (e) { message = 'Ошибка отключения. ' + errorMessage(e); }
     finally {
       device = undefined; camera = undefined; deviceName = ''; closing = false;
+      settings = {};
       ops = { capturePreview: false, captureImage: false, config: false };
       phase = 'idle'; progress(); clearFrame();
     }
@@ -94,7 +141,16 @@
         ops = await camera.getSupportedOps();
         if (closing) return;
         message = ops.captureImage || ops.capturePreview ? '' : 'Камера не поддерживает съёмку и Live View через этот адаптер.';
-        phase = 'ready';
+        configReadFailed = false;
+        if (ops.config) {
+          try {
+            settings = writableSettings(await camera.getConfig());
+          } catch (e) {
+            configReadFailed = true;
+            report('Не удалось прочитать настройки камеры.', e);
+          }
+        }
+        if (!closing) phase = 'ready';
       } catch (e) {
         if (closing) return;
         message = errorMessage(e);
@@ -107,11 +163,17 @@
 
   async function viewfinderOff(current: Camera) {
     // Canon EOS exposes this libgphoto2 toggle; reads start it on demand.
-    if (device?.vendorId === 0x04a9 && ops.config) await current.setConfigValue('viewfinder', false);
+    if (!settings.viewfinder && !(ops.config && device?.vendorId === 0x04a9 && configReadFailed)) return;
+    const at = performance.now();
+    record('Команда viewfinder=false отправлена');
+    try { await current.setConfigValue('viewfinder', false); }
+    catch (error) { report('Не удалось выключить видоискатель.', error, at); return; }
+    record('viewfinder=false · ответ библиотеки', at);
   }
 
-  async function readFrames(current: Camera) {
+  async function readFrames(current: Camera, started: number, firstLabel: string, shutterAt?: number) {
     let failures = 0;
+    let first = true;
     while (phase === 'preview') {
       try {
         const image = await current.capturePreviewAsBlob();
@@ -127,6 +189,12 @@
           if (!context) throw new Error('Не удалось открыть область просмотра.');
           context.drawImage(bitmap, 0, 0, width, height);
           frameSeen = true; failures = 0; progress();
+          if (first) {
+            record(firstLabel, started);
+            if (shutterAt !== undefined) record('От команды съёмки до первого кадра Live View', shutterAt);
+            first = false; whiteScreen = false;
+            if (autoArmed && !countdown) beginCountdown();
+          }
           if (lastDraw) {
             intervals.push(lastProgress - lastDraw);
             if (intervals.length > 100) intervals.shift();
@@ -140,38 +208,106 @@
           await new Promise(resolve => setTimeout(resolve, failures * 200));
           continue;
         }
-        phase = 'stopping';
+        cancelCountdown(); whiteScreen = false; phase = 'stopping';
         message = 'Live View остановлен. ' + errorMessage(e);
-        try { await viewfinderOff(current); } catch { /* preserve the preview error */ }
+        record(message); await viewfinderOff(current);
         if (!closing) phase = 'ready';
         clearFrame(); return;
       }
     }
   }
-  function start() {
+  function start(firstLabel = 'Live View · первый кадр', shutterAt?: number) {
     if (phase !== 'ready' || !ops.capturePreview || !camera) return;
-    phase = 'preview'; message = ''; fps = 0; progress();
-    frames = readFrames(camera);
+    lastDraws = []; intervals = []; lastDraw = 0; p95 = null;
+    phase = 'preview'; fps = 0; progress();
+    frames = readFrames(camera, performance.now(), firstLabel, shutterAt);
   }
   function stop() {
     if (phase !== 'preview' || !camera) return;
     const current = camera;
+    cancelCountdown();
     phase = 'stopping'; clearFrame(); progress();
     command = (async () => {
       await frames;
       if (closing) return;
-      try { await viewfinderOff(current); }
-      catch (e) { message = 'Не удалось выключить видоискатель камеры. ' + errorMessage(e); }
+      await viewfinderOff(current);
       if (!closing) phase = 'ready';
     })();
+  }
+  async function finishOperation(current: Camera, previewWasOn: boolean, firstLabel: string, shutterAt?: number) {
+    if (closing) return;
+    if (previewWasOn && !allowResume) await viewfinderOff(current);
+    if (closing) return;
+    phase = 'ready'; progress();
+    if (allowResume && !document.hidden) start(firstLabel, shutterAt);
+    else { clearFrame(); whiteScreen = false; }
+  }
+  function configure(name: string, value: string | boolean, label: string) {
+    const widget = settings[name];
+    if (busy || !camera || !widget || (typeof value === 'string' && !widget.choices?.includes(value))) return;
+    const current = camera;
+    const resume = phase === 'preview';
+    allowResume = resume;
+    phase = 'setting'; message = ''; wakeFrame?.(); progress();
+    command = (async () => {
+      await frames;
+      if (closing) return;
+      const at = performance.now();
+      record(label + ' · команда отправлена');
+      shutterSent = name === 'eosremoterelease';
+      try {
+        await current.setConfigValue(name, value);
+        record(label + ' · ответ библиотеки', at);
+        if (name === 'afmethod') settings = { ...settings, afmethod: { ...widget, value } };
+        if (shutterSent) uncertain = false;
+      } catch (e) {
+        if (shutterSent) uncertain = true;
+        report(shutterSent ? 'Снимок мог быть сделан.' : label + ' · ошибка.', e, at);
+      } finally {
+        shutterSent = false;
+        await finishOperation(current, resume, 'Live View после настройки · первый кадр');
+      }
+    })();
+  }
+  function commitFocus() {
+    const step = focus;
+    focus = 0;
+    if (!step) return;
+    const direction = step < 0 ? 'Near ' : 'Far ';
+    const value = direction + Math.abs(step);
+    if (!settings.manualfocusdrive?.choices?.includes(value)) {
+      message = 'Камера не поддерживает шаг ' + value + '.';
+      return;
+    }
+    configure('manualfocusdrive', value, 'Фокус ' + value);
+  }
+  function armAuto() {
+    if (busy || !settings.viewfinder || !ops.captureImage || !ops.capturePreview || document.hidden) return;
+    autoArmed = true; message = '';
+    if (phase === 'ready') start();
+    else if (frameSeen) beginCountdown();
+  }
+  function beginCountdown() {
+    countdown = 3;
+    record('Начало отсчёта');
+    countdownTimers = [
+      window.setTimeout(() => countdown = 2, 1000),
+      window.setTimeout(() => countdown = 1, 2000),
+      window.setTimeout(() => {
+        cancelCountdown();
+        if (phase === 'preview' && !document.hidden) capture(true);
+      }, countdownMs - captureLeadMs)
+    ];
   }
   async function makeShot(file: File, receiveMs: number): Promise<Shot> {
     const signature = new Uint8Array(await file.slice(0, 3).arrayBuffer());
     if (signature[0] !== 255 || signature[1] !== 216 || signature[2] !== 255)
       throw new Error('На камере выберите JPEG вместо RAW.');
-    const bitmap = await createImageBitmap(file);
-    let thumbnail: string;
+    const url = URL.createObjectURL(file);
+    let thumbnail = url;
+    let bitmap: ImageBitmap | undefined;
     try {
+      bitmap = await createImageBitmap(file);
       const thumb = document.createElement('canvas');
       const scale = Math.min(1, 220 / Math.max(bitmap.width, bitmap.height));
       thumb.width = Math.max(1, Math.round(bitmap.width * scale)); thumb.height = Math.max(1, Math.round(bitmap.height * scale));
@@ -179,41 +315,66 @@
       if (!context) throw new Error('Не удалось прочитать изображение.');
       context.drawImage(bitmap, 0, 0, thumb.width, thumb.height);
       thumbnail = thumb.toDataURL('image/jpeg', 0.8);
-    } finally { bitmap.close(); }
+    } catch (error) {
+      report('Миниатюра недоступна. Оригинал сохранён.', error);
+    } finally { bitmap?.close(); }
     const sequence = ++id;
-    return { id: sequence, thumbnail, receiveMs, size: file.size, url: URL.createObjectURL(file), name: `camera-${sequence}.jpg` };
+    return { id: sequence, thumbnail, receiveMs, size: file.size, url, name: `camera-${sequence}.jpg` };
   }
-  function capture() {
+  function addShot(shot: Shot) {
+    for (const old of shots.slice(4)) URL.revokeObjectURL(old.url);
+    shots = [shot, ...shots.slice(0, 4)];
+  }
+
+  function capture(automatic = false) {
     if (!camera || !ops.captureImage || busy) return;
     const current = camera;
     const resume = phase === 'preview';
-    resumeAfterShot = resume;
+    allowResume = resume;
     phase = 'shooting'; message = ''; clearFrame(); progress();
+    if (automatic) {
+      whiteScreen = true;
+      record('Остановка цикла Live View');
+      flashOn = window.setTimeout(() => {
+        flash = true; record('Экранная вспышка');
+        flashOff = window.setTimeout(() => flash = false, flashMs);
+      }, flashDelayMs);
+    }
     command = (async () => {
       await frames;
       if (closing) return;
-      shutterSent = true; // Once dispatched, a lost USB response can still mean an exposure.
+      if (automatic && !allowResume) {
+        await viewfinderOff(current);
+        clearFlash(); whiteScreen = false;
+        if (!closing) phase = 'ready';
+        return;
+      }
+      const off = automatic ? viewfinderOff(current) : Promise.resolve();
+      const shutterAt = performance.now();
+      record('Команда съёмки с AF отправлена');
+      shutterSent = true;
       try {
-        const shutterAt = performance.now();
         const file = await current.captureImageAsFile();
-        const shot = await makeShot(file, Math.round(performance.now() - shutterAt));
-        for (const old of shots.slice(4)) URL.revokeObjectURL(old.url);
-        shots = [shot, ...shots.slice(0, 4)];
+        const received = performance.now();
+        shutterSent = false;
+        record('Файл получен · ' + file.size.toLocaleString('ru') + ' байт', shutterAt);
+        const shot = await makeShot(file, Math.round(received - shutterAt));
         uncertain = false;
+        if (automatic && !closing && allowResume) {
+          review = shot;
+          await tick();
+          await new Promise(resolve => setTimeout(resolve, reviewMs));
+        }
+        addShot(shot);
+        review = null;
       } catch (e) {
         uncertain = true;
-        message = 'Снимок мог быть сделан. Оригинал JPEG не получен. ' + errorMessage(e);
+        report(shutterSent ? 'Снимок мог быть сделан. Оригинал JPEG не получен.' : 'Не удалось обработать полученный файл.', e);
       } finally {
         shutterSent = false;
-        if (!closing) {
-          phase = 'ready'; progress();
-          if (resumeAfterShot && !uncertain && !document.hidden) start();
-          else if (resume) {
-            phase = 'stopping';
-            try { await viewfinderOff(current); } catch { /* retain shot error */ }
-            if (!closing) phase = 'ready';
-          }
-        }
+        await off;
+        if (uncertain) allowResume = false;
+        await finishOperation(current, !automatic && resume, 'Восстановление Live View · первый кадр', shutterAt);
       }
     })();
   }
@@ -227,7 +388,7 @@
     const hide = () => { void disconnect(); };
     const background = () => {
       if (!document.hidden) return;
-      resumeAfterShot = false;
+      allowResume = false; cancelCountdown(); clearFlash();
       if (phase === 'preview') stop();
     };
     usb?.addEventListener('disconnect', unplugged);
@@ -237,7 +398,7 @@
     return () => {
       clearInterval(timer); usb?.removeEventListener('disconnect', unplugged);
       window.removeEventListener('pagehide', hide); document.removeEventListener('visibilitychange', background);
-      void disconnect(); shots.forEach(shot => URL.revokeObjectURL(shot.url));
+      void disconnect().then(() => shots.forEach(shot => URL.revokeObjectURL(shot.url)));
     };
   });
 </script>
@@ -266,21 +427,57 @@
       <button onclick={() => void disconnect()} disabled={phase === 'closing' || phase === 'connecting'}>Отключить</button>
     {/if}
   </div>
-  <div class="status" role="status"><i class:connected={phase === 'ready' || phase === 'preview'}></i>{labels[phase]}{deviceName ? ' · ' + deviceName : ''}</div>
+  <div class="status" role="status"><i class:spinner={['setting','stopping','connecting'].includes(phase) || (phase === 'preview' && !frameSeen)} class:connected={phase === 'ready' || phase === 'preview'}></i>{labels[phase]}{deviceName ? ' · ' + deviceName : ''}</div>
   {#if support || message}<p class="notice" role="alert">{support || message}</p>{/if}
   {#if slow}<p class="notice" role="status">Ожидаем ответ камеры. При зависании сохраните нужные снимки и переподключите USB. Если соединение не освободилось, перезагрузите вкладку.</p>{/if}
 
   <section aria-labelledby="live-heading">
+    <div class="modes" role="group" aria-label="Режим съёмки">
+      <button aria-pressed={mode === 'manual'} disabled={busy && phase !== 'idle'} onclick={() => mode = 'manual'}>Ручной</button>
+      <button aria-pressed={mode === 'auto'} disabled={busy && phase !== 'idle'} onclick={() => mode = 'auto'}>Автоматический</button>
+    </div>
     <div class="heading"><h2 id="live-heading">Live View</h2><output aria-label="Статистика Live View" aria-live="off" title="P95 — интервал, в который укладываются 95% последних межкадровых пауз">{fps ?? '—'} FPS{p95 !== null ? ` · P95 ${p95} мс` : ''}</output></div>
-    <div class="screen">
-      <canvas class:visible={frameSeen} bind:this={canvas} aria-label="Изображение с камеры"></canvas>
-      {#if !frameSeen}<span>{phase === 'preview' ? 'Ожидаем первый кадр' : phase === 'shooting' ? 'Идёт съёмка' : 'Превью выключено'}</span>{/if}
+    <div class="screen" class:white={whiteScreen}>
+      <canvas class:visible={frameSeen && !review} bind:this={canvas} aria-label="Изображение с камеры"></canvas>
+      {#if review}<img class="review" src={review.url} alt="Полученный JPEG">
+      {:else if !frameSeen && !whiteScreen}<span>{phase === 'preview' ? 'Ожидаем первый кадр' : phase === 'shooting' ? 'Идёт съёмка' : 'Превью выключено'}</span>{/if}
+      {#if countdown}<strong class="countdown" aria-label="Обратный отсчёт">{countdown}</strong>{/if}
     </div>
-    <div class="controls">
-      {#if phase === 'preview'}<button onclick={stop}>Остановить Live View</button>
-      {:else}<button disabled={phase !== 'ready' || !ops.capturePreview} onclick={start}>Запустить Live View</button>{/if}
-      <button class="primary" disabled={busy || !ops.captureImage} onclick={capture}>{uncertain ? 'Снять новый кадр' : 'Снять фото'}</button>
-    </div>
+    {#if mode === 'auto'}
+      <div class="controls">
+        <button class="primary" disabled={busy || !ops.captureImage || !ops.capturePreview || !settings.viewfinder} onclick={armAuto}>{uncertain ? 'Снять новый кадр через 3 с' : 'Снять через 3 с'}</button>
+        {#if phase === 'preview' && !autoArmed}<button onclick={stop}>Остановить Live View</button>{/if}
+      </div>
+      {#if !busy && !settings.viewfinder}<p>Для автоматической съёмки камера должна поддерживать отключение видоискателя.</p>{/if}
+    {:else}
+      <div class="controls">
+        {#if phase === 'preview'}<button onclick={stop}>Остановить Live View</button>
+        {:else}<button disabled={phase !== 'ready' || !ops.capturePreview} onclick={() => start()}>Запустить Live View</button>{/if}
+        <button class="primary" disabled={busy || !ops.captureImage} onclick={() => capture()}>{uncertain ? 'Снять новый кадр' : 'Снять фото'}</button>
+        {#if settings.eosremoterelease?.choices?.includes('Immediate')}
+          <button disabled={busy} onclick={() => configure('eosremoterelease', 'Immediate', 'Спуск без AF')}>Спуск без AF · без JPEG</button>
+        {/if}
+      </div>
+      <h3>Фокусировка {#if phase === 'setting'}<i class="spinner" aria-hidden="true"></i>{/if}</h3>
+      <div class="controls">
+        <button disabled={busy || !settings.autofocusdrive} onclick={() => configure('autofocusdrive', true, 'Автофокус')}>Автофокус без снимка</button>
+        {#each ['Quick', 'Live'] as method}
+          {#if settings.afmethod?.choices?.includes(method)}
+            <button disabled={busy} aria-pressed={settings.afmethod.value === method} onclick={() => configure('afmethod', method, method + ' AF')}>{method} AF</button>
+          {/if}
+        {/each}
+      </div>
+      <div class="focus-control">
+        <label for="focus-drive">Ручной фокус</label>
+        <output for="focus-drive">{focus ? (focus < 0 ? 'Ближе' : 'Дальше') + ' · ' + Math.abs(focus) : 'Центр'}</output>
+        <input id="focus-drive" type="range" min="-3" max="3" step="1" bind:value={focus}
+          disabled={busy || !settings.manualfocusdrive?.choices?.length}
+          onpointerup={commitFocus} onkeyup={commitFocus} onpointercancel={() => focus = 0} onblur={() => focus = 0}
+          aria-describedby="focus-help">
+        <span>Ближе</span><span>Дальше</span>
+      </div>
+      <p id="focus-help">Отклоните ползунок на 1–3 деления и отпустите для одного перемещения.</p>
+    {/if}
     {#if !busy && (!ops.capturePreview || !ops.captureImage)}<p>{!ops.capturePreview ? 'Камера не заявила поддержку Live View.' : ''} {!ops.captureImage ? 'Спуск затвора недоступен.' : ''}</p>{/if}
   </section>
 
@@ -297,14 +494,28 @@
     <p class="gallery-note">Скачайте нужные оригиналы до закрытия страницы. После получения снимка библиотека запрашивает удаление файла с камеры.</p>
   </section>
 
+  <section aria-labelledby="timings-heading">
+    <div class="heading"><h2 id="timings-heading">Журнал операций</h2></div>
+    {#if events.length}
+      <div class="log" role="region" aria-label="Измерения камеры">
+        <table><thead><tr><th>От открытия</th><th>Событие</th><th>Длительность</th></tr></thead>
+          <tbody>{#each [...events].reverse() as event}<tr>
+            <td>{(event.at / 1000).toFixed(3)} с</td><td>{event.label}</td><td>{event.duration === undefined ? '—' : event.duration + ' мс'}</td>
+          </tr>{/each}</tbody>
+        </table>
+      </div>
+    {:else}<p>Здесь появятся замеры Live View, фокусировки и съёмки.</p>{/if}
+  </section>
 </main>
+{#if flash}<div class="flash" aria-hidden="true"></div>{/if}
 
 <style>
   @font-face{font-family:Manrope;src:url('../capture/story/assets/manrope-0.woff2') format('truetype');font-weight:400;font-display:swap}
   @font-face{font-family:Manrope;src:url('../capture/story/assets/manrope-3.woff2') format('truetype');font-weight:650 800;font-display:swap}
   :global(html){color-scheme:dark;background:#171419}
   :global(body){margin:0;color:#f6f1f6;font-family:Manrope,system-ui,sans-serif;font-size:15px;line-height:1.45}
-  main{box-sizing:border-box;width:min(100%,848px);margin:auto;padding:clamp(18px,4vw,32px) 24px}
+  main{box-sizing:border-box;width:100%;margin:auto;padding:clamp(18px,4vw,32px) clamp(14px,4vw,64px)}
+  section[aria-labelledby="setup-heading"]{max-width:800px}
   header,.heading,.controls,.status{display:flex;align-items:center;gap:12px}
   header,.heading{justify-content:space-between}
   h1,h2,p,ul,ol{margin:0}
@@ -338,5 +549,25 @@
   ol{padding:8px 0 0 24px}
   ol li{margin-top:4px}
   .driver-note,.gallery-note{margin-top:8px;font-size:13px}
+  .modes{display:flex;gap:4px;margin-bottom:14px}
+  button[aria-pressed="true"]{background:#48313e;border-color:#da9ebc}
+  .status i.spinner,h3 i.spinner{display:inline-block;vertical-align:middle;box-sizing:border-box;width:16px;height:16px;border:2px solid #655a69;border-top-color:#efc4d8;border-radius:50%;background:none;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .screen{position:relative}
+  .screen.white,.flash{background:white}
+  .flash{position:fixed;inset:0;z-index:10;pointer-events:none}
+  .review{position:absolute;width:100%;height:100%;object-fit:contain}
+  .countdown{position:absolute;display:grid;place-items:center;min-width:1.5em;border-radius:8px;background:#171419bd;color:white;font-size:clamp(36px,8vw,72px);font-variant-numeric:tabular-nums}
+  h3{margin:18px 0 0;font-size:16px}
+  .focus-control{display:grid;grid-template-columns:1fr auto;align-items:center;margin-top:16px}
+  .focus-control :is(output,span:last-child){text-align:right}
+  .focus-control span,#focus-help{font-size:13px;color:#cec3ce}
+  .focus-control input{grid-column:1/-1;width:100%;height:34px;margin:0;accent-color:#e9b0ca;touch-action:pan-y}
+  #focus-help{margin-top:4px}
+  .log{overflow:auto;max-height:18rem}
+  table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+  td,th{padding:6px 4px;text-align:left;border-bottom:1px solid #453d48}
+  th{background:#171419;position:sticky;top:0}
+  td:last-child,th:last-child{text-align:right;white-space:nowrap}
   @media(max-width:480px){main{padding:18px 14px}header{align-items:start;flex-wrap:wrap}.controls{gap:8px}button{padding-inline:12px}}
 </style>
