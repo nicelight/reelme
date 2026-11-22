@@ -1,6 +1,7 @@
 // Minimal surface used from WebUSB and the pinned web-gphoto2 build.
 export interface Device {
   readonly vendorId: number;
+  readonly productId: number;
   readonly productName?: string;
   readonly manufacturerName?: string;
   readonly configurations: readonly {
@@ -63,7 +64,7 @@ export function chooseCamera(usb: Usb): Promise<Device> {
   return usb.requestDevice({ filters: [{ classCode: 6, subclassCode: 1 }] });
 }
 
-export async function createCamera(usb: Usb, selected: Device): Promise<Camera> {
+export async function checkSelectedCamera(usb: Usb, selected: Device): Promise<void> {
   // Upstream auto-detects a permitted PTP camera; it cannot take a USBDevice.
   const permitted = (await usb.getDevices()).filter(device => device.configurations.some(configuration =>
     configuration.interfaces.some(iface => iface.alternates.some(alt => alt.interfaceClass === 6 && alt.interfaceSubclass === 1))
@@ -71,6 +72,9 @@ export async function createCamera(usb: Usb, selected: Device): Promise<Camera> 
   if (permitted.length !== 1 || permitted[0] !== selected) {
     throw new Error('Для теста подключите одну разрешённую USB-камеру и выберите её снова.');
   }
+}
+
+export async function createCamera(): Promise<Camera> {
   const source = '/cam-test-web-assets/v0.4.1/build/camera.js';
   const { Camera } = await import(/* @vite-ignore */ source) as { Camera: new () => Camera };
   return new Camera();

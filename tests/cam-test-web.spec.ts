@@ -9,6 +9,10 @@ test.use({ capturePort: 0 });
 test('the isolated camera page initializes its same-origin WASM runtime', async ({ page, app }) => {
   const response = await page.goto(app.origin + '/cam-test-web');
   expect(response?.status()).toBe(200);
+  const script = page.getByRole('link', { name: 'Скачать скрипт перезапуска Canon' });
+  const scriptResponse = await page.request.get(app.origin + await script.getAttribute('href'));
+  expect(scriptResponse.status()).toBe(200);
+  expect(await scriptResponse.text()).toContain('/restart-device $instanceId');
   const windowsSetup = page.getByRole('region', { name: 'Подключение и драйвер Windows' });
   await expect(windowsSetup.getByRole('link', { name: 'Скачайте Zadig' })).toBeVisible();
   await expect(windowsSetup.getByRole('listitem')).toHaveCount(5);
@@ -59,6 +63,7 @@ async function connectCamera(page: Page, origin: string, bytes: Buffer) {
         delete() { if (stats.active) stats.overlaps++; }
         supportedOps() { return {capturePreview:true, captureImage:true, config:true}; }
         configToJS() {
+          if (window.holdConfig) return new Promise((_, reject) => { window.rejectConfig = reject; });
           const controls = {
             viewfinder: {}, autofocusdrive: {}, manualfocusdrive: { choices: ['Near 1', 'Near 2', 'Near 3', 'Far 1', 'Far 2', 'Far 3'] },
             afmethod: { choices: ['Quick', 'Live'], value: 'Quick' }, eosremoterelease: { choices: ['Immediate'] }
@@ -94,6 +99,37 @@ async function connectCamera(page: Page, origin: string, bytes: Buffer) {
   await page.getByRole('button', { name: 'Выбрать камеру' }).click();
 }
 
+test('connection log can be downloaded while a camera call is pending and retains its original error', async ({ page, app }) => {
+  const stages: { state: string; stage: string; status: number }[] = [];
+  page.on('response', response => {
+    if (new URL(response.url()).pathname.endsWith('/diagnostics')) {
+      stages.push({ ...response.request().postDataJSON(), status: response.status() });
+    }
+  });
+  await page.addInitScript('window.holdConfig = true');
+  await connectCamera(page, app.origin, await readFile(app.jpeg));
+  await expect(page.getByRole('status').filter({ hasText: 'getConfig()' })).toBeVisible();
+
+  async function readLog() {
+    const downloaded = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Скачать журнал' }).click();
+    const file = await downloaded;
+    expect(file.suggestedFilename()).toBe('cam-test-web.log');
+    return readFile((await file.path())!, 'utf8');
+  }
+  await expect.poll(() => stages.some(s => s.stage.includes('getConfig()') && s.state === 'waiting' && s.status === 204), { timeout: 15000 }).toBe(true);
+  const pending = await readLog();
+  expect(pending).toContain('getDevices() · готово');
+  expect(pending).toContain('camera.connect() · готово');
+  expect(pending).toContain('getSupportedOps() · готово');
+  expect(pending).toMatch(/getConfig\(\) · ожидание \d+ мс/);
+  expect(pending).not.toContain('getConfig() · готово');
+  await page.evaluate("window.rejectConfig(new DOMException('Access denied at fixture', 'SecurityError'))");
+  await expect(page.getByRole('alert')).toContainText('Нет доступа');
+  expect(await readLog()).toContain('getConfig() · SecurityError: Access denied at fixture');
+  await expect(page.getByRole('button', { name: 'Запустить Live View' })).toBeEnabled();
+});
+
 test('preview and local originals share the camera without repeating an uncertain shutter', async ({ page, app }) => {
   const bytes = await readFile(app.jpeg);
   const apiRequests: string[] = [];
@@ -107,7 +143,7 @@ test('preview and local originals share the camera without repeating an uncertai
   await page.getByRole('button', { name: 'Остановить Live View' }).click();
   await expect.poll(() => page.evaluate('window.usbTest.stops')).toBe(1);
   await page.getByRole('button', { name: 'Запустить Live View' }).click();
-  const downloads = page.locator('a[download]');
+  const downloads = page.locator('a[download$=".jpg"]');
   for (let i = 1; i <= 6; i++) {
     await page.getByRole('button', { name: 'Снять фото' }).click();
     await expect(downloads).toHaveCount(Math.min(5, i));
@@ -137,7 +173,7 @@ test('automatic capture drains preview, bypasses the config timer, flashes and r
     Object.assign(window, { changes });
     const visible = new Map<string, boolean>();
     const observer = new MutationObserver(() => {
-      for (const selector of ['.countdown', '.screen.white', '.flash', '.review', 'a[download]']) {
+      for (const selector of ['.countdown', '.screen.white', '.flash', '.review', 'a[download$=".jpg"]']) {
         const present = !!document.querySelector(selector);
         if ((visible.get(selector) ?? false) !== present) {
           visible.set(selector, present);
@@ -152,7 +188,7 @@ test('automatic capture drains preview, bypasses the config timer, flashes and r
   await expect(page.getByLabel('Обратный отсчёт')).toHaveText('3');
   await expect(shoot).toBeDisabled();
   await expect(page.getByRole('img', { name: 'Полученный JPEG' })).toBeVisible();
-  await expect(page.locator('a[download]')).toHaveCount(0);
+  await expect(page.locator('a[download$=".jpg"]')).toHaveCount(0);
   await expect(page.getByText('Восстановление Live View · первый кадр')).toBeVisible();
   const timeline: { selector: string; visible: boolean; at: number }[] = await page.evaluate('window.changes');
   const at = (selector: string, visible = true) => timeline.find(e => e.selector === selector && e.visible === visible)!.at;
@@ -162,20 +198,20 @@ test('automatic capture drains preview, bypasses the config timer, flashes and r
   expect(at('.flash') - at('.screen.white')).toBeLessThan(340);
   expect(at('.flash', false) - at('.flash')).toBeGreaterThanOrEqual(40);
   expect(at('.flash', false) - at('.flash')).toBeLessThan(150);
-  expect(at('a[download]') - at('.review')).toBeGreaterThanOrEqual(990);
+  expect(at('a[download$=".jpg"]') - at('.review')).toBeGreaterThanOrEqual(990);
   expect(await page.evaluate('window.usbTest.shotAt - window.usbTest.offAt')).toBeLessThan(500);
   expect(await page.evaluate('window.usbTest.shots')).toBe(1);
 
   await page.evaluate('window.usbTest.failOff = true');
   await shoot.click();
   await expect(page.getByRole('alert')).toContainText('viewfinder failure');
-  await expect(page.locator('a[download]')).toHaveCount(2);
+  await expect(page.locator('a[download$=".jpg"]')).toHaveCount(2);
   await expect(shoot).toBeEnabled();
   expect(await page.evaluate('window.usbTest.shots')).toBe(2);
   expect(await page.evaluate('window.usbTest.overlaps')).toBe(0);
 });
 
-test('manual controls repeat AF, commit one relative move and keep Immediate independent of JPEG capture', async ({ page, app }) => {
+test('manual controls repeat AF, run relative focus presets and keep Immediate independent of JPEG capture', async ({ page, app }) => {
   await connectCamera(page, app.origin, await readFile(app.jpeg));
   await page.getByRole('button', { name: 'Запустить Live View' }).click();
   const af = page.getByRole('button', { name: 'Автофокус без снимка' });
@@ -184,25 +220,23 @@ test('manual controls repeat AF, commit one relative move and keep Immediate ind
   await af.click();
   await page.getByRole('button', { name: 'Live AF', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Live AF', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  const slider = page.getByRole('slider');
-  await expect(slider).toHaveValue('0');
-  await slider.scrollIntoViewIfNeeded();
-  const box = (await slider.boundingBox())!;
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(box.x + 2, box.y + box.height / 2, { steps: 15 });
-  expect(await page.evaluate('window.usbTest.writes.length')).toBe(3);
-  await page.mouse.up();
-  await expect(slider).toHaveValue('0');
-  await expect(slider).toBeEnabled();
-  await slider.press('End');
-  await expect(slider).toHaveValue('0');
+  const focus = page.getByRole('group', { name: 'Ручной фокус' }).getByRole('button');
+  await expect(focus).toHaveText(['−10', '−5', '−3', '−2', '−1', '+1', '+2', '+3', '+5', '+10']);
+  await page.setViewportSize({ width: 320, height: 780 });
+  const boxes = await focus.evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().toJSON()));
+  expect(boxes.every(box => box.y === boxes[0].y && box.left >= 0 && box.right <= 320)).toBe(true);
+  expect(boxes[5].left - boxes[4].right).toBeGreaterThan(boxes[1].left - boxes[0].right);
+  await focus.filter({ hasText: '−5' }).click();
+  await expect(focus.last()).toBeDisabled();
+  await focus.filter({ hasText: '+10' }).click();
   await page.getByRole('button', { name: 'Спуск без AF · без JPEG' }).click();
   await expect(af).toBeEnabled();
-  await expect(page.locator('a[download]')).toHaveCount(0);
+  await expect(page.locator('a[download$=".jpg"]')).toHaveCount(0);
   expect(await page.evaluate('window.usbTest.writes')).toEqual([
     ['autofocusdrive', true], ['autofocusdrive', true], ['afmethod', 'Live'],
-    ['manualfocusdrive', 'Near 3'], ['manualfocusdrive', 'Far 3'], ['eosremoterelease', 'Immediate'],
+    ['manualfocusdrive', 'Near 3'], ['manualfocusdrive', 'Near 2'],
+    ['manualfocusdrive', 'Far 3'], ['manualfocusdrive', 'Far 3'], ['manualfocusdrive', 'Far 3'],
+    ['manualfocusdrive', 'Far 1'], ['eosremoterelease', 'Immediate'],
   ]);
   expect(await page.evaluate('window.usbTest.shots')).toBe(0);
   expect(await page.evaluate('window.usbTest.overlaps')).toBe(0);
@@ -225,7 +259,7 @@ test('disconnect cancels a countdown and drains a dispatched shot into the galle
   await expect(page.getByText(/Освобождаем USB/)).toBeVisible();
   await page.evaluate('window.usbTest.releaseShot()');
   await expect(page.getByRole('button', { name: 'Выбрать камеру' })).toBeEnabled();
-  await expect(page.locator('a[download]')).toHaveCount(1);
+  await expect(page.locator('a[download$=".jpg"]')).toHaveCount(1);
   expect(await page.evaluate('window.usbTest.shots')).toBe(1);
   expect(await page.evaluate('window.usbTest.stops')).toBe(1);
   expect(await page.evaluate('window.usbTest.overlaps')).toBe(0);

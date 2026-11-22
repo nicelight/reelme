@@ -12,7 +12,7 @@ import { randomUUID } from 'node:crypto';
 import type { TemplateUploadStatus } from '../shared/template-upload.js';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 import type { Config } from './config.js';
 import { openDatabase } from './db.js';
 import { createAccess } from './access/index.js';
@@ -104,6 +104,19 @@ export async function createApp(config: Config, options: { now?: () => number; l
     root: join(config.clientDir, 'cam-test-web-assets'), prefix: '/cam-test-web-assets/',
     decorateReply: false, index: false,
     setHeaders: response => { response.header('Cross-Origin-Embedder-Policy', 'require-corp'); },
+  });
+  const cameraConnectionEvent = z.object({
+    attempt: z.uuid(), stage: z.string().min(1).max(90),
+    state: z.enum(['start', 'done', 'waiting', 'error']),
+    ms: z.number().int().nonnegative(), detail: z.string().max(400)
+  }).strict();
+  app.post('/cam-test-web/diagnostics', {
+    preHandler: access.requireOrigin, bodyLimit: 4096,
+    config: { rateLimit: { max: 180, timeWindow: '1 minute' } }
+  }, async (request, reply) => {
+    const event = cameraConnectionEvent.parse(request.body);
+    app.log.info({ code: 'CAM_TEST_CONNECTION', ...event }, 'Диагностика USB-камеры');
+    return reply.code(204).send();
   });
   app.get('/cam-test-web', async (_request, reply) => reply.type('text/html')
     .header('Cache-Control', 'no-cache')

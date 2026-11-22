@@ -10,13 +10,14 @@
    * eosremoterelease=Immediate releases without AF or JPEG transfer. Never follow it
    * with captureImageAsFile() to fetch a file. Never retry an uncertain release.
    * Gate writes by getConfig() widgets/choices. manualfocusdrive is relative (Near/Far 1–3).
-   * One committed gesture = one move. No absolute lens position is available.
+   * Focus presets 5 = 3+2, 10 = 3+3+3+1. Await each drive before sending the next.
+   * Drive magnitudes are lens-dependent; no absolute position or calibrated distance.
    * Browser timestamps measure dispatch, promise settlement and displayed frames.
    * A pending preview, camera busy state, AF and shutter mechanics can delay exposure.
    * The 50 ms flash is timer-driven. Its timestamp is independent of exposure.
    */
   import { onMount, tick } from 'svelte';
-  import { chooseCamera, createCamera, errorMessage, unsupportedReason, usbApi, writableSettings, type ConfigWidget, type Camera, type Device } from './camera';
+  import { checkSelectedCamera, chooseCamera, createCamera, errorMessage, unsupportedReason, usbApi, writableSettings, type ConfigWidget, type Camera, type Device } from './camera';
 
   type Phase = 'idle' | 'connecting' | 'ready' | 'preview' | 'stopping' | 'shooting' | 'setting' | 'closing';
   interface Shot { id: number; url: string; thumbnail: string; name: string; size: number; receiveMs: number }
@@ -52,7 +53,12 @@
   let mode = $state<'manual' | 'auto'>('manual');
   let settings = $state<Record<string, ConfigWidget>>({});
   let configReadFailed = false;
-  let focus = $state(0);
+  const focusButtons = [-10, -5, -3, -2, -1, 1, 2, 3, 5, 10].map(step => {
+    const magnitude = Math.abs(step);
+    const sizes = magnitude === 10 ? [3, 3, 3, 1] : magnitude === 5 ? [3, 2] : [magnitude];
+    const direction = step < 0 ? 'Near' : 'Far';
+    return { label: (step < 0 ? '−' : '+') + magnitude, moves: sizes.map(size => direction + ' ' + size) };
+  });
   let autoArmed = $state(false);
   let countdown = $state(0);
   let whiteScreen = $state(false);
@@ -106,7 +112,9 @@
         p95 = Math.round(sorted[Math.ceil(sorted.length * .95) - 1]);
       }
     }
-    slow = !['idle', 'ready'].includes(phase) && now - lastProgress > 8000;
+    const waiting = !['idle', 'ready'].includes(phase) && now - lastProgress > 8000;
+    if (waiting && !slow && pendingStep) sendConnectionEvent(pendingStep, 'waiting', now - stepStarted);
+    slow = waiting;
   }
 
   async function disconnect(reason = '') {
@@ -125,26 +133,94 @@
     }
   }
 
+  let attempt = $state('');
+  let deliveryFailed = $state(false);
+  let pendingStep = $state('');
+  let stepStarted = 0;
+
+  // Send each stage immediately: a stuck USB promise may never reach catch/finally.
+  // Keep network delivery independent of USB scheduling and the picker's user gesture.
+  function sendConnectionEvent(stage: string, state: 'start' | 'done' | 'waiting' | 'error', ms: number, detail = '') {
+    const id = attempt;
+    const payload = { attempt: id, stage, state, ms: Math.round(ms), detail: detail.slice(0, 400) };
+    void fetch('/cam-test-web/diagnostics', {
+      method: 'POST', credentials: 'omit', keepalive: true,
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    }).then(response => {
+      if (!response.ok && attempt === id) deliveryFailed = true;
+    }).catch(() => { if (attempt === id) deliveryFailed = true; });
+  }
+
+  async function connectionStep<T>(label: string, run: () => Promise<T>): Promise<T> {
+    pendingStep = label;
+    const start = performance.now();
+    stepStarted = start;
+    record(label + ' · начало');
+    sendConnectionEvent(label, 'start', 0);
+    console.info('[cam-test-web]', label, '· начало');
+    try {
+      const result = await run();
+      record(label + ' · готово', start);
+      sendConnectionEvent(label, 'done', performance.now() - start);
+      console.info('[cam-test-web]', label, '· готово', Math.round(performance.now() - start), 'мс');
+      return result;
+    } catch (error) {
+      record(label + ' · ' + String(error), start);
+      sendConnectionEvent(label, 'error', performance.now() - start, String(error));
+      console.error('[cam-test-web]', label, error);
+      throw error;
+    } finally {
+      pendingStep = '';
+    }
+  }
+
+  function downloadLog() {
+    const localTime = new Intl.DateTimeFormat('ru-RU', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3
+    });
+    const openedAt = performance.timeOrigin + origin;
+    const lines = [
+      new Date().toISOString() + ' · /cam-test-web · web-gphoto2 0.4.1',
+      'Время событий · ' + localTime.resolvedOptions().timeZone,
+      navigator.userAgent,
+      'Попытка подключения · ' + attempt,
+      ...events.map(event => localTime.format(openedAt + event.at) + ' · +' + event.at + ' мс · ' + event.label
+        + (event.duration === undefined ? '' : ' · ' + event.duration + ' мс'))
+    ];
+    if (pendingStep) lines.push(pendingStep + ' · ожидание ' + Math.round(performance.now() - stepStarted) + ' мс');
+    const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = 'cam-test-web.log'; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   function connect() {
     const usb = usbApi();
     if (!usb || support || phase !== 'idle') return;
+    attempt = crypto.randomUUID(); deliveryFailed = false;
     phase = 'connecting'; message = ''; progress();
     command = (async () => {
       try {
-        device = await chooseCamera(usb);
+        const selected = await connectionStep('Выбор камеры · requestDevice()', () => chooseCamera(usb));
+        device = selected;
         if (closing) return;
         deviceName = device.productName || 'USB-камера';
-        camera = await createCamera(usb, device);
+        const usbId = [selected.vendorId, selected.productId].map(id => id.toString(16).padStart(4, '0')).join(':');
+        record(deviceName + ' · USB ' + usbId);
+        await connectionStep('Проверка разрешённых устройств · getDevices()', () => checkSelectedCamera(usb, selected));
         if (closing) return;
-        await camera.connect();
+        const current = await connectionStep('Загрузка модуля · camera.js', createCamera);
+        camera = current;
         if (closing) return;
-        ops = await camera.getSupportedOps();
+        await connectionStep('Запуск WASM и открытие камеры · camera.connect()', () => current.connect());
+        if (closing) return;
+        ops = await connectionStep('Чтение возможностей · getSupportedOps()', () => current.getSupportedOps());
         if (closing) return;
         message = ops.captureImage || ops.capturePreview ? '' : 'Камера не поддерживает съёмку и Live View через этот адаптер.';
         configReadFailed = false;
         if (ops.config) {
           try {
-            settings = writableSettings(await camera.getConfig());
+            settings = writableSettings(await connectionStep('Чтение настроек · getConfig()', () => current.getConfig()));
           } catch (e) {
             configReadFailed = true;
             report('Не удалось прочитать настройки камеры.', e);
@@ -155,7 +231,11 @@
         if (closing) return;
         message = errorMessage(e);
         // The picker can be cancelled before a context exists.
-        try { await camera?.disconnect(); } catch { /* keep the connection error */ }
+        const current = camera;
+        if (current) {
+          try { await connectionStep('Освобождение камеры · disconnect()', () => current.disconnect()); }
+          catch { /* The stage log retains both errors. */ }
+        }
         device = undefined; camera = undefined; deviceName = ''; phase = 'idle';
       }
     })();
@@ -242,9 +322,12 @@
     if (allowResume && !document.hidden) start(firstLabel, shutterAt);
     else { clearFrame(); whiteScreen = false; }
   }
-  function configure(name: string, value: string | boolean, label: string) {
+  function supportsSetting(name: string, values: (string | boolean)[]) {
     const widget = settings[name];
-    if (busy || !camera || !widget || (typeof value === 'string' && !widget.choices?.includes(value))) return;
+    return !!widget && values.every(value => typeof value === 'boolean' || widget.choices?.includes(value));
+  }
+  function configure(name: string, values: (string | boolean)[], label: string) {
+    if (busy || !camera || !supportsSetting(name, values)) return;
     const current = camera;
     const resume = phase === 'preview';
     allowResume = resume;
@@ -253,12 +336,17 @@
       await frames;
       if (closing) return;
       const at = performance.now();
-      record(label + ' · команда отправлена');
       shutterSent = name === 'eosremoterelease';
       try {
-        await current.setConfigValue(name, value);
-        record(label + ' · ответ библиотеки', at);
-        if (name === 'afmethod') settings = { ...settings, afmethod: { ...widget, value } };
+        for (const value of values) {
+          if (closing || document.hidden) return;
+          const operation = name === 'manualfocusdrive' ? label + ' · ' + value : label;
+          const sentAt = performance.now();
+          record(operation + ' · команда отправлена');
+          await current.setConfigValue(name, value);
+          record(operation + ' · ответ библиотеки', sentAt);
+          if (name === 'afmethod') settings = { ...settings, afmethod: { ...settings.afmethod, value } };
+        }
         if (shutterSent) uncertain = false;
       } catch (e) {
         if (shutterSent) uncertain = true;
@@ -268,18 +356,6 @@
         await finishOperation(current, resume, 'Live View после настройки · первый кадр');
       }
     })();
-  }
-  function commitFocus() {
-    const step = focus;
-    focus = 0;
-    if (!step) return;
-    const direction = step < 0 ? 'Near ' : 'Far ';
-    const value = direction + Math.abs(step);
-    if (!settings.manualfocusdrive?.choices?.includes(value)) {
-      message = 'Камера не поддерживает шаг ' + value + '.';
-      return;
-    }
-    configure('manualfocusdrive', value, 'Фокус ' + value);
   }
   function armAuto() {
     if (busy || !settings.viewfinder || !ops.captureImage || !ops.capturePreview || document.hidden) return;
@@ -418,6 +494,7 @@
       <li>В Chrome или Edge обновите эту страницу, нажмите «Выбрать камеру» и подтвердите выбор Canon.</li>
     </ol>
     <p class="driver-note">Для возврата к digiCamControl может понадобиться восстановить прежний драйвер в диспетчере устройств Windows.</p>
+    <p class="driver-note"><a href="/cam-test-web-assets/restart-canon-usb.ps1" download>Скачать скрипт перезапуска Canon</a> (.ps1). Перед перезапуском сохраните нужные снимки, закройте вкладки камеры и приложения, использующие Canon. Запустите скрипт из PowerShell от имени администратора.</p>
   </section>
 
   <div class="connection">
@@ -426,8 +503,10 @@
     {:else}
       <button onclick={() => void disconnect()} disabled={phase === 'closing' || phase === 'connecting'}>Отключить</button>
     {/if}
+    {#if events.length}<button onclick={downloadLog}>Скачать журнал</button>{/if}
   </div>
-  <div class="status" role="status"><i class:spinner={['setting','stopping','connecting'].includes(phase) || (phase === 'preview' && !frameSeen)} class:connected={phase === 'ready' || phase === 'preview'}></i>{labels[phase]}{deviceName ? ' · ' + deviceName : ''}</div>
+  <div class="status" role="status"><i class:spinner={['setting','stopping','connecting'].includes(phase) || (phase === 'preview' && !frameSeen)} class:connected={phase === 'ready' || phase === 'preview'}></i>{pendingStep || labels[phase]}{deviceName ? ' · ' + deviceName : ''}</div>
+  {#if attempt}<p class="driver-note">Диагностика подключения · {attempt.slice(0, 8)}{deliveryFailed ? ' · Журнал отправлен не полностью. Используйте «Скачать журнал».' : ''}</p>{/if}
   {#if support || message}<p class="notice" role="alert">{support || message}</p>{/if}
   {#if slow}<p class="notice" role="status">Ожидаем ответ камеры. При зависании сохраните нужные снимки и переподключите USB. Если соединение не освободилось, перезагрузите вкладку.</p>{/if}
 
@@ -455,28 +534,28 @@
         {:else}<button disabled={phase !== 'ready' || !ops.capturePreview} onclick={() => start()}>Запустить Live View</button>{/if}
         <button class="primary" disabled={busy || !ops.captureImage} onclick={() => capture()}>{uncertain ? 'Снять новый кадр' : 'Снять фото'}</button>
         {#if settings.eosremoterelease?.choices?.includes('Immediate')}
-          <button disabled={busy} onclick={() => configure('eosremoterelease', 'Immediate', 'Спуск без AF')}>Спуск без AF · без JPEG</button>
+          <button disabled={busy} onclick={() => configure('eosremoterelease', ['Immediate'], 'Спуск без AF')}>Спуск без AF · без JPEG</button>
         {/if}
       </div>
       <h3>Фокусировка {#if phase === 'setting'}<i class="spinner" aria-hidden="true"></i>{/if}</h3>
       <div class="controls">
-        <button disabled={busy || !settings.autofocusdrive} onclick={() => configure('autofocusdrive', true, 'Автофокус')}>Автофокус без снимка</button>
+        <button disabled={busy || !settings.autofocusdrive} onclick={() => configure('autofocusdrive', [true], 'Автофокус')}>Автофокус без снимка</button>
         {#each ['Quick', 'Live'] as method}
           {#if settings.afmethod?.choices?.includes(method)}
-            <button disabled={busy} aria-pressed={settings.afmethod.value === method} onclick={() => configure('afmethod', method, method + ' AF')}>{method} AF</button>
+            <button disabled={busy} aria-pressed={settings.afmethod.value === method} onclick={() => configure('afmethod', [method], method + ' AF')}>{method} AF</button>
           {/if}
         {/each}
       </div>
-      <div class="focus-control">
-        <label for="focus-drive">Ручной фокус</label>
-        <output for="focus-drive">{focus ? (focus < 0 ? 'Ближе' : 'Дальше') + ' · ' + Math.abs(focus) : 'Центр'}</output>
-        <input id="focus-drive" type="range" min="-3" max="3" step="1" bind:value={focus}
-          disabled={busy || !settings.manualfocusdrive?.choices?.length}
-          onpointerup={commitFocus} onkeyup={commitFocus} onpointercancel={() => focus = 0} onblur={() => focus = 0}
-          aria-describedby="focus-help">
-        <span>Ближе</span><span>Дальше</span>
-      </div>
-      <p id="focus-help">Отклоните ползунок на 1–3 деления и отпустите для одного перемещения.</p>
+      <fieldset class="focus-control">
+        <legend>Ручной фокус</legend>
+        <div class="focus-buttons">
+          {#each focusButtons as button}
+            <button disabled={busy || !supportsSetting('manualfocusdrive', button.moves)}
+              onclick={() => configure('manualfocusdrive', button.moves, 'Фокус ' + button.label)}>{button.label}</button>
+          {/each}
+        </div>
+        <div class="focus-directions"><span>Ближе</span><span>Дальше</span></div>
+      </fieldset>
     {/if}
     {#if !busy && (!ops.capturePreview || !ops.captureImage)}<p>{!ops.capturePreview ? 'Камера не заявила поддержку Live View.' : ''} {!ops.captureImage ? 'Спуск затвора недоступен.' : ''}</p>{/if}
   </section>
@@ -544,8 +623,8 @@
   li strong,li small{display:block}
   li a{color:#f3b6d0}
   ul li a{font-size:13px}
-  .connection{margin-top:14px}
-  ol a{color:#f3b6d0}
+  .connection{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  ol a,.driver-note a{color:#f3b6d0}
   ol{padding:8px 0 0 24px}
   ol li{margin-top:4px}
   .driver-note,.gallery-note{margin-top:8px;font-size:13px}
@@ -559,11 +638,12 @@
   .review{position:absolute;width:100%;height:100%;object-fit:contain}
   .countdown{position:absolute;display:grid;place-items:center;min-width:1.5em;border-radius:8px;background:#171419bd;color:white;font-size:clamp(36px,8vw,72px);font-variant-numeric:tabular-nums}
   h3{margin:18px 0 0;font-size:16px}
-  .focus-control{display:grid;grid-template-columns:1fr auto;align-items:center;margin-top:16px}
-  .focus-control :is(output,span:last-child){text-align:right}
-  .focus-control span,#focus-help{font-size:13px;color:#cec3ce}
-  .focus-control input{grid-column:1/-1;width:100%;height:34px;margin:0;accent-color:#e9b0ca;touch-action:pan-y}
-  #focus-help{margin-top:4px}
+  .focus-control{max-width:680px;min-width:0;margin:16px 0 0;padding:0;border:0}
+  .focus-control legend{padding:0;margin-bottom:6px}
+  .focus-buttons{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) clamp(4px,1vw,12px) repeat(5,minmax(0,1fr));gap:clamp(2px,.5vw,6px)}
+  .focus-buttons button{padding-inline:0;font-size:clamp(13px,3.5vw,15px);font-variant-numeric:tabular-nums}
+  .focus-buttons button:nth-child(6){grid-column:7}
+  .focus-directions{display:flex;justify-content:space-between;margin-top:4px;font-size:13px;color:#cec3ce}
   .log{overflow:auto;max-height:18rem}
   table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
   td,th{padding:6px 4px;text-align:left;border-bottom:1px solid #453d48}
