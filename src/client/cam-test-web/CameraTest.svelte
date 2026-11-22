@@ -17,7 +17,7 @@
    * The 50 ms flash is timer-driven. Its timestamp is independent of exposure.
    */
   import { onMount, tick } from 'svelte';
-  import { checkSelectedCamera, chooseCamera, createCamera, errorMessage, reopenCanon, unsupportedReason, usbApi, writableSettings, type ConfigWidget, type Camera, type Device } from './camera';
+  import { checkSelectedCamera, chooseCamera, createCamera, errorMessage, unsupportedReason, usbApi, writableSettings, type ConfigWidget, type Camera, type Device } from './camera';
 
   type Phase = 'idle' | 'connecting' | 'ready' | 'preview' | 'stopping' | 'shooting' | 'setting' | 'closing';
   interface Shot { id: number; url: string; thumbnail: string; name: string; size: number; receiveMs: number }
@@ -123,15 +123,46 @@
     slow = waiting;
   }
 
-  async function disconnect(reason = '') {
-    if (closing || phase === 'idle') return;
+  async function disconnect(reason = '', releasePorts = false) {
+    if (closing || (phase === 'idle' && !releasePorts)) return;
+    const opening = phase === 'connecting';
+    const hadSession = phase !== 'idle';
     closing = true; cancelCountdown(); clearFlash(); whiteScreen = false;
     phase = 'closing'; progress(); clearFrame();
-    if (reason) message = reason;
-    await Promise.allSettled([command, frames]);
-    try { await camera?.disconnect(); }
-    catch (e) { message = 'Ошибка отключения. ' + errorMessage(e); }
-    finally {
+    if (releasePorts) {
+      if (!uncertain) message = '';
+      record('Запрошено освобождение портов');
+    } else if (reason) message = reason;
+    try {
+      // During a stuck connect, close only the handle already open in this document.
+      // The native context must still survive until all pending operations settle.
+      if (releasePorts && opening && device?.opened) {
+        try { await device.close(); record('USBDevice.close() при подключении · готово'); }
+        catch (e) { report('USBDevice.close() при подключении.', e); }
+      }
+      await Promise.allSettled([command, frames]);
+      let closedHandles = 0;
+      try { await camera?.disconnect(); }
+      finally {
+        if (releasePorts) {
+          // After failed setup the wrapper may have dropped its device reference.
+          const handles = device ? [device] : (await usbApi()?.getDevices() ?? [])
+            .filter(d => d.vendorId === 0x04a9 && d.productId === 0x3217);
+          for (const handle of handles.filter(d => d.opened)) {
+            await handle.close();
+            closedHandles++;
+          }
+        }
+      }
+      if (releasePorts) {
+        const result = hadSession || closedHandles ? 'USB-сессия вкладки закрыта.' : 'У этой вкладки нет открытых USB-портов Canon.';
+        record(result);
+        message = [message, result].filter(Boolean).join(' ');
+      }
+    } catch (e) {
+      message = 'Ошибка освобождения USB. ' + errorMessage(e);
+      record(message);
+    } finally {
       device = undefined; camera = undefined; deviceName = ''; closing = false;
       settings = {};
       ops = { capturePreview: false, captureImage: false, config: false };
@@ -200,16 +231,14 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  function connect(onReload = false) {
+  function connect() {
     const usb = usbApi();
     if (!usb || support || phase !== 'idle') return;
     attempt = crypto.randomUUID(); deliveryFailed = false;
     phase = 'connecting'; message = ''; progress();
     command = (async () => {
       try {
-        const selected = onReload
-          ? await reopenCanon(usb, connectionStep)
-          : await connectionStep('Выбор камеры · requestDevice()', () => chooseCamera(usb));
+        const selected = await connectionStep('Выбор камеры · requestDevice()', () => chooseCamera(usb));
         device = selected;
         if (closing) return;
         deviceName = device.productName || 'USB-камера';
@@ -481,8 +510,6 @@
     window.addEventListener('pagehide', hide);
     document.addEventListener('visibilitychange', background);
     const timer = setInterval(metrics, 500);
-    const [navigation] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
-    if (navigation?.type === 'reload') connect(true);
     return () => {
       clearInterval(timer); usb?.removeEventListener('disconnect', unplugged);
       window.removeEventListener('pagehide', hide); document.removeEventListener('visibilitychange', background);
@@ -503,10 +530,10 @@
       <li><a href="https://zadig.akeo.ie/" target="_blank" rel="noreferrer">Скачайте Zadig</a> и запустите его.</li>
       <li>В Zadig откройте <b>Options → List All Devices</b>. Выберите именно Canon EOS 1100D и запишите название текущего драйвера.</li>
       <li>Выберите <b>WinUSB</b> и нажмите <b>Replace Driver</b> или <b>Install Driver</b>.</li>
-      <li>При первом подключении нажмите «Выбрать камеру» и подтвердите выбор Canon. При обновлении страницы Chrome или Edge автоматически подключит ранее разрешённую Canon EOS 1100D.</li>
+      <li>Для подключения нажмите «Выбрать камеру» и подтвердите выбор Canon.</li>
     </ol>
     <p class="driver-note">Для возврата к digiCamControl может понадобиться восстановить прежний драйвер в диспетчере устройств Windows.</p>
-    <p class="driver-note"><a href="/cam-test-web-assets/restart-canon-usb.ps1?v=2" download="restart-canon-usb.ps1">Скачать скрипт перезапуска Canon</a> (.ps1). Перед перезапуском сохраните нужные снимки, закройте вкладки камеры и приложения, использующие Canon. Щёлкните скачанный файл правой кнопкой, выберите «Выполнить с помощью PowerShell» и подтвердите запрос Windows.</p>
+    <p class="driver-note"><a href="/cam-test-web-assets/restart-canon-usb.ps1?v=3" download="restart-canon-usb.ps1">Скачать скрипт перезапуска Canon</a> (.ps1). Скрипт отключает и снова включает Canon в Windows. Сохраните нужные снимки и закройте приложения, использующие камеру. Щёлкните скачанный файл правой кнопкой, выберите «Выполнить с помощью PowerShell» и подтвердите запрос Windows.</p>
   </section>
 
   <div class="connection">
@@ -515,9 +542,10 @@
     {:else}
       <button onclick={() => void disconnect()} disabled={phase === 'closing' || phase === 'connecting'}>Отключить</button>
     {/if}
+    <button disabled={!!support || phase === 'closing'} onclick={() => void disconnect('', true)}>Освободить порты</button>
     {#if events.length}<button onclick={downloadLog}>Скачать журнал</button>{/if}
   </div>
-  <div class="status" role="status"><i class:spinner={['setting','stopping','connecting'].includes(phase) || (phase === 'preview' && !frameSeen)} class:connected={phase === 'ready' || phase === 'preview'}></i>{pendingStep || labels[phase]}{deviceName ? ' · ' + deviceName : ''}</div>
+  <div class="status" role="status"><i class:spinner={['setting','stopping','connecting'].includes(phase) || (phase === 'preview' && !frameSeen)} class:connected={phase === 'ready' || phase === 'preview'}></i>{phase === 'closing' ? labels.closing : pendingStep || labels[phase]}{deviceName ? ' · ' + deviceName : ''}</div>
   {#if attempt}<p class="driver-note">Диагностика подключения · {attempt.slice(0, 8)}{deliveryFailed ? ' · Журнал отправлен не полностью. Используйте «Скачать журнал».' : ''}</p>{/if}
   {#if support || message}<p class="notice" role="alert">{support || message}</p>{/if}
   {#if slow}<p class="notice" role="status">Ожидаем ответ камеры. При зависании сохраните нужные снимки и переподключите USB. Если соединение не освободилось, перезагрузите вкладку.</p>{/if}

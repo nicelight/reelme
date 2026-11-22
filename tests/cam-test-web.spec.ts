@@ -13,7 +13,8 @@ test('the isolated camera page initializes its same-origin WASM runtime', async 
   const scriptResponse = await page.request.get(app.origin + await script.getAttribute('href'));
   expect(scriptResponse.status()).toBe(200);
   const scriptText = await scriptResponse.text();
-  expect(scriptText).toContain("'/restart-device'");
+  expect(scriptText).toContain('/disable-device $id');
+  expect(scriptText).toContain('/enable-device $id');
   expect(scriptText).toContain('-Verb RunAs');
   expect(scriptText).not.toContain('#Requires -RunAsAdministrator');
   const windowsSetup = page.getByRole('region', { name: 'Подключение и драйвер Windows' });
@@ -49,18 +50,14 @@ async function connectCamera(page: Page, origin: string, bytes: Buffer, refreshO
     const config = { configurationValue: 1, interfaces: [{ interfaceNumber: 0, alternates: [{ interfaceClass: 6, interfaceSubclass: 1 }] }] };
     const device = { vendorId: 0x04a9, productId: 0x3217, productName: 'Canon EOS 1100D',
       configurations: [config], configuration: config,
-      async open() { calls.push('open'); },
-      async claimInterface() {
-        calls.push('claim');
-        if (sessionStorage.getItem('denyClaim')) throw new Error('USB interface busy');
-      },
-      async close() { calls.push('close'); }
+      opened: false,
+      async close() { calls.push('close'); this.opened = false; window.dispatchEvent(new Event('camera-handle-closed')); }
     };
     const usb = Object.assign(new EventTarget(), {
       requestDevice: async () => { calls.push('picker'); return device; },
-      getDevices: async () => [device]
+      getDevices: async () => { calls.push('list'); return [device]; }
     });
-    Object.assign(window, { usbCalls: calls });
+    Object.assign(window, { usbCalls: calls, cameraDevice: device });
     Object.defineProperty(navigator, 'usb', { configurable: true, value: usb });
   });
   await page.route('**/cam-test-web-assets/*/build/libapi.mjs', route => route.fulfill({
@@ -75,6 +72,12 @@ async function connectCamera(page: Page, origin: string, bytes: Buffer, refreshO
         stats.active--;
       }
       class Context {
+        constructor() {
+          window.cameraDevice.opened = true;
+          if (window.holdOpen) return new Promise((_, reject) => {
+            window.addEventListener('camera-handle-closed', () => reject(new Error('USB closed')), {once:true});
+          });
+        }
         isDeleted() { return false; }
         delete() { if (stats.active) stats.overlaps++; }
         supportedOps() { return {capturePreview:true, captureImage:true, config:true}; }
@@ -116,20 +119,23 @@ async function connectCamera(page: Page, origin: string, bytes: Buffer, refreshO
   else await page.getByRole('button', { name: 'Выбрать камеру' }).click();
 }
 
-test('refresh reopens a previously allowed Canon without a picker and reports an occupied interface', async ({ page, app }) => {
+test('refresh is passive and the release button closes only an owned USB handle', async ({ page, app }) => {
   await connectCamera(page, app.origin, await readFile(app.jpeg), true);
-  await expect(page.getByRole('button', { name: 'Снять фото' })).toBeEnabled();
-  expect(await page.evaluate('window.usbCalls')).toEqual(['open', 'claim', 'close']);
+  const release = page.getByRole('button', {name: 'Освободить порты'});
+  const connect = page.getByRole('button', {name: 'Выбрать камеру'});
+  await expect(connect).toBeEnabled();
+  expect(await page.evaluate('window.usbCalls')).toEqual([]);
+  await release.click();
+  await expect(page.getByRole('alert')).toContainText('нет открытых USB-портов');
+  expect(await page.evaluate('window.usbCalls')).toEqual(['list']);
+  await page.evaluate('window.holdOpen = true');
+  await connect.click();
+  await expect.poll(() => page.evaluate('window.cameraDevice.opened')).toBe(true);
+  await release.click();
+  await expect(connect).toBeEnabled();
+  await expect(page.getByRole('alert')).toContainText('USB-сессия вкладки закрыта');
+  expect(await page.evaluate('window.usbCalls')).toEqual(['list', 'picker', 'list', 'close']);
   expect(await page.evaluate('window.usbTest.shots')).toBe(0);
-  await expect(page.getByText('Запуск WASM · initModule() · готово', { exact: true })).toBeVisible();
-  await page.evaluate(() => sessionStorage.setItem('denyClaim', 'yes'));
-  const errorReport = page.waitForResponse(r => r.url().endsWith('/diagnostics') &&
-    r.request().postDataJSON().state === 'error' && r.request().postDataJSON().stage.includes('claimInterface'));
-  await page.reload();
-  expect((await errorReport).status()).toBe(204);
-  await expect(page.getByRole('alert')).toContainText('USB-интерфейс занят');
-  expect(await page.evaluate('window.usbCalls')).toEqual(['open', 'claim', 'close']);
-  expect(await page.evaluate('window.usbTest')).toBeUndefined();
 });
 
 test('connection log can be downloaded while a camera call is pending and retains its original error', async ({ page, app }) => {
@@ -288,7 +294,7 @@ test('disconnect cancels a countdown and drains a dispatched shot into the galle
   await page.evaluate('window.usbTest.holdShot = true');
   await shoot.click();
   await expect.poll(() => page.evaluate('window.usbTest.shots')).toBe(1);
-  await disconnect.click();
+  await page.getByRole('button', {name: 'Освободить порты'}).click();
   await expect(page.getByText(/Освобождаем USB/)).toBeVisible();
   await page.evaluate('window.usbTest.releaseShot()');
   await expect(page.getByRole('button', { name: 'Выбрать камеру' })).toBeEnabled();

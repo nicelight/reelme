@@ -16,9 +16,6 @@ export interface Device {
   readonly manufacturerName?: string;
   readonly configuration: Configuration | null;
   readonly configurations: readonly Configuration[];
-  open(): Promise<void>;
-  selectConfiguration(value: number): Promise<void>;
-  claimInterface(value: number): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -92,34 +89,6 @@ export async function checkSelectedCamera(usb: Usb, selected: Device): Promise<v
   if (permitted.length !== 1 || permitted[0] !== selected) {
     throw new Error('Для теста подключите одну разрешённую USB-камеру и выберите её снова.');
   }
-}
-
-type Trace = <T>(stage: string, run: () => Promise<T>) => Promise<T>;
-
-// On reload test driver access with a fresh handle. close() releases the claimed
-// interface before libgphoto2 takes ownership. No PTP transfers or shutter commands.
-export async function reopenCanon(usb: Usb, trace: Trace): Promise<Device> {
-  const device = await trace('Поиск разрешённой Canon · getDevices()', async () => {
-    const devices = await permittedCameras(usb);
-    const canon = devices[0];
-    if (devices.length !== 1 || canon.vendorId !== 0x04a9 || canon.productId !== 0x3217) {
-      throw new Error('Для автоподключения нужна одна ранее разрешённая Canon 04a9:3217. Доступных PTP-камер: ' + devices.length);
-    }
-    return canon;
-  });
-  await trace('Открытие USB · USBDevice.open()', () => device.open());
-  try {
-    const active = device.configuration;
-    const config = active && ptpInterface(active) ? active : device.configurations.find(c => ptpInterface(c))!;
-    if (active?.configurationValue !== config.configurationValue) {
-      await trace('Выбор конфигурации USB · selectConfiguration()', () => device.selectConfiguration(config.configurationValue));
-    }
-    const number = ptpInterface(config)!.interfaceNumber;
-    await trace('Доступ к PTP-интерфейсу · claimInterface(' + number + ')', () => device.claimInterface(number));
-  } finally {
-    await trace('Освобождение USB · USBDevice.close()', () => device.close());
-  }
-  return device;
 }
 
 export async function createCamera(): Promise<Camera> {
