@@ -41,11 +41,14 @@ export class Camera {
             ]
         });
     }
-    async connect() {
+    prepareRuntime() {
         if (!ModulePromise) {
             ModulePromise = initModule();
         }
-        let Module = await ModulePromise;
+        return ModulePromise;
+    }
+    async connect() {
+        let Module = await this.prepareRuntime();
         this.#context = await new Module.Context();
     }
     async #schedule(op) {

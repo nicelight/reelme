@@ -17,7 +17,7 @@
    * The 50 ms flash is timer-driven. Its timestamp is independent of exposure.
    */
   import { onMount, tick } from 'svelte';
-  import { checkSelectedCamera, chooseCamera, createCamera, errorMessage, unsupportedReason, usbApi, writableSettings, type ConfigWidget, type Camera, type Device } from './camera';
+  import { checkSelectedCamera, chooseCamera, createCamera, errorMessage, reopenCanon, unsupportedReason, usbApi, writableSettings, type ConfigWidget, type Camera, type Device } from './camera';
 
   type Phase = 'idle' | 'connecting' | 'ready' | 'preview' | 'stopping' | 'shooting' | 'setting' | 'closing';
   interface Shot { id: number; url: string; thumbnail: string; name: string; size: number; receiveMs: number }
@@ -113,7 +113,13 @@
       }
     }
     const waiting = !['idle', 'ready'].includes(phase) && now - lastProgress > 8000;
-    if (waiting && !slow && pendingStep) sendConnectionEvent(pendingStep, 'waiting', now - stepStarted);
+    if (waiting && !slow && pendingStep) {
+      const detail = device ? JSON.stringify({
+        opened: device.opened, configuration: device.configuration?.configurationValue,
+        claimed: device.configuration?.interfaces.filter(iface => iface.claimed).map(iface => iface.interfaceNumber)
+      }) : '';
+      sendConnectionEvent(pendingStep, 'waiting', now - stepStarted, detail);
+    }
     slow = waiting;
   }
 
@@ -194,14 +200,16 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  function connect() {
+  function connect(onReload = false) {
     const usb = usbApi();
     if (!usb || support || phase !== 'idle') return;
     attempt = crypto.randomUUID(); deliveryFailed = false;
     phase = 'connecting'; message = ''; progress();
     command = (async () => {
       try {
-        const selected = await connectionStep('Выбор камеры · requestDevice()', () => chooseCamera(usb));
+        const selected = onReload
+          ? await reopenCanon(usb, connectionStep)
+          : await connectionStep('Выбор камеры · requestDevice()', () => chooseCamera(usb));
         device = selected;
         if (closing) return;
         deviceName = device.productName || 'USB-камера';
@@ -212,7 +220,9 @@
         const current = await connectionStep('Загрузка модуля · camera.js', createCamera);
         camera = current;
         if (closing) return;
-        await connectionStep('Запуск WASM и открытие камеры · camera.connect()', () => current.connect());
+        await connectionStep('Запуск WASM · initModule()', () => current.prepareRuntime());
+        if (closing) return;
+        await connectionStep('Открытие PTP-сессии Canon · camera.connect()', () => current.connect());
         if (closing) return;
         ops = await connectionStep('Чтение возможностей · getSupportedOps()', () => current.getSupportedOps());
         if (closing) return;
@@ -471,6 +481,8 @@
     window.addEventListener('pagehide', hide);
     document.addEventListener('visibilitychange', background);
     const timer = setInterval(metrics, 500);
+    const [navigation] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
+    if (navigation?.type === 'reload') connect(true);
     return () => {
       clearInterval(timer); usb?.removeEventListener('disconnect', unplugged);
       window.removeEventListener('pagehide', hide); document.removeEventListener('visibilitychange', background);
@@ -491,7 +503,7 @@
       <li><a href="https://zadig.akeo.ie/" target="_blank" rel="noreferrer">Скачайте Zadig</a> и запустите его.</li>
       <li>В Zadig откройте <b>Options → List All Devices</b>. Выберите именно Canon EOS 1100D и запишите название текущего драйвера.</li>
       <li>Выберите <b>WinUSB</b> и нажмите <b>Replace Driver</b> или <b>Install Driver</b>.</li>
-      <li>В Chrome или Edge обновите эту страницу, нажмите «Выбрать камеру» и подтвердите выбор Canon.</li>
+      <li>При первом подключении нажмите «Выбрать камеру» и подтвердите выбор Canon. При обновлении страницы Chrome или Edge автоматически подключит ранее разрешённую Canon EOS 1100D.</li>
     </ol>
     <p class="driver-note">Для возврата к digiCamControl может понадобиться восстановить прежний драйвер в диспетчере устройств Windows.</p>
     <p class="driver-note"><a href="/cam-test-web-assets/restart-canon-usb.ps1?v=2" download="restart-canon-usb.ps1">Скачать скрипт перезапуска Canon</a> (.ps1). Перед перезапуском сохраните нужные снимки, закройте вкладки камеры и приложения, использующие Canon. Щёлкните скачанный файл правой кнопкой, выберите «Выполнить с помощью PowerShell» и подтвердите запрос Windows.</p>
@@ -499,7 +511,7 @@
 
   <div class="connection">
     {#if phase === 'idle'}
-      <button class="primary" onclick={connect} disabled={!!support}>Выбрать камеру</button>
+      <button class="primary" onclick={() => connect()} disabled={!!support}>Выбрать камеру</button>
     {:else}
       <button onclick={() => void disconnect()} disabled={phase === 'closing' || phase === 'connecting'}>Отключить</button>
     {/if}

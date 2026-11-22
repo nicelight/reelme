@@ -43,11 +43,24 @@ test('the isolated camera page initializes its same-origin WASM runtime', async 
 
 // Exercise the shipped JS queue and its 800 ms acknowledgement timer. Only
 // the WASM camera context and browser device picker are simulated.
-async function connectCamera(page: Page, origin: string, bytes: Buffer) {
+async function connectCamera(page: Page, origin: string, bytes: Buffer, refreshOnly = false) {
   await page.addInitScript(() => {
-    const device = { vendorId: 0x04a9, productId: 0x3218, productName: 'Canon EOS 1100D',
-      configurations: [{ interfaces: [{ alternates: [{ interfaceClass: 6, interfaceSubclass: 1 }] }] }] };
-    const usb = Object.assign(new EventTarget(), { requestDevice: async () => device, getDevices: async () => [device] });
+    const calls: string[] = [];
+    const config = { configurationValue: 1, interfaces: [{ interfaceNumber: 0, alternates: [{ interfaceClass: 6, interfaceSubclass: 1 }] }] };
+    const device = { vendorId: 0x04a9, productId: 0x3217, productName: 'Canon EOS 1100D',
+      configurations: [config], configuration: config,
+      async open() { calls.push('open'); },
+      async claimInterface() {
+        calls.push('claim');
+        if (sessionStorage.getItem('denyClaim')) throw new Error('USB interface busy');
+      },
+      async close() { calls.push('close'); }
+    };
+    const usb = Object.assign(new EventTarget(), {
+      requestDevice: async () => { calls.push('picker'); return device; },
+      getDevices: async () => [device]
+    });
+    Object.assign(window, { usbCalls: calls });
     Object.defineProperty(navigator, 'usb', { configurable: true, value: usb });
   });
   await page.route('**/cam-test-web-assets/*/build/libapi.mjs', route => route.fulfill({
@@ -99,8 +112,25 @@ async function connectCamera(page: Page, origin: string, bytes: Buffer) {
       export default async () => ({Context});`,
   }));
   await page.goto(origin + '/cam-test-web');
-  await page.getByRole('button', { name: 'Выбрать камеру' }).click();
+  if (refreshOnly) await page.reload();
+  else await page.getByRole('button', { name: 'Выбрать камеру' }).click();
 }
+
+test('refresh reopens a previously allowed Canon without a picker and reports an occupied interface', async ({ page, app }) => {
+  await connectCamera(page, app.origin, await readFile(app.jpeg), true);
+  await expect(page.getByRole('button', { name: 'Снять фото' })).toBeEnabled();
+  expect(await page.evaluate('window.usbCalls')).toEqual(['open', 'claim', 'close']);
+  expect(await page.evaluate('window.usbTest.shots')).toBe(0);
+  await expect(page.getByText('Запуск WASM · initModule() · готово', { exact: true })).toBeVisible();
+  await page.evaluate(() => sessionStorage.setItem('denyClaim', 'yes'));
+  const errorReport = page.waitForResponse(r => r.url().endsWith('/diagnostics') &&
+    r.request().postDataJSON().state === 'error' && r.request().postDataJSON().stage.includes('claimInterface'));
+  await page.reload();
+  expect((await errorReport).status()).toBe(204);
+  await expect(page.getByRole('alert')).toContainText('USB-интерфейс занят');
+  expect(await page.evaluate('window.usbCalls')).toEqual(['open', 'claim', 'close']);
+  expect(await page.evaluate('window.usbTest')).toBeUndefined();
+});
 
 test('connection log can be downloaded while a camera call is pending and retains its original error', async ({ page, app }) => {
   const stages: { state: string; stage: string; status: number }[] = [];
