@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { boothCamera } from '../camera-context';
+  import CameraPanel from '../CameraPanel.svelte';
   /** Shared story carousel. Capture mode may begin a session through its callback;
    * Capture opens after the covers and selected player are ready. Unchanged cards
    * stay mounted during a refresh; previewOnly uses native public media. */
@@ -13,6 +15,7 @@
     items: CatalogItem[]; activeId?: string; installationKey: string; loading: boolean; error: string; busy: boolean; previewOnly?: boolean;
     onbrowse: (item: CatalogItem) => void; onbegin: (item: CatalogItem) => void; onback: () => void; onrefresh: () => void;
   } = $props();
+  const usb = boothCamera()?.usb;
   const ribbons = [
     'M-80 300 C100 265 220 170 420 145', 'M1150 140 C1370 160 1500 255 1690 370',
     'M-70 860 C130 710 260 820 485 940', 'M1160 960 C1410 710 1450 1000 1690 705',
@@ -140,10 +143,10 @@
       <g class="ribbon-hotspot" use:ribbonLight={{path, from: 8, to: 92}}><ellipse rx="120" ry="36" fill="url(#hotspot-halo)"/><ellipse rx="62" ry="6" fill="url(#hotspot-halo)"/><ellipse rx="40" ry="2.5" fill="url(#hotspot-core)"/></g>
     {/each}
   </svg>
-  <header>
+  <header class:usb-header={!!usb}>
     <a class="story-brand" href="#catalog" onclick={(event) => { event.preventDefault(); onback(); }} aria-label="ReelMe — начало"><img src={brandMark} alt="" class="brand-mark"/><span>REELME<small>AI VIDEO BOOTH</small></span></a>
     <ol class="steps" aria-label="Этапы создания"><li class="active"><span></span>Сюжет</li><li ><span></span>Фото</li><li><span></span>Видео</li></ol>
-    <div class="event">Ваша киноистория</div>
+    {#if usb}<CameraPanel />{:else}<div class="event">Ваша киноистория</div>{/if}
   </header>
   <main>
     <div class="story-intro"><h1>{previewOnly ? 'Ваша киноистория' : 'Выберите историю'}</h1><p>{previewOnly ? 'Посмотрите, каким может стать ваше фото' : 'Сделайте фото, а мы превратим его в эффектное видео'}</p></div>
@@ -234,5 +237,9 @@
   .catalog-controls{display:flex;gap:1.4vw;align-items:center;justify-content:center;margin-top:1.5vw;min-height:1.4vw}.catalog-back,.catalog-refresh{background:transparent;border:0;font-size:.78vw;color:#d9bfd1;padding:.35vw}.catalog-count{font-size:.8vw;color:#d9bfd1;font-variant-numeric:tabular-nums}.catalog-state{min-height:32vw;display:flex;flex-direction:column;gap:1.2rem;align-items:center;justify-content:center;text-align:center;color:#e2ccdc}.catalog-state h2{font-size:2vw}.catalog-state button,.catalog-error button{padding:.6rem 1rem;background:#44253b;border:1px solid #bb80a2;border-radius:99px}.catalog-error{padding:1rem;margin:1rem auto;max-width:680px;color:#ffd5da;text-align:center}.catalog-error button{margin-top:.75rem}
   @media(max-width:700px){
     .stage{display:block;padding:16px 16px 28px;min-height:100svh}.stage header{height:54px;margin:0}.story-brand{font-size:15px;gap:7px;letter-spacing:.2em}.brand-mark{width:38px;height:38px}.story-brand small{font-size:5px;margin-top:4px}.event{display:none}.steps{left:auto;right:0;transform:none;gap:20px}.steps li{font-size:10px;gap:4px}.steps span{width:13px;height:13px;border-width:2px}.steps li+li:before{top:6px;right:calc(50% + 6px);width:44px}.story-intro{margin:24px 0}.story-intro h1{font-size:32px}.story-intro p{font-size:14px;line-height:1.5;margin:10px auto;max-width:30ch}.gallery{height:530px;margin:0 8px}.story{display:none;transition:opacity 180ms ease}.story.center{display:block;left:50%;top:0;width:100%;height:500px;border-radius:25px}.center-content{width:calc(100% - 32px);top:20px;height:460px;gap:14px}.story-heading{height:auto;gap:12px}.story-heading>svg{width:34px;height:34px;padding:7px}.story h2{font-size:23px;margin-bottom:7px}.story-preview{height:auto;border-radius:14px}.story-preview :global(.fallback){font-size:13px}.choose{width:100%;min-height:54px;font-size:16px;gap:12px}.choose svg{width:22px;height:22px}.arrow{width:36px;height:36px;top:510px;padding:8px}.previous{left:0}.next{right:0}.catalog-controls{gap:12px;flex-wrap:wrap;margin-top:24px}.catalog-back,.catalog-refresh{font-size:12px;padding:7px}.catalog-count{font-size:12px}.dots{order:3;max-width:100%;width:100%;gap:13px;padding-top:10px}.dots button{width:9px;height:9px}.catalog-state{min-height:350px}.catalog-state h2{font-size:25px}.rim-halo{filter:blur(5px)}.rim-halo:before{padding:5px}.rim-hotspot{height:2px}
+  }
+  @media(max-width:700px){
+    .stage header.usb-header{height:auto;min-height:54px;flex-wrap:wrap;row-gap:12px}
+    .usb-header .steps{position:static;order:1;flex-basis:100%;justify-content:center}
   }
 </style>

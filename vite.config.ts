@@ -4,10 +4,10 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 function serveCameraTest(server: ViteDevServer | PreviewServer) {
   server.middlewares.use((request, response, next) => {
     const path = request.url?.split('?')[0];
-    if (path === '/cam-test-web' || path === '/cam-test-web.html') {
+    if (path && ['/cam-test-web', '/booth', '/cam-test-web.html', '/booth.html'].includes(path)) {
       response.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
       response.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
-      request.url = request.url?.replace(/^\/cam-test-web(?=\?|$)/, '/cam-test-web.html');
+      if (!path.endsWith('.html')) request.url = request.url?.replace(path, path + '.html');
     } else if (path?.startsWith('/cam-test-web-assets/')) {
       response.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
     }
@@ -21,6 +21,6 @@ export default defineConfig({
   base: './',
   build: {
     outDir: 'dist/client', manifest: true,
-    rollupOptions: { input: { cloud: 'index.html', capture: 'src/client/capture/main.ts', cameraTest: 'cam-test-web.html' } },
+    rollupOptions: { input: { cloud: 'index.html', capture: 'src/client/capture/main.ts', cameraTest: 'cam-test-web.html', booth: 'booth.html' } },
   },
 });

@@ -8,8 +8,8 @@
 
 <main class="photobooth">
   <header class="guide-heading">
-    <h1>Фотобудка</h1>
-    <p>От установки на Windows до первого ролика. Короткий план — перед вами, подробности раскрываются по нажатию.</p>
+    <h1>Фотобудка через digiCamControl</h1>
+    <p>Эта инструкция и файл reelme.html предназначены для локальной фотобудки с digiCamControl на Windows. Для прямого подключения Canon в Chrome или Edge откройте <a href="/booth">фотобудку WebUSB</a>.</p>
     <div class="actions">
       <a class="button primary" href={download} download="reelme.html">Скачать страницу ReelMe</a>
       <a class="button" href="https://digicamcontrol.com/download" target="_blank" rel="noopener noreferrer">Скачать digiCamControl</a>

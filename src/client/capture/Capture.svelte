@@ -10,9 +10,9 @@
    * Unmount cancels waits and releases URLs/audio. Source: docs/slot-setup/matrix.md. */
   import { onMount, untrack } from 'svelte';
   import { defaultCaptureSettings, type StartReceipt } from '../../shared/capture';
-  import { CaptureDiagnostics } from './capture-diagnostics';
   import { enqueueReport } from './report-queue';
-  import { CameraError, DigiCamControl, pause } from './camera';
+  import { boothCamera } from './camera-context';
+  import { CameraError, pause } from './camera-frame';
   import PhotoSessionView, { type CapturePhase, type PhotoThumbnail } from './session/PhotoSessionView.svelte';
   import type { CapturedPhoto } from './photos';
   let { receipt, installationKey, oncomplete, onscenario }: { receipt: StartReceipt; installationKey: string; oncomplete: (photos: CapturedPhoto[]) => void; onscenario: () => void } = $props();
@@ -40,16 +40,18 @@
   const settings = $derived(receipt.captureSettings ?? defaultCaptureSettings);
   let automatic = $state(untrack(() => settings.startMode === 'automatic'));
   let caseCode = $state('');
-  const diagnostics = untrack(() => settings.sendCaptureLogs ? new CaptureDiagnostics(report => {
+  const transport = boothCamera()!;
+  const usb = transport.usb;
+  const diagnostics = untrack(() => settings.sendCaptureLogs && transport.Diagnostics ? new transport.Diagnostics(report => {
     if (report.kind === 'attempt' && report.outcome === 'error') caseCode = report.caseId.slice(0,8);
     enqueueReport(receipt.sessionId, report);
   }) : undefined);
-  const camera = new DigiCamControl(undefined, undefined, undefined, diagnostics);
+  const camera = transport.session(diagnostics);
   const lifecycle = new AbortController();
   let previewRun: AbortController | undefined;
   const pose = $derived(receipt.posePlan[position]);
   const cameraLocked = $derived(phase === 'camera' || pendingCapture);
-  const shouldPreview = $derived(previewEnabled && !hidden && !confirming && !['camera', 'confirmation', 'complete'].includes(phase));
+  const shouldPreview = $derived((!usb || (usb.state === 'ready' && phase !== 'review')) && previewEnabled && !hidden && !confirming && !['camera', 'confirmation', 'complete'].includes(phase));
   function clearConfirmed() {
     clearTimeout(confirmationTimer); confirming = false; confirmationUntil = 0;
     if (confirmed) URL.revokeObjectURL(confirmed); confirmed = '';
@@ -61,6 +63,10 @@
   }
   function stopPreview() { diagnostics?.stopPreview('operator'); previewEnabled = false; pausePreview(); }
   function previewFailed(error: unknown) {
+    if (usb) {
+      if (usb.state === 'ready') void usb.release(error instanceof Error ? error.message : 'Проверьте камеру.');
+      return;
+    }
     diagnostics?.stopPreview('error', error, error instanceof CameraError ? error.status : undefined);
     needsLiveViewOpen = true;
     previewRetryAt = performance.now() + 1000;
@@ -103,14 +109,24 @@
     return () => { controller.abort(); if (previewRun === controller) { pausePreview(); previewRun = undefined; } };
   });
   onMount(() => {
+    if (usb) usb.sendCaptureLogs = settings.sendCaptureLogs;
     diagnostics?.start();
     if (automatic && !document.hidden) void run();
     else if (document.hidden) automatic = false;
-    const visibility = () => { hidden = document.hidden; diagnostics?.visibilityChanged(); if (hidden) { diagnostics?.stopPreview('hidden'); automatic = false; pauseCapture(); pausePreview(); } };
+    const visibility = () => { hidden = document.hidden; diagnostics?.visibilityChanged(); if (hidden) { diagnostics?.stopPreview('hidden'); automatic = false; pauseCapture(); pausePreview(); usb?.park(); } };
     const pageHide = () => diagnostics?.pageHidden(camera.hasPendingCapture);
     window.addEventListener('pagehide', pageHide);
     document.addEventListener('visibilitychange', visibility);
-    return () => { window.removeEventListener('pagehide', pageHide); diagnostics?.stopProbe(); document.removeEventListener('visibilitychange', visibility); cancelSequence(); lifecycle.abort(); stopPreview(); clearConfirmed(); clearThumbnails(); void audio?.close(); };
+    return () => { window.removeEventListener('pagehide', pageHide); diagnostics?.stopProbe(); document.removeEventListener('visibilitychange', visibility); cancelSequence(); lifecycle.abort(); stopPreview(); clearConfirmed(); clearThumbnails(); usb?.park(); void audio?.close(); };
+  });
+  $effect(() => {
+    if (!usb || usb.state === 'ready') return;
+    untrack(() => {
+      automatic = false;
+      if (phase === 'countdown' || (running && ['ready','paused'].includes(phase))) {
+        cancelSequence(); phase = 'error'; error = 'Проверьте камеру.';
+      } else if (phase === 'camera') pauseAfterCapture = true;
+    });
   });
   function beep() {
     if (!audio || audio.state !== 'running') return;
@@ -159,6 +175,9 @@
   async function run() {
     if ((phase === 'camera' || phase === 'confirmation') && pauseAfterCapture) { pauseAfterCapture = false; return; }
     if (running || !['ready', 'paused', 'error'].includes(phase)) return;
+    if (usb && usb.state !== 'ready') {
+      error = 'Проверьте камеру.'; phase = 'error'; automatic = false; return;
+    }
     let retry = phase === 'error';
     if (retry) diagnostics?.retryRequested();
     running = true; error = ''; caseCode = '';
@@ -171,17 +190,22 @@
       if (hidden) return;
       while (!current.signal.aborted) {
         clearConfirmed();
-        if (!camera.hasPendingCapture) {
+        if (usb && automatic) {
+          phase = 'ready';
+          while (!preview && usb.state === 'ready') await pause(30, current.signal);
+          if (usb.state !== 'ready') throw new Error('Проверьте камеру.');
+        }
+        if (!camera.hasPendingCapture && (!usb || automatic)) {
           diagnostics?.countdown();
           phase = 'countdown';
           const seconds = settings.countdownSeconds;
-          for (countdown = seconds; countdown > 0; countdown--) { beep(); await pause(1000, current.signal); }
+          for (countdown = seconds; countdown > 0; countdown--) { beep(); await pause(usb && countdown === 1 ? 700 : 1000, current.signal); }
         }
         current.signal.throwIfAborted();
         const wasPreviewing = previewRun && !previewRun.signal.aborted;
         phase = 'camera'; diagnostics?.stopPreview('shutter'); pausePreview();
         // Give digiCamControl time to finish serving Live View before reading the file list.
-        if (wasPreviewing) await pause(200, current.signal);
+        if (!usb && wasPreviewing) await pause(200, current.signal);
         const target = pose.index;
         const blob = await camera.capture(receipt.sessionId, target, liveView, lifecycle.signal, automatic, retry);
         retry = false;
@@ -199,6 +223,7 @@
       }
     } catch (cause) {
       if (lifecycle.signal.aborted || current.signal.aborted) return;
+      if (usb) automatic = false;
       pendingCapture = camera.hasPendingCapture;
       error = cause instanceof Error ? cause.message : 'Не удалось получить снимок. Нажмите «Повторить».';
       phase = 'error';
@@ -210,5 +235,5 @@
   }
 </script>
 <PhotoSessionView {receipt} {installationKey} {position} {phase} {countdown} {preview} {previewEnabled} previewRetrying={!!previewRetryAt} {confirmed} {confirming} {thumbnails}
-  {error} {caseCode} {pendingCapture} {cameraLocked} {pauseAfterCapture} {automatic} {settings} ontoggle={toggleMode} onrun={() => void run()} onpause={pauseCapture}
+  webUsb={!!usb} uncertain={usb?.uncertain ?? false} {error} {caseCode} {pendingCapture} {cameraLocked} {pauseAfterCapture} {automatic} {settings} ontoggle={toggleMode} onrun={() => void run()} onpause={pauseCapture}
   onretake={retake} onrestart={restart} onfinish={finish} {onscenario} onstoppreview={stopPreview} onpreviewerror={previewImageFailed}/>

@@ -118,11 +118,11 @@ export async function createApp(config: Config, options: { now?: () => number; l
     app.log.info({ code: 'CAM_TEST_CONNECTION', ...event }, 'Диагностика USB-камеры');
     return reply.code(204).send();
   });
-  app.get('/cam-test-web', async (_request, reply) => reply.type('text/html')
+  for (const entry of ['cam-test-web', 'booth']) app.get('/' + entry, async (_request, reply) => reply.type('text/html')
     .header('Cache-Control', 'no-cache')
     .header('Cross-Origin-Opener-Policy', 'same-origin')
     .header('Cross-Origin-Embedder-Policy', 'require-corp')
-    .send(await readFile(join(config.clientDir, 'cam-test-web.html'), 'utf8')));
+    .send(await readFile(join(config.clientDir, entry + '.html'), 'utf8')));
   // Stable prompt filenames must revalidate; empty Recast files are valid assets.
   await app.register(fastifyStatic, { root: join(config.clientDir, 'slot-prompts'), prefix: '/slot-prompts/', decorateReply: false, immutable: false, maxAge: 0, index: false, setHeaders: response => { response.header('Cache-Control', 'no-cache'); } });
   app.get('/', async (request, reply) => {

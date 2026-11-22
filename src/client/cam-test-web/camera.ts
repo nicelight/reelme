@@ -66,7 +66,7 @@ export function usbApi(): Usb | undefined {
 export function unsupportedReason(): string {
   if (!window.isSecureContext) return 'Откройте страницу по HTTPS или через localhost.';
   if (!usbApi()) return 'Для доступа по WebUSB откройте страницу в настольном Chrome или Edge.';
-  if (!window.crossOriginIsolated || typeof SharedArrayBuffer === 'undefined') return 'Недоступна изоляция страницы. Проверьте заголовки COOP и COEP для /cam-test-web.';
+  if (!window.crossOriginIsolated || typeof SharedArrayBuffer === 'undefined') return 'Недоступна изоляция страницы. Проверьте заголовки COOP и COEP для этой страницы.';
   return '';
 }
 
@@ -87,7 +87,7 @@ export async function checkSelectedCamera(usb: Usb, selected: Device): Promise<v
   // Upstream auto-detects a permitted PTP camera; it cannot take a USBDevice.
   const permitted = await permittedCameras(usb);
   if (permitted.length !== 1 || permitted[0] !== selected) {
-    throw new Error('Для теста подключите одну разрешённую USB-камеру и выберите её снова.');
+    throw new Error('Подключите одну разрешённую USB-камеру и выберите её снова.');
   }
 }
 

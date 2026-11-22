@@ -1,4 +1,5 @@
 import { test, expect } from './browser-fixture';
+import { mockUsbCamera } from './usb-camera-fixture';
 import type { Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
@@ -17,6 +18,10 @@ test('the isolated camera page initializes its same-origin WASM runtime', async 
   expect(scriptText).toContain('/enable-device $id');
   expect(scriptText).toContain('-Verb RunAs');
   expect(scriptText).not.toContain('#Requires -RunAsAdministrator');
+  const portReset = page.getByRole('link', { name: 'скачайте скрипт сброса USB-порта Canon' });
+  const portResetResponse = await page.request.get(app.origin + await portReset.getAttribute('href'));
+  expect(portResetResponse.status()).toBe(200);
+  expect(await portResetResponse.text()).toContain('Query(hub, CyclePort');
   const windowsSetup = page.getByRole('region', { name: 'Подключение и драйвер Windows' });
   await expect(windowsSetup.getByRole('link', { name: 'Скачайте Zadig' })).toBeVisible();
   await expect(windowsSetup.getByRole('listitem')).toHaveCount(5);
@@ -42,78 +47,8 @@ test('the isolated camera page initializes its same-origin WASM runtime', async 
   expect(app.sessionCount()).toBe(0);
 });
 
-// Exercise the shipped JS queue and its 800 ms acknowledgement timer. Only
-// the WASM camera context and browser device picker are simulated.
 async function connectCamera(page: Page, origin: string, bytes: Buffer, refreshOnly = false) {
-  await page.addInitScript(() => {
-    const calls: string[] = [];
-    const config = { configurationValue: 1, interfaces: [{ interfaceNumber: 0, alternates: [{ interfaceClass: 6, interfaceSubclass: 1 }] }] };
-    const device = { vendorId: 0x04a9, productId: 0x3217, productName: 'Canon EOS 1100D',
-      configurations: [config], configuration: config,
-      opened: false,
-      async close() { calls.push('close'); this.opened = false; window.dispatchEvent(new Event('camera-handle-closed')); }
-    };
-    const usb = Object.assign(new EventTarget(), {
-      requestDevice: async () => { calls.push('picker'); return device; },
-      getDevices: async () => { calls.push('list'); return [device]; }
-    });
-    Object.assign(window, { usbCalls: calls, cameraDevice: device });
-    Object.defineProperty(navigator, 'usb', { configurable: true, value: usb });
-  });
-  await page.route('**/cam-test-web-assets/*/build/libapi.mjs', route => route.fulfill({
-    contentType: 'text/javascript',
-    body: `
-      const jpeg = Uint8Array.from(atob('${bytes.toString('base64')}'), c => c.charCodeAt(0));
-      const stats = window.usbTest = { shots: 0, previews: 0, active: 0, overlaps: 0, stops: 0, writes: [],
-        failOff: false, holdShot: false };
-      async function read(ms = 25) {
-        if (stats.active++) stats.overlaps++;
-        await new Promise(resolve => setTimeout(resolve, ms));
-        stats.active--;
-      }
-      class Context {
-        constructor() {
-          window.cameraDevice.opened = true;
-          if (window.holdOpen) return new Promise((_, reject) => {
-            window.addEventListener('camera-handle-closed', () => reject(new Error('USB closed')), {once:true});
-          });
-        }
-        isDeleted() { return false; }
-        delete() { if (stats.active) stats.overlaps++; }
-        supportedOps() { return {capturePreview:true, captureImage:true, config:true}; }
-        configToJS() {
-          if (window.holdConfig) return new Promise((_, reject) => { window.rejectConfig = reject; });
-          const controls = {
-            viewfinder: {}, autofocusdrive: {}, manualfocusdrive: { choices: ['Near 1', 'Near 2', 'Near 3', 'Far 1', 'Far 2', 'Far 3'] },
-            afmethod: { choices: ['Quick', 'Live'], value: 'Quick' }, eosremoterelease: { choices: ['Immediate'] }
-          };
-          for (const [name, widget] of Object.entries(controls)) Object.assign(widget, {name, readonly:false});
-          return {name:'main', children:{ actions: {name:'actions', children:controls} }};
-        }
-        async setConfigValue(name, value) {
-          stats.writes.push([name, value]);
-          if (name === 'viewfinder' && value === false) {
-            stats.stops++;
-            stats.offAt = performance.now();
-            await read();
-            if (stats.failOff) throw new Error('viewfinder failure');
-          } else await read();
-        }
-        async capturePreviewAsBlob() {
-          await read(); stats.previews++;
-          return new Blob([jpeg], {type:'image/jpeg'});
-        }
-        async captureImageAsFile() {
-          const shot = ++stats.shots;
-          stats.shotAt = performance.now();
-          if (stats.holdShot) await new Promise(resolve => { stats.releaseShot = resolve; });
-          await read(120);
-          if (shot === 7) throw new Error('Transfer interrupted');
-          return new File([jpeg], 'frame-' + shot + '.jpg', {type:'image/jpeg'});
-        }
-      }
-      export default async () => ({Context});`,
-  }));
+  await mockUsbCamera(page, bytes);
   await page.goto(origin + '/cam-test-web');
   if (refreshOnly) await page.reload();
   else await page.getByRole('button', { name: 'Выбрать камеру' }).click();
@@ -203,7 +138,7 @@ test('preview and local originals share the camera without repeating an uncertai
   expect(apiRequests).toEqual([]);
 });
 
-test('automatic capture drains preview, bypasses the config timer, flashes and reviews the JPEG', async ({ page, app }) => {
+test('automatic capture waits for viewfinder acknowledgement and skips the shutter on failure', async ({ page, app }) => {
   await connectCamera(page, app.origin, await readFile(app.jpeg));
   await page.getByRole('button', { name: 'Автоматический' }).click();
   // Observe short DOM states in the page, independently of Playwright polling.
@@ -238,15 +173,15 @@ test('automatic capture drains preview, bypasses the config timer, flashes and r
   expect(at('.flash', false) - at('.flash')).toBeGreaterThanOrEqual(40);
   expect(at('.flash', false) - at('.flash')).toBeLessThan(150);
   expect(at('a[download$=".jpg"]') - at('.review')).toBeGreaterThanOrEqual(990);
-  expect(await page.evaluate('window.usbTest.shotAt - window.usbTest.offAt')).toBeLessThan(500);
+  expect(await page.evaluate('window.usbTest.shotAt - window.usbTest.offAt')).toBeGreaterThanOrEqual(799);
   expect(await page.evaluate('window.usbTest.shots')).toBe(1);
 
   await page.evaluate('window.usbTest.failOff = true');
   await shoot.click();
   await expect(page.getByRole('alert')).toContainText('viewfinder failure');
-  await expect(page.locator('a[download$=".jpg"]')).toHaveCount(2);
+  await expect(page.locator('a[download$=".jpg"]')).toHaveCount(1);
   await expect(shoot).toBeEnabled();
-  expect(await page.evaluate('window.usbTest.shots')).toBe(2);
+  expect(await page.evaluate('window.usbTest.shots')).toBe(1);
   expect(await page.evaluate('window.usbTest.overlaps')).toBe(0);
 });
 
@@ -291,6 +226,12 @@ test('disconnect cancels a countdown and drains a dispatched shot into the galle
   await disconnect.click();
   await expect(page.getByLabel('Обратный отсчёт')).toHaveCount(0);
   await page.getByRole('button', { name: 'Выбрать камеру' }).click();
+  await shoot.click();
+  await expect.poll(() => page.evaluate('window.usbTest.stops')).toBe(1);
+  await disconnect.click();
+  await expect(page.getByRole('button', { name: 'Выбрать камеру' })).toBeEnabled();
+  expect(await page.evaluate('window.usbTest.shots')).toBe(0);
+  await page.getByRole('button', { name: 'Выбрать камеру' }).click();
   await page.evaluate('window.usbTest.holdShot = true');
   await shoot.click();
   await expect.poll(() => page.evaluate('window.usbTest.shots')).toBe(1);
@@ -300,6 +241,6 @@ test('disconnect cancels a countdown and drains a dispatched shot into the galle
   await expect(page.getByRole('button', { name: 'Выбрать камеру' })).toBeEnabled();
   await expect(page.locator('a[download$=".jpg"]')).toHaveCount(1);
   expect(await page.evaluate('window.usbTest.shots')).toBe(1);
-  expect(await page.evaluate('window.usbTest.stops')).toBe(1);
+  expect(await page.evaluate('window.usbTest.stops')).toBe(2);
   expect(await page.evaluate('window.usbTest.overlaps')).toBe(0);
 });

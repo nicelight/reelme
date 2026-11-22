@@ -1,6 +1,10 @@
 import 'vite/modulepreload-polyfill';
 import { mount } from 'svelte';
 import App from './App.svelte';
+import { cameraContext, type BoothCamera } from './camera-context';
+import { CaptureDiagnostics } from './capture-diagnostics';
+import { DigiCamControl } from './camera';
+const camera: BoothCamera = { Diagnostics: CaptureDiagnostics, session: diagnostics => new DigiCamControl(undefined, undefined, undefined, diagnostics) };
 const target = document.getElementById('app')!;
 target.replaceChildren();
-mount(App, { target });
+mount(App, { target, context: new Map([[cameraContext, camera]]) });

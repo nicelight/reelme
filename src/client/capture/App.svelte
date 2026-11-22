@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { boothCamera } from './camera-context';
   import { onMount } from 'svelte';
   import type { CatalogItem, CatalogPage, StartReceipt } from '../../shared/capture';
   import type { EventSetup as EventSetupAction } from '../../shared/events';
@@ -20,6 +21,7 @@
    * Last browsed/chosen story persists in localStorage for catalog return/reload.
    * Catalog refresh keeps the current cards mounted until a new list is ready.
    * Server photos are never erased here. */
+  const usb = boothCamera()?.usb;
   type StartState = { startRequestId: string; slotId: string; receipt?: StartReceipt; eventSetupRequired?: boolean; eventSetup?: EventSetupAction };
   let key = $state('');
   let setup = $state(false);
@@ -104,11 +106,12 @@
         start = saved;
       }
     } catch { storageReady = false; error = 'Не удалось прочитать данные установки. Попросите сотрудника проверить профиль браузера.'; }
+    const stopUsb = usb?.listen();
     if (storageReady) { route(); void flushReports(); }
     window.addEventListener('online', flushReports);
     window.addEventListener('hashchange', route);
     window.addEventListener('focus', refresh);
-    return () => { window.removeEventListener('online', flushReports); lifecycle.abort(); catalogAbort?.abort(); loadVersion++; window.removeEventListener('hashchange', route); window.removeEventListener('focus', refresh); };
+    return () => { stopUsb?.(); window.removeEventListener('online', flushReports); lifecycle.abort(); catalogAbort?.abort(); loadVersion++; window.removeEventListener('hashchange', route); window.removeEventListener('focus', refresh); };
   });
   async function saveKey(event: SubmitEvent) {
     event.preventDefault(); busy = true; error = ''; setupMessage = '';
@@ -199,7 +202,7 @@
       {#if key}<p class="muted">Ключ установки сохранён.</p><a class="button" href="#catalog">Открыть каталог</a>{/if}
     </section>
   {:else if !storageReady || !key}
-    <section class="narrow"><h1>Нужна настройка установки</h1><p class="intro">Пожалуйста, позовите сотрудника — он подготовит всё для съёмки.</p></section>
+    <section class="narrow"><h1>Нужна настройка установки</h1><p class="intro">Пожалуйста, позовите сотрудника — он подготовит всё для съёмки.</p>{#if usb && storageReady}<a class="button" href="#setup">Ввести ключ установки</a>{/if}</section>
   {:else if start}
     <section class="narrow handoff" aria-live="polite"><h1>Готовимся к съёмке</h1><p class="intro">{busy ? 'Создаём сессию…' : 'Нужно подтвердить начало вашей сессии.'}</p><button class="primary" onclick={() => begin()} disabled={busy}>{busy ? 'Подождите…' : 'Повторить старт'}</button></section>
   {/if}

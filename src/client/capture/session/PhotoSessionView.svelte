@@ -8,6 +8,7 @@
    * Dialogs pause local sequencing before opening. Only explicit confirmation may
    * restart or leave; camera/transfer locks are never bypassed. No camera, API writes,
    * persistence, demo images or JPEG ownership here. Source: FT-002-AC-006. */
+  import CameraPanel from '../CameraPanel.svelte';
   import { tick } from 'svelte';
   import type { CaptureSettings, StartReceipt } from '../../../shared/capture';
   import { warmPoseGuides } from './artwork';
@@ -20,10 +21,10 @@
   import '../story/assets/fonts.css';
   import './session.css';
   let { receipt, installationKey, position, phase, countdown, preview, previewEnabled, previewRetrying, confirmed, confirming, thumbnails,
-    error, caseCode, pendingCapture, cameraLocked, pauseAfterCapture, automatic, settings, ontoggle, onrun, onpause, onretake, onrestart, onfinish, onscenario, onstoppreview, onpreviewerror }: {
+    webUsb, uncertain, error, caseCode, pendingCapture, cameraLocked, pauseAfterCapture, automatic, settings, ontoggle, onrun, onpause, onretake, onrestart, onfinish, onscenario, onstoppreview, onpreviewerror }: {
     receipt: StartReceipt; installationKey: string; position: number; phase: CapturePhase;
     countdown: number; preview: string; previewEnabled: boolean; previewRetrying: boolean; confirmed: string; confirming: boolean; thumbnails: PhotoThumbnail[];
-    error: string; caseCode?: string; pendingCapture: boolean; cameraLocked: boolean; pauseAfterCapture: boolean;
+    webUsb: boolean; uncertain: boolean; error: string; caseCode?: string; pendingCapture: boolean; cameraLocked: boolean; pauseAfterCapture: boolean;
     automatic: boolean; settings: CaptureSettings; ontoggle: () => void;
     onrun: () => void; onpause: () => void; onretake: () => void; onrestart: () => void; onfinish: () => void;
     onscenario: () => void; onstoppreview: () => void; onpreviewerror: (url: string) => void;
@@ -37,6 +38,10 @@
   const active = $derived(phase === 'countdown' || ((phase === 'confirmation' || phase === 'camera') && !pauseAfterCapture));
   const playLabel = $derived(automatic ? 'Пауза' : phase === 'ready' && thumbnails.length === 0 ? 'Начать съёмку' : 'Продолжить');
   const date = $derived(new Date(`${receipt.date}T12:00:00`).toLocaleDateString('ru-RU', {day:'numeric',month:'long',year:'numeric'}));
+  let flash = $state(false);
+  $effect(() => {
+    if (webUsb && phase === 'camera' && automatic) flash = true;
+  });
   let coverSettled = $state(false);
   let guideSettled = $state(false);
   $effect(() => {
@@ -85,6 +90,7 @@
 {#snippet corners()}<div class="corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>{/snippet}
 {#snippet counter(live=false)}{#if phase==='countdown'}{#key countdown}<div class="countdown" aria-hidden={!live} role={live?'status':undefined}><strong>{countdown}</strong>{#if live}<span class="sr-only">Смотрите в объектив</span>{/if}</div>{/key}{/if}{/snippet}
 <div class="photo-session-view">
+{#if flash}<div class="usb-flash" aria-hidden="true" onanimationend={() => flash = false}></div>{/if}
 <main class="page"><div class="stage" aria-label="Фотосессия">
   <svg class="light-lines" viewBox="0 0 1600 900" preserveAspectRatio="none" aria-hidden="true"><defs>
     <linearGradient id="session-line"><stop stop-color="#d36aaa" stop-opacity="0"/><stop offset=".25" stop-color="#ec85bc"/><stop offset=".43" stop-color="#ffe5c4"/><stop offset=".56" stop-color="#ef9ac4"/><stop offset="1" stop-color="#d76ab5" stop-opacity="0"/></linearGradient>
@@ -92,7 +98,7 @@
     <radialGradient id="session-core"><stop stop-color="#fffaf5"/><stop offset=".4" stop-color="#fff2f2"/><stop offset=".72" stop-color="#ffbbdf" stop-opacity=".8"/><stop offset="1" stop-color="#ff8bcd" stop-opacity="0"/></radialGradient>
     <filter id="session-bloom" x="-30%" y="-150%" width="160%" height="400%"><feGaussianBlur stdDeviation="12"/></filter>
   </defs>{#each paths as path}<g fill="none" stroke="url(#session-line)"><path class="glow" d={path}/><path class="ribbon" d={path}/></g><g use:ribbonLight={{path,from:5,to:95}}><ellipse rx="120" ry="36" fill="url(#session-halo)"/><ellipse rx="62" ry="6" fill="url(#session-halo)"/><ellipse rx="40" ry="2.5" fill="url(#session-core)"/></g>{/each}</svg>
-  <header><div class="brand"><img src={brand} alt=""/><span>REELME</span></div><div class="event">{@render icon('people')}<span>Фотосессия · {date}</span></div></header>
+  <header class:usb-header={webUsb}><div class="brand"><img src={brand} alt=""/><span>REELME</span></div>{#if webUsb}<CameraPanel onopen={onpause}/>{/if}<div class="event">{@render icon('people')}<span>Фотосессия · {date}</span></div></header>
   <div class="composition" use:rimWave={{pageVersion:0,gain:1,previewVersion:0}}>
     <article class="story framed">
       <div class="story-media">{#if story?.thumbnailId}<ProtectedMedia mediaId={story.thumbnailId} path={story.slotId ? storyMediaPath(story.slotId, story.thumbnailId) : sessionThumbnailPath} sessionPath={story.slotId ? sessionThumbnailPath : undefined} {installationKey} onsettled={() => coverSettled = true} alt={title}/>{:else}<div class="story-missing">Сюжет этой фотосессии</div>{/if}</div>
@@ -115,11 +121,11 @@
         {@render corners()}
         {#if phase==='ready' || phase==='paused'}<div class="live-note" role="status">{pose.participant===2?'Подготовьте второго человека. ':''}Коснитесь экрана для одного кадра или нажмите Play для автоматической серии.</div>{/if}
         {#if !automatic && (phase==='ready' || phase==='paused')}<button class="manual-shutter" aria-label="Снять один кадр" onclick={onrun}></button>{/if}
-        {#if phase==='error'}<div class="notice error" role="alert"><h2>Не удалось получить кадр</h2><p>{error}</p>{#if caseCode}<p>Код случая <strong>{caseCode}</strong></p>{/if}{#if pendingCapture}<p>Ожидается текущий JPEG. Новый спуск и пересъёмки пока недоступны.</p>{/if}<button onclick={onrun}>Повторить</button></div>{/if}
+        {#if phase==='error'}<div class="notice error" role="alert"><h2>Не удалось получить кадр</h2><p>{error}</p>{#if caseCode}<p>Код случая <strong>{caseCode}</strong></p>{/if}{#if pendingCapture}<p>Ожидается текущий JPEG. Новый спуск и пересъёмки пока недоступны.</p>{/if}{#if uncertain}<p>Камера могла сделать снимок.</p>{/if}<button onclick={onrun}>{uncertain ? 'Снять эту позу заново' : 'Повторить'}</button></div>{/if}
         {#if phase==='review'}<div class="notice complete">{@render icon('check')}<h2>Отлично! Все кадры готовы</h2><p>Передача начнётся через {settings.reviewSeconds} с.</p><button onclick={onfinish}>Завершить фотосессию</button></div>{/if}
         {@render counter(true)}
         {#if phase==='camera'}<div class="capture-status" role="status">{pauseAfterCapture?'Получаем снимок… Затем — пауза.':'Получаем снимок…'}</div>{:else if phase==='confirmation'}<div class="capture-status" role="status">Кадр снят ✓</div>{/if}
-        {#if previewEnabled && phase!=='camera' && !['error','review','complete'].includes(phase)}<button class="preview-toggle" onclick={onstoppreview}>Продолжить без превью</button>{/if}
+        {#if !webUsb && previewEnabled && phase!=='camera' && !['error','review','complete'].includes(phase)}<button class="preview-toggle" onclick={onstoppreview}>Продолжить без превью</button>{/if}
       </div>{@render rim()}
     </section>
   </div>
@@ -130,3 +136,10 @@
 </div></main>
 <dialog bind:this={dialog} oncancel={e=>{e.preventDefault();close();}} aria-labelledby="session-dialog-title"><h2 id="session-dialog-title">{dialogMode==='restart'?'Начать фотосессию заново?':'Выбрать другой сценарий?'}</h2><p>{thumbnails.length?'Сделанные кадры этой серии будут сброшены.':'Текущая серия начнётся заново.'}</p><div class="dialog-actions"><button class="cancel" onclick={()=>close()}>Отмена</button><button class="confirm" onclick={confirm}>{dialogMode==='restart'?'Начать заново':'Выбрать сценарий'}</button></div></dialog>
 </div>
+
+<style>
+  header.usb-header { position:relative;min-height:36px; }
+  header.usb-header :global(.camera-status) { position:absolute;right:0;top:0; }
+  .usb-flash { position:fixed;inset:0;z-index:50;background:white;pointer-events:none;opacity:0;animation:usb-flash 50ms step-end 200ms; }
+  @keyframes usb-flash { from {opacity:1} to {opacity:0} }
+</style>

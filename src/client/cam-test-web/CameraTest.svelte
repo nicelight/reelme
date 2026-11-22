@@ -2,9 +2,9 @@
   /*
    * /cam-test-web · EOS 1100D · web-gphoto2 0.4.1
    * Stop scheduling previews and drain the in-flight read before viewfinder=false.
-   * Enqueue captureImageAsFile() immediately after the toggle. setConfigValue()
-   * starts an 800 ms timer inside its queued operation and awaits it outside the queue.
-   * Observe both promises. disconnect() deletes the context outside the queue: drain first.
+   * Await setConfigValue() before the next camera command. Its 800 ms timer starts
+   * when the queued write begins and runs concurrently with the native write.
+   * disconnect() deletes the context outside the queue: drain first.
    * captureImageAsFile() runs AF, releases, reads and requests deletion of the original.
    * autofocusdrive=true is repeatable AF only; a later captureImageAsFile() runs AF again.
    * eosremoterelease=Immediate releases without AF or JPEG transfer. Never follow it
@@ -282,12 +282,13 @@
 
   async function viewfinderOff(current: Camera) {
     // Canon EOS exposes this libgphoto2 toggle; reads start it on demand.
-    if (!settings.viewfinder && !(ops.config && device?.vendorId === 0x04a9 && configReadFailed)) return;
+    if (!settings.viewfinder && !(ops.config && device?.vendorId === 0x04a9 && configReadFailed)) return false;
     const at = performance.now();
     record('Команда viewfinder=false отправлена');
     try { await current.setConfigValue('viewfinder', false); }
-    catch (error) { report('Не удалось выключить видоискатель.', error, at); return; }
+    catch (error) { report('Не удалось выключить видоискатель.', error, at); return false; }
     record('viewfinder=false · ответ библиотеки', at);
+    return true;
   }
 
   async function readFrames(current: Camera, started: number, firstLabel: string, shutterAt?: number) {
@@ -458,13 +459,15 @@
     command = (async () => {
       await frames;
       if (closing) return;
-      if (automatic && !allowResume) {
-        await viewfinderOff(current);
-        clearFlash(); whiteScreen = false;
-        if (!closing) phase = 'ready';
-        return;
+      if (automatic) {
+        const off = await viewfinderOff(current);
+        if (closing || !off || !allowResume || document.hidden) {
+          clearFlash(); whiteScreen = false;
+          record('Автосъёмка отменена до команды спуска');
+          if (!closing) phase = 'ready';
+          return;
+        }
       }
-      const off = automatic ? viewfinderOff(current) : Promise.resolve();
       const shutterAt = performance.now();
       record('Команда съёмки с AF отправлена');
       shutterSent = true;
@@ -487,7 +490,6 @@
         report(shutterSent ? 'Снимок мог быть сделан. Оригинал JPEG не получен.' : 'Не удалось обработать полученный файл.', e);
       } finally {
         shutterSent = false;
-        await off;
         if (uncertain) allowResume = false;
         await finishOperation(current, !automatic && resume, 'Восстановление Live View · первый кадр', shutterAt);
       }
@@ -534,6 +536,7 @@
     </ol>
     <p class="driver-note">Для возврата к digiCamControl может понадобиться восстановить прежний драйвер в диспетчере устройств Windows.</p>
     <p class="driver-note"><a href="/cam-test-web-assets/restart-canon-usb.ps1?v=3" download="restart-canon-usb.ps1">Скачать скрипт перезапуска Canon</a> (.ps1). Скрипт отключает и снова включает Canon в Windows. Сохраните нужные снимки и закройте приложения, использующие камеру. Щёлкните скачанный файл правой кнопкой, выберите «Выполнить с помощью PowerShell» и подтвердите запрос Windows.</p>
+    <p class="driver-note">Если скрипт выше не помог, <a href="/cam-test-web-assets/reset-canon-port.ps1" download="reset-canon-port.ps1">скачайте скрипт сброса USB-порта Canon</a>. Сохраните журнал, закройте вкладку и запустите скрипт через PowerShell. После сброса проверьте, открывается ли новая PTP-сессия.</p>
   </section>
 
   <div class="connection">
