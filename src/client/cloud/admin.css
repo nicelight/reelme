@@ -67,7 +67,7 @@
 .admin-shell .primary { background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:800; }
 .admin-shell .primary:hover:not(:disabled) { background:var(--accent); opacity:.9; }
 .admin-shell .editor-footer { position:sticky; bottom:0; z-index:2; padding:20px 0; background:var(--editor-bg); border-top:1px solid var(--line); }
-.admin-shell .editor-issues { color:var(--error); background:color-mix(in srgb,var(--error) 9%,var(--editor-bg)); border-left:4px solid var(--error); padding:8px 12px; overflow-wrap:anywhere; max-height:30vh; overflow:auto; }
+.admin-shell .editor-issues { color:var(--error); background:color-mix(in srgb,var(--error) 9%,var(--editor-bg)); padding:8px 12px; overflow-wrap:anywhere; max-height:30vh; overflow:auto; }
 .admin-shell .editor-issues ul { margin:3px 0 0; padding-left:20px; }
 .admin-shell .editor-footer .primary { min-height:48px; }
 .admin-shell .eyebrow { display:none; }
@@ -104,7 +104,7 @@
   .admin-shell .materials { padding:16px; }
   .admin-shell :is(.guides-page,.archive,.display-settings) { padding:28px 16px; }
   .admin-shell .display-settings form { padding:20px; }
-  .admin-shell .editor-footer { gap:12px; padding:16px 0; }
+  .admin-shell .editor-footer { position:static; gap:12px; padding:16px 0; }
   .admin-shell .editor-footer .primary { width:100%; }
 }
 
