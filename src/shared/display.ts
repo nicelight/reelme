@@ -11,7 +11,7 @@ export interface DisplaySession {
   simulation: { status: 'pending' | 'passed' | 'failed'; message: string; detail: string | null } | null;
   card: { photoUrl: string; frameUrl: string; qrUrl: string; videoUrl: string } | null;
 }
-/** Staff player caption from the saved generation, scoped to an available display video. */
+/** Staff player caption from the saved generation, scoped to an available display or archive video. */
 export interface ResultVideoDetails {
   comment?: string;
   number: number;

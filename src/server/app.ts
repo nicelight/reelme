@@ -78,7 +78,7 @@ export async function createApp(config: Config, options: { now?: () => number; l
   registerStatuses(app, db, config.dataDir, access, options.now ?? Date.now, costs, config.falBillingKey);
   registerDisplay(app, db, config.dataDir, config.origin, access, options.now ?? Date.now, costs);
   const cleanup = createEventCleanup(db, config.dataDir, app.log, options.now ?? Date.now, { ...options.cleanup, deleteOutput });
-  registerEvents(app, db, config.dataDir, access, options.now ?? Date.now, cleanup);
+  registerEvents(app, db, config.dataDir, access, options.now ?? Date.now, cleanup, costs);
   app.addHook('onReady', async () => { await cleanup.runOnce(); cleanup.start(); });
   app.addHook('onClose', async () => { await cleanup.stop(); });
   registerReceive(app, db, config.dataDir, config.clientDir, options.now ?? Date.now, access.requireOrigin);

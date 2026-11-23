@@ -87,9 +87,14 @@ test('last real completion wins within its slot; failures/pending, Range, permis
   assert.equal((await get(`/api/admin/slots/${a}/results/${failed}/video`)).statusCode, 404);
   assert.equal((await get(`/api/admin/slots/${randomUUID()}/latest-video`)).statusCode, 404);
   const full = await get(first.videoUrl); assert.equal(full.statusCode, 200); assert.deepEqual(full.rawPayload, h.bytes);
-  assert.equal(full.headers['content-type'], 'video/mp4'); assert.equal(full.headers['cache-control'], 'no-store');
+  assert.equal(full.headers['content-type'], 'video/mp4'); assert.equal(full.headers['cache-control'], 'private, no-cache');
+  const etag = String(full.headers.etag);
+  assert.equal((await get(first.videoUrl, { ...h.admin, 'if-none-match': etag })).statusCode, 304);
+  const replaced = await get(first.videoUrl, { ...h.admin, range: 'bytes=0-31', 'if-range': '"older-file"' });
+  assert.equal(replaced.statusCode, 200);
+  assert.deepEqual(replaced.rawPayload, h.bytes);
   for (const range of ['bytes=0-31', 'bytes=32-63', 'bytes=-16']) {
-    const response = await get(first.videoUrl, { ...h.admin, range }); assert.equal(response.statusCode, 206);
+    const response = await get(first.videoUrl, { ...h.admin, range, 'if-range': etag }); assert.equal(response.statusCode, 206);
     const expected = range === 'bytes=-16' ? h.bytes.subarray(-16) : range === 'bytes=0-31' ? h.bytes.subarray(0,32) : h.bytes.subarray(32,64);
     assert.deepEqual(response.rawPayload, expected);
   }

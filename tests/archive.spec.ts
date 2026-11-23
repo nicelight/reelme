@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -8,6 +8,20 @@ import { seedArchive } from './archive-fixture.js';
 
 test('Chromium archive: both accounts browse dates, original thumbnails and their own playable videos after public hide', async ({ page, request }) => {
   test.setTimeout(90_000);
+  async function trackVideoReload(video: Page) {
+    const network = await video.context().newCDPSession(video);
+    await network.send('Network.enable');
+    // Chromium exposes the merged cached response to the page. ExtraInfo carries the wire status.
+    const mediaRequests = new Set<string>();
+    const videoStatuses: number[] = [];
+    network.on('Network.requestWillBeSent', ({request, requestId}) => {
+      if (request.url.endsWith('/video')) mediaRequests.add(requestId);
+    });
+    network.on('Network.responseReceivedExtraInfo', ({requestId, statusCode}) => {
+      if (mediaRequests.has(requestId)) videoStatuses.push(statusCode);
+    });
+    return videoStatuses;
+  }
   const root = await mkdtemp(join(tmpdir(), 'reelme-archive-'));
   const dataDir = join(root, 'data'); const origin = 'http://127.0.0.1:3196';
   const artifacts = process.env.REELME_BROWSER_ARTIFACTS ?? '.tasks/TASK-011-T2-FT-005-W8';
@@ -31,6 +45,11 @@ test('Chromium archive: both accounts browse dates, original thumbnails and thei
   async function login(role: string) {
     await page.getByLabel('Логин').fill(role); await page.getByLabel('Пароль').fill('test-password'); await page.getByRole('button',{name:'Войти',exact:true}).click();
     await expect(page.getByRole('button',{name:'Архив',exact:true})).toBeVisible();
+  }
+  async function openVideo(number: number) {
+    const popup = page.waitForEvent('popup');
+    await page.getByRole('link', { name: `Смотреть видео № ${number}`, exact: true }).click();
+    return popup;
   }
   try {
     child = spawn(process.execPath,['--import','tsx','tests/archive-browser-server.ts'],{env:{...process.env,DATA_DIR:dataDir},stdio:'ignore'});
@@ -72,23 +91,44 @@ test('Chromium archive: both accounts browse dates, original thumbnails and thei
       expect(await (await page.request.get(`${origin}/api/events/2026-11-14/${seed.second.id}/thumbnail`)).body()).toEqual(seed.changed);
       await page.screenshot({path:join(artifacts,`archive-${role}-gallery.png`),fullPage:true});
       for(const [number,id,duration] of [[1,seed.first.id,1],[2,seed.second.id,2]] as const) {
-        await page.getByRole('button',{name:`Смотреть видео № ${number}`,exact:true}).click();
-        const player=page.locator('video');
+        const video = await openVideo(number);
+        const player = video.locator('video');
+        await expect(page.locator('video')).toHaveCount(0);
+        await expect(player).toBeInViewport();
+        const details = video.getByRole('button', { name: 'Details', exact: true });
+        await expect(details).toHaveAttribute('aria-expanded', 'false');
+        await details.click();
+        await expect(video.getByText('Цена генерации', { exact: true })).toBeVisible();
+        if (number === 1) await expect(video.getByText(seed.comment, { exact: true })).toBeVisible();
+        else await expect(video.getByText('Комментарий к слоту', { exact: true })).toHaveCount(0);
+        await details.click();
+        await expect(video.locator('#generation-details')).toBeHidden();
         await expect(player).toHaveAttribute('src',`/api/events/2026-11-14/${id}/video`);
         await expect.poll(() => player.evaluate(n => n.duration)).toBe(duration);
+        const videoStatuses = await trackVideoReload(video);
+        await video.reload();
+        await expect(player).toHaveAttribute('src',`/api/events/2026-11-14/${id}/video`);
+        await expect.poll(() => player.evaluate(n => n.duration)).toBe(duration);
+        expect(videoStatuses).toEqual([304]);
         await player.evaluate(async n => { n.muted=true; await n.play(); });
         await expect.poll(() => player.evaluate(n => n.currentTime)).toBeGreaterThan(0);
         expect(await (await page.request.get(`${origin}/api/events/2026-11-14/${id}/video`)).body()).toEqual(videos[number-1]);
-        await page.getByRole('button',{name:'Закрыть видео'}).click();
+        await video.getByRole('link', { name: 'К мероприятию' }).click();
+        await expect(video.locator('.archive-session')).toHaveCount(4);
+        await video.close();
       }
       if(role==='admin') {
         if (await page.getByRole('button',{name:'Тёмная тема'}).count()) await page.getByRole('button',{name:'Тёмная тема'}).click();
         await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
         await page.setViewportSize({width:375,height:812});
-        await page.getByRole('button',{name:'Смотреть видео № 1',exact:true}).click();
-        expect(await page.evaluate(() => document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-        await page.screenshot({path:join(artifacts,'archive-mobile-dark-player.png'),fullPage:true});
-        await page.getByRole('button',{name:'Закрыть видео'}).click();
+        const video = await openVideo(1);
+        await video.setViewportSize({width:375,height:812});
+        await expect(video.locator('video')).toBeInViewport();
+        await video.getByRole('button', { name: 'Details' }).click();
+        await expect(video.getByText(seed.comment)).toBeVisible();
+        expect(await video.evaluate(() => document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+        await video.screenshot({path:join(artifacts,'archive-mobile-dark-player.png'),fullPage:true});
+        await video.close();
       }
       await page.getByRole('button',{name:'Все мероприятия',exact:false}).click();
       await page.locator('[data-date="2026-11-13"]').click();

@@ -72,7 +72,7 @@
 .admin-shell .editor-footer .primary { min-height:48px; }
 .admin-shell .eyebrow { display:none; }
 .admin-shell :is(.guides-page,.archive,.display-settings) { max-width:1200px; padding:40px; margin:0 auto; }
-.admin-shell :is(.guide-card,.archive-session,.archive-player,.confirmation) { background:var(--surface); border-radius:16px; }
+.admin-shell :is(.guide-card,.archive-session,.confirmation) { background:var(--surface); border-radius:16px; }
 .admin-shell .guide-card { padding:24px; }
 .admin-shell .display-settings form { max-width:720px; padding:28px; background:var(--surface); border:1px solid var(--line); border-radius:16px; }
 .admin-shell .display-settings form>label:first-child { margin-top:0; }

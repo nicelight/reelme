@@ -4,6 +4,7 @@
  * Deletion delegates to the shared restartable Sessions cleanup after role/date checks.
  * Saved slot material semantics: docs/slot-setup/matrix.md. */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { sendPrivateJson } from '../http-cache.js';
 import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
 import type { SlotSnapshot } from '../../shared/capture.js';
@@ -12,16 +13,18 @@ import { HttpError } from '../errors.js';
 import { readMedia, sendMedia } from '../scenarios/media.js';
 import { eventDate } from './index.js';
 import type { createEventCleanup } from './cleanup.js';
+import { videoDetails, videoDetailsColumns, type VideoDetailsRow } from './video-details.js';
+import type { CostReader } from './fal-costs.js';
 import { isTestVideo } from '../../shared/scenarios.js';
 
 interface Row {
   id: string; number: number; snapshot: string; state: string;
   video_path: string | null; video_size: number | null; width: number; height: number;
 }
-const selection = `SELECT s.id,s.number,s.snapshot,s.state,g.video_path,g.video_size,g.width,g.height
-  FROM capture_sessions s LEFT JOIN generation_jobs g ON g.session_id=s.id WHERE s.event_date=? AND s.event_no=?`;
+const eventSessions = `FROM capture_sessions s LEFT JOIN generation_jobs g ON g.session_id=s.id WHERE s.event_date=? AND s.event_no=?`;
+const selection = `SELECT s.id,s.number,s.snapshot,s.state,g.video_path,g.video_size,g.width,g.height ${eventSessions}`;
 const hasVideo = (row: Row) => row.state === 'ready' && !!row.video_path && (row.video_size ?? 0) > 0;
-export function registerEvents(app: FastifyInstance, db: DB, dataDir: string, access: Access, now: () => number, cleanup: ReturnType<typeof createEventCleanup>) {
+export function registerEvents(app: FastifyInstance, db: DB, dataDir: string, access: Access, now: () => number, cleanup: ReturnType<typeof createEventCleanup>, costs: CostReader) {
   async function account(request: FastifyRequest, reply: FastifyReply) {
     const role = access.context(request, reply);
     if (role !== 'operator' && role !== 'admin') throw new HttpError(403, 'FORBIDDEN', 'Нужен аккаунт оператора или администратора');
@@ -64,7 +67,7 @@ export function registerEvents(app: FastifyInstance, db: DB, dataDir: string, ac
     const view = cleanup.prepare(request.body?.through);
     return reply.code(view.operation?.running ? 202 : 200).send(view);
   });
-  app.get('/api/events', { preHandler: account }, (): ArchiveEvent[] => {
+  app.get('/api/events', { preHandler: account }, (request, reply) => {
     // UNION groups by path before summing, so neither joins nor shared inputs multiply files.
     const today = eventDate(now());
     const rows = db.prepare(`WITH files AS (
@@ -76,19 +79,29 @@ export function registerEvents(app: FastifyInstance, db: DB, dataDir: string, ac
       FROM events e LEFT JOIN files f ON f.event_date=e.date AND f.event_no=e.event_no
       WHERE (e.date<? OR (e.date=? AND e.closed_at IS NOT NULL)) AND e.deleting=0
       GROUP BY e.date,e.event_no ORDER BY e.date DESC,e.event_no DESC`).all(today,today) as (ArchiveEvent & {event_no: number})[];
-    return rows.map(({event_no, ...event}) => ({...event, ...(event_no > 1 && {eventNo: event_no}), ...(event.date === today && {closedToday: true})}));
+    const events: ArchiveEvent[] = rows.map(({event_no, ...event}) => ({...event, ...(event_no > 1 && {eventNo: event_no}), ...(event.date === today && {closedToday: true})}));
+    return sendPrivateJson(request, reply, events);
   });
-  app.get<{ Params: { key: string } }>('/api/events/:key', { preHandler: account }, (request): EventGallery => {
+  app.get<{ Params: { key: string } }>('/api/events/:key', { preHandler: account }, (request, reply) => {
     const key = request.params.key;
     const { date, eventNo, event } = requireArchived(key);
     const rows = db.prepare(`${selection} ORDER BY s.number,s.id`).all(date,eventNo) as Row[];
-    return { ...event, date, ...(eventNo > 1 && {eventNo}), sessions: rows.map(row => {
+    const gallery: EventGallery = { ...event, date, ...(eventNo > 1 && {eventNo}), sessions: rows.map(row => {
       const snapshot = JSON.parse(row.snapshot) as SlotSnapshot;
       const base = `/api/events/${key}/${row.id}`;
       return { id: row.id, number: row.number, description: snapshot.description,
         ...(isTestVideo(snapshot.generation) ? { testVideo: true as const } : {}),
         thumbnailUrl: `${base}/thumbnail`, videoUrl: hasVideo(row) ? `${base}/video` : null };
     }) };
+    return sendPrivateJson(request, reply, gallery);
+  });
+  app.get<{ Params: { key: string; id: string } }>('/api/events/:key/:id/video-details', { preHandler: account }, (request, reply) => {
+    const { date, eventNo } = requireArchived(request.params.key);
+    const row = db.prepare(`SELECT ${videoDetailsColumns} ${eventSessions}
+      AND s.id=? AND s.state='ready' AND g.video_path IS NOT NULL AND g.video_size>0`)
+      .get(date, eventNo, request.params.id) as VideoDetailsRow | undefined;
+    if (!row) throw new HttpError(404, 'NOT_FOUND', 'Готовое видео недоступно в этом мероприятии');
+    return sendPrivateJson(request, reply, videoDetails(row, costs));
   });
   for (const kind of ['thumbnail', 'video'] as const) {
     app.get<{ Params: { key: string; id: string } }>(`/api/events/:key/:id/${kind}`, { preHandler: account }, async (request, reply) => {
@@ -98,10 +111,10 @@ export function registerEvents(app: FastifyInstance, db: DB, dataDir: string, ac
       if (!row) throw new HttpError(404, 'NOT_FOUND', 'Фотосессия отсутствует в мероприятии');
       if (kind === 'thumbnail') {
         const snapshot = JSON.parse(row.snapshot) as SlotSnapshot;
-        return sendMedia(dataDir, readMedia(db, snapshot.thumbnailId), request, reply);
+        return sendMedia(dataDir, readMedia(db, snapshot.thumbnailId), request, reply, 'inline', 'Cookie');
       }
       if (!hasVideo(row)) throw new HttpError(404, 'NOT_FOUND', 'Готового видео пока нет');
-      return sendMedia(dataDir, { id, path: row.video_path!, size: row.video_size!, kind: 'video', mime: 'video/mp4', width: row.width, height: row.height }, request, reply);
+      return sendMedia(dataDir, { id, path: row.video_path!, size: row.video_size!, kind: 'video', mime: 'video/mp4', width: row.width, height: row.height }, request, reply, 'inline', 'Cookie');
     });
   }
 }

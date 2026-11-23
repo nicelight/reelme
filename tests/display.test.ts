@@ -37,7 +37,7 @@ test('operator display: six stages, explicit errors, stable order, private media
     for (const token of [row().receive_token, row().download_token]) assert.equal((await f.app.inject({ url, headers: { authorization: `Bearer ${token}` } })).statusCode, 401, url);
     assert.equal((await get(url)).statusCode, 200, url);
   }
-  for (const url of Object.values(card)) {
+  for (const url of [detailsUrl, ...Object.values(card)]) {
     const original = await get(url);
     assert.equal(original.headers['cache-control'], 'private, no-cache');
     const headers = { 'if-none-match': String(original.headers.etag) };

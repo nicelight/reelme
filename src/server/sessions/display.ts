@@ -16,13 +16,14 @@ import type { DB } from '../db.js';
 import type { Access } from '../access/index.js';
 import { HttpError } from '../errors.js';
 import { eventKey } from '../../shared/events.js';
-import type { SlotSnapshot } from '../../shared/capture.js';
 import { eventDate } from './index.js';
 import { makeDisplayCover } from './jpeg.js';
 import { readyCard } from './receive.js';
-import { matchesPrivateCache, sendMedia } from '../scenarios/media.js';
-import { pageDurationOptions, stageLabels, type DisplaySettings, type DisplaySession, type TodayDisplay, type ResultVideoDetails } from '../../shared/display.js';
-import { isBillableRequest, type CostReader } from './fal-costs.js';
+import { matchesPrivateCache, sendPrivateJson } from '../http-cache.js';
+import { sendMedia } from '../scenarios/media.js';
+import { pageDurationOptions, stageLabels, type DisplaySettings, type DisplaySession, type TodayDisplay } from '../../shared/display.js';
+import { videoDetails, videoDetailsColumns, type VideoDetailsRow } from './video-details.js';
+import type { CostReader } from './fal-costs.js';
 import { isTestVideo } from '../../shared/scenarios.js';
 
 interface Row {
@@ -88,20 +89,11 @@ export function registerDisplay(app: FastifyInstance, db: DB, dataDir: string, o
   });
   const availableVideo = `FROM capture_sessions s JOIN generation_jobs g ON g.session_id=s.id
       WHERE ${currentEvent} AND s.id=? AND s.state='ready' AND s.display_hidden=0 AND g.video_path IS NOT NULL`;
-  app.get<{ Params: { id: string } }>('/api/display/:id/video-details', { preHandler: account }, (request): ResultVideoDetails => {
+  app.get<{ Params: { id: string } }>('/api/display/:id/video-details', { preHandler: account }, (request, reply) => {
     const id = request.params.id;
-    const row = db.prepare(`SELECT s.number, s.snapshot, g.request_id, g.cost_usd, COALESCE(g.submitted_at,s.created_at) AS submittedAt
-      ${availableVideo}`).get(eventDate(now()), id) as {
-      number: number; snapshot: string; request_id: string | null; cost_usd: number | null; submittedAt: number;
-    } | undefined;
+    const row = db.prepare(`SELECT ${videoDetailsColumns} ${availableVideo}`).get(eventDate(now()), id) as VideoDetailsRow | undefined;
     if (!row) throw new HttpError(404, 'NOT_FOUND', 'Результат недоступен на общем экране');
-    const snapshot: Partial<SlotSnapshot> = JSON.parse(row.snapshot);
-    const generation: Partial<SlotSnapshot['generation']> = snapshot.generation ?? {};
-    const billable = isBillableRequest(row.request_id, generation.simulateGeneration);
-    if (billable && row.cost_usd === null) costs.refresh([{ id, requestId: row.request_id!, submittedAt: row.submittedAt }]);
-    return { number: row.number, model: generation.model ?? null, testVideo: isTestVideo(generation),
-      costUsd: billable ? row.cost_usd : undefined, comment: snapshot.comment,
-      prompt: generation.simulateGeneration ? null : (generation.prompt?.trim() || null) };
+    return sendPrivateJson(request, reply, videoDetails(row, costs));
   });
   app.get<{ Params: { id: string } }>('/api/display/:id/video', { preHandler: account }, (request, reply) => {
     // A card already on the active page is still actionable after its email deadline.

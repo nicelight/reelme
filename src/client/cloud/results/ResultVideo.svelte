@@ -1,5 +1,5 @@
 <script lang="ts">
-  /** Staff playback uses the display video. Billing can arrive while it is playing. */
+  /** Staff playback uses the selected display or archive video. Billing can arrive while it is playing. */
   import { onMount } from 'svelte';
   import { api, ApiError } from '../api';
   import { formatUsd } from '../money';
@@ -7,12 +7,12 @@
   import type { ResultVideoDetails } from '../../../shared/display';
   import '../results-prototype/assets/fonts.css';
 
-  let { id, onunauthorized }: { id: string; onunauthorized: () => void } = $props();
+  let { id, archiveEvent, onunauthorized }: { id: string; archiveEvent: string | null; onunauthorized: () => void } = $props();
   let details = $state<ResultVideoDetails>();
   let error = $state('');
   let mediaError = $state(false);
   let detailsOpen = $state(false);
-  const base = $derived('/display/' + encodeURIComponent(id));
+  const base = $derived((archiveEvent === null ? '/display' : '/events/' + encodeURIComponent(archiveEvent)) + '/' + encodeURIComponent(id));
   const model = $derived(details?.model ? modelName(details.model) : 'Не указана');
 
   onMount(() => {
@@ -42,7 +42,7 @@
   <div class="wrap">
     <div class="masthead">
       <span class="wordmark"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 2C22 18 18 22 2 24c16 2 20 6 22 22 2-16 6-20 22-22C30 22 26 18 24 2Z"/></svg>REELME</span>
-      <a href="/results">К результатам <span aria-hidden="true">↗</span></a>
+      <a href={archiveEvent === null ? '/results' : '/operator?archive=' + encodeURIComponent(archiveEvent)}>{archiveEvent === null ? 'К результатам' : 'К мероприятию'} <span aria-hidden="true">↗</span></a>
     </div>
     {#if details}
       <article class="film">

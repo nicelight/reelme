@@ -14,6 +14,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
 import type { DB } from '../db.js';
+import { matchesPrivateCache } from '../http-cache.js';
 import type { Access } from '../access/index.js';
 import { MAX_VIDEO_UPLOAD_BYTES, videoUploadLimitMessage, type Media } from '../../shared/scenarios.js';
 import { HttpError } from '../errors.js';
@@ -95,27 +96,17 @@ export function registerMedia(app: FastifyInstance, db: DB, dataDir: string, acc
   });
 }
 
-/** Call only after the route has verified access and the resource still exists. */
-export function matchesPrivateCache(request: FastifyRequest, reply: FastifyReply, etag: string, varyBy: 'Authorization' | 'Cookie') {
-  reply.header('Cache-Control', 'private, no-cache').header('ETag', etag);
-  const vary = reply.getHeader('Vary');
-  reply.header('Vary', vary ? `${vary}, ${varyBy}` : varyBy);
-  return request.headers['if-none-match']?.split(',').some(value => {
-    const tag = value.trim().replace(/^W\//, '');
-    return tag === etag || tag === '*';
-  });
-}
-
-export async function sendMedia(dataDir: string, media: StoredMedia, request: FastifyRequest, reply: FastifyReply, disposition = 'inline', varyBy?: 'Authorization' | 'Cookie') {
+export async function sendMedia(dataDir: string, media: StoredMedia, request: FastifyRequest, reply: FastifyReply, disposition = 'inline', cacheKey?: 'Authorization' | 'Cookie' | 'url') {
   const path = join(dataDir, 'media', media.path);
   const { size, mtimeMs } = await stat(path);
-  if (varyBy) {
+  let range = request.headers.range;
+  if (cacheKey) {
     // Installation media IDs identify immutable files. Display URLs identify a session.
-    const etag = varyBy === 'Authorization' ? `"${media.id}"` : `"${media.id}-${size}-${mtimeMs}"`;
-    if (matchesPrivateCache(request, reply, etag, varyBy)) return reply.code(304).send();
+    const etag = cacheKey === 'Authorization' ? `"${media.id}"` : `"${media.id}-${size}-${mtimeMs}"`;
+    if (matchesPrivateCache(request, reply, etag, cacheKey === 'url' ? undefined : cacheKey)) return reply.code(304).send();
+    if (request.headers['if-range'] && request.headers['if-range'] !== etag) range = undefined;
   }
   reply.header('Content-Type', media.mime).header('Accept-Ranges', 'bytes').header('Content-Disposition', disposition);
-  const range = request.headers.range;
   if (range) {
     const match = /^bytes=(\d*)-(\d*)$/.exec(range);
     if (!match || (!match[1] && !match[2])) return reply.code(416).header('Content-Range', `bytes */${size}`).send();

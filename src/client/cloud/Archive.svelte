@@ -1,14 +1,14 @@
 <script lang="ts">
   /** Account archive browsing displays saved event names alongside server dates;
-   * only admins see deletion, with explicit confirmation.
+   * ready videos open the shared staff player in a separate tab.
+   * Only admins see deletion, with explicit confirmation.
    * The server owns dates/authorization; viewing never opens visitor forms. */
   import { onMount } from 'svelte';
-  import { eventKey, type ArchiveEvent, type ArchiveSession, type EventGallery } from '../../shared/events';
+  import { eventKey, type ArchiveEvent, type EventGallery } from '../../shared/events';
   import { api, ApiError } from './api';
-  let { role, onunauthorized }: { role: 'admin' | 'operator'; onunauthorized: () => void } = $props();
+  let { role, onevent, onunauthorized }: { role: 'admin' | 'operator'; onevent: (key?: string) => void; onunauthorized: () => void } = $props();
   let events = $state<ArchiveEvent[]>([]);
   let gallery = $state<EventGallery | null>(null);
-  let selected = $state<ArchiveSession | null>(null);
   let busy = $state(true);
   let error = $state('');
   let deleting = $state<ArchiveEvent | null>(null);
@@ -20,12 +20,16 @@
     if (value instanceof ApiError && value.status === 401) onunauthorized();
   }
   async function load() {
-    busy = true; error = ''; gallery = null; selected = null;
+    onevent();
+    busy = true; error = ''; gallery = null;
     try { events = await api<ArchiveEvent[]>('/events'); } catch (value) { fail(value); } finally { busy = false; }
   }
   async function open(key: string) {
-    busy = true; error = ''; selected = null;
-    try { gallery = await api<EventGallery>(`/events/${key}`); } catch (value) { fail(value); } finally { busy = false; }
+    onevent(key);
+    busy = true; error = '';
+    try {
+      gallery = await api<EventGallery>(`/events/${encodeURIComponent(key)}`);
+    } catch (value) { gallery = null; fail(value); } finally { busy = false; }
   }
   function showConfirmation(dialog: HTMLDialogElement) { dialog.showModal(); }
   async function remove() {
@@ -34,7 +38,11 @@
     try { await api(`/events/${eventKey(deleting.date, deleting.eventNo)}`, { method: 'DELETE' }); deleting = null; await load(); }
     catch (value) { fail(value); } finally { removing = false; }
   }
-  onMount(() => { void load(); });
+  onMount(() => {
+    const key = new URLSearchParams(location.search).get('archive') ?? history.state?.archive?.event;
+    if (key) void open(key);
+    else void load();
+  });
 </script>
 
 <main class="archive">
@@ -46,19 +54,19 @@
   {#if error}<p class="error" role="alert">{error}</p><button onclick={() => gallery ? open(eventKey(gallery.date,gallery.eventNo)) : load()}>Повторить</button>{/if}
   {#if busy}<p class="archive-empty" role="status">Открываем архив…</p>
   {:else if gallery}
-    {#if selected}
-      <section class="archive-player" aria-label={`Видео № ${selected.number}`}>
-        <div class="archive-heading"><h2>История № {selected.number}</h2><button onclick={() => selected = null}>Закрыть видео</button></div>
-        {#key selected.id}<video src={selected.videoUrl!} controls autoplay playsinline onerror={() => error = 'Не удалось загрузить видео. Повторите попытку.'}><track kind="captions" /></video>{/key}
-      </section>
-    {/if}
     <div class="archive-gallery">
       {#each gallery.sessions as session (session.id)}
         <article class="archive-session" data-session={session.number}>
-          <button class="archive-thumbnail" aria-label={`Смотреть видео № ${session.number}`} disabled={!session.videoUrl} onclick={() => { selected = session; error = ''; }}>
-            <img src={session.thumbnailUrl} alt={session.description} />
-            {#if session.videoUrl}<span class="archive-play" aria-hidden="true">▶</span>{/if}
-          </button>
+          {#if session.videoUrl}
+            <a class="archive-thumbnail" href={`/results?video=${encodeURIComponent(session.id)}&event=${eventKey(gallery.date, gallery.eventNo)}`} target="_blank" rel="noopener" aria-label={`Смотреть видео № ${session.number}`}>
+              <img loading="lazy" src={session.thumbnailUrl} alt={session.description} />
+              <span class="archive-play" aria-hidden="true">▶</span>
+            </a>
+          {:else}
+            <button class="archive-thumbnail" disabled aria-label={`Смотреть видео № ${session.number}`}>
+              <img loading="lazy" src={session.thumbnailUrl} alt={session.description} />
+            </button>
+          {/if}
           <div class="archive-caption"><h2>№ {session.number}</h2><p>{session.description}</p>{#if session.testVideo}<span class="hint">Тестовое видео · без fal</span>{/if}{#if !session.videoUrl}<span class="hint">Готового видео пока нет</span>{/if}</div>
         </article>
       {/each}
@@ -111,8 +119,6 @@
   .archive-caption { padding:20px; overflow-wrap:anywhere; }
   .archive-caption h2 { font-size:24px; margin-bottom:8px; }
   .archive-caption p { font-size:14px; color:var(--muted); }
-  .archive-player { margin-top:28px; padding:20px; border:1px solid var(--line); background:var(--surface); border-radius:6px; }
-  .archive-player video { display:block; margin:20px auto 0; width:100%; max-height:65vh; background:#000; }
   .archive-empty { padding:48px 0; color:var(--muted); }
   @media(min-width:640px) { .archive { padding:48px 32px 64px; } }
 </style>

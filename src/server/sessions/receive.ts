@@ -155,7 +155,7 @@ export function registerReceive(app: FastifyInstance, db: DB, dataDir: string, c
         ? db.prepare('SELECT path,size,width,height FROM capture_photos WHERE session_id=? AND pose_index=0')
         : db.prepare('SELECT frame_path AS path,frame_size AS size,width,height FROM generation_jobs WHERE session_id=?')).get(row.session_id) as FileRow | undefined;
       if (!file) throw missing();
-      return sendMedia(dataDir, { ...file, id: row.session_id, kind: 'image', mime: 'image/jpeg' }, request, reply);
+      return sendMedia(dataDir, { ...file, id: row.session_id, kind: 'image', mime: 'image/jpeg' }, request, reply, 'inline', 'url');
     });
   }
   app.get<{ Params: { token: string }; Querystring: { inline?: string; purpose?: string } }>('/download/:token', async (request, reply) => {
@@ -165,7 +165,7 @@ export function registerReceive(app: FastifyInstance, db: DB, dataDir: string, c
     // Attach before stat/sendMedia so the observed status includes file/stream errors.
     const completed = (ended: boolean) => {
       const httpStatus = reply.raw.statusCode;
-      const event = !ended ? 'transfer_aborted' : httpStatus >= 400 ? 'transfer_error' : httpStatus === 206 ? 'range_served' : method === 'head' ? 'headers_served' : 'response_finished';
+      const event = !ended ? 'transfer_aborted' : httpStatus >= 400 ? 'transfer_error' : httpStatus === 206 ? 'range_served' : method === 'head' || httpStatus === 304 ? 'headers_served' : 'response_finished';
       recordHistory(db, row.session_id, 'server', 'delivery.download', event, ended && httpStatus < 400 ? 'succeeded' : 'failed', { method, httpStatus }, now);
     };
     const aborted = () => {
@@ -180,8 +180,9 @@ export function registerReceive(app: FastifyInstance, db: DB, dataDir: string, c
     reply.raw.once('finish', finished);
     const file = db.prepare('SELECT video_path AS path,video_size AS size,width,height FROM generation_jobs WHERE session_id=?').get(row.session_id) as FileRow;
     try { await stat(join(dataDir, 'media', file.path)); } catch { throw missing(); }
-    reply.header('Cache-Control', 'private, no-store');
     const disposition = request.query.inline === '1' ? 'inline' : `attachment; filename="reelme-${row.number}.mp4"`;
-    return sendMedia(dataDir, { ...file, id: row.session_id, kind: 'video', mime: 'video/mp4' }, request, reply, disposition);
+    const cachePlayback = request.query.inline === '1' || request.query.purpose === 'share';
+    if (!cachePlayback) reply.header('Cache-Control', 'private, no-store');
+    return sendMedia(dataDir, { ...file, id: row.session_id, kind: 'video', mime: 'video/mp4' }, request, reply, disposition, cachePlayback ? 'url' : undefined);
   });
 }

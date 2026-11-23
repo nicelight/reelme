@@ -22,6 +22,7 @@ test('archive: totals, snapshots, own media, permissions and read-only state aft
   const states = () => db.prepare('SELECT id,state FROM capture_sessions ORDER BY id').all();
   const firstDelivery = db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(seed.first.id) as { receive_token: string; download_token: string };
   const list = () => f.app.inject({ url: '/api/events', headers: { cookie: operator } });
+  const oldListTag = (await list()).headers.etag;
   assert.deepEqual((await list()).json(), [{ date: '2026-11-13', name: 'Session_2', participantRange: null, location: 'Новосибирск', photoBytes: 0, videoBytes: 0 }]);
   for (const date of ['2026-11-14', '2026-11-15', '2026-11-99', 'invalid']) assert.equal((await f.app.inject({ url: `/api/events/${date}`, headers: { cookie: operator } })).statusCode, 404);
   // Use the existing confirmation and hide implementation; no SMTP worker required.
@@ -31,6 +32,9 @@ test('archive: totals, snapshots, own media, permissions and read-only state aft
   f.advance(Date.parse('2026-11-14T17:00:00Z') - Date.parse('2026-11-14T10:03:00Z'));
   const beforeDelivery = delivery(); const beforeStates = states();
   assert.deepEqual((await list()).json(), [seed.expected, { date: '2026-11-13', name: 'Session_2', participantRange: null, location: 'Новосибирск', photoBytes: 0, videoBytes: 0 }]);
+  const changedList = await f.app.inject({ url: '/api/events', headers: { cookie: operator, 'if-none-match': oldListTag } });
+  assert.equal(changedList.statusCode, 200);
+  assert.notEqual(changedList.headers.etag, oldListTag);
   for (const cookie of [operator, admin]) {
     const detail = await f.app.inject({ url: '/api/events/2026-11-14', headers: { cookie } });
     assert.equal(detail.statusCode, 200); assert.doesNotMatch(detail.body, /fixture.test|receive_token|download_token|visitor@example|prompt|video_path/);
@@ -40,6 +44,10 @@ test('archive: totals, snapshots, own media, permissions and read-only state aft
       const session = gallery.sessions[index];
       assert.equal(session.description, index === 0 ? 'Зелёная история' : 'Красная история');
       assert.deepEqual((await f.app.inject({ url: session.thumbnailUrl, headers: { cookie } })).rawPayload, index === 0 ? seed.thumb : seed.changed);
+      const details = await f.app.inject({ url: session.videoUrl! + '-details', headers: { cookie } });
+      assert.equal(details.statusCode, 200);
+      assert.equal(details.json().number, session.number);
+      assert.equal(details.json().comment, index === 0 ? seed.comment : undefined);
       const media = await f.app.inject({ url: session.videoUrl!, headers: { cookie } });
       assert.equal(media.statusCode, 200); assert.deepEqual(media.rawPayload, bytes);
       const range = await f.app.inject({ url: session.videoUrl!, headers: { cookie, range: 'bytes=0-31' } });
@@ -47,12 +55,25 @@ test('archive: totals, snapshots, own media, permissions and read-only state aft
     }
     for (const session of gallery.sessions.slice(2)) {
       assert.equal(session.videoUrl, null);
+      assert.equal((await f.app.inject({ url: `/api/events/2026-11-14/${session.id}/video-details`, headers: { cookie } })).statusCode, 404);
       assert.equal((await f.app.inject({ url: `/api/events/2026-11-14/${session.id}/video`, headers: { cookie } })).statusCode, 404);
     }
+    assert.equal((await f.app.inject({ url: `/api/events/2026-11-13/${seed.first.id}/video-details`, headers: { cookie } })).statusCode, 404);
     assert.equal((await f.app.inject({ url: `/api/events/2026-11-13/${seed.first.id}/video`, headers: { cookie } })).statusCode, 404);
     assert.equal((await f.app.inject({ url: `/api/events/2026-11-15/${seed.first.id}/thumbnail`, headers: { cookie } })).statusCode, 404);
   }
-  const urls = ['/api/events', '/api/events/2026-11-14', `/api/events/2026-11-14/${seed.first.id}/thumbnail`, `/api/events/2026-11-14/${seed.first.id}/video`];
+  const urls = ['/api/events', '/api/events/2026-11-14', `/api/events/2026-11-14/${seed.first.id}/thumbnail`, `/api/events/2026-11-14/${seed.first.id}/video`, `/api/events/2026-11-14/${seed.first.id}/video-details`];
+  for (const url of urls) {
+    const first = await f.app.inject({ url, headers: { cookie: operator } });
+    assert.equal(first.headers['cache-control'], 'private, no-cache');
+    assert.match(String(first.headers.vary), /Cookie/i);
+    assert.ok(first.headers.etag);
+    const headers = { 'if-none-match': first.headers.etag };
+    const cached = await f.app.inject({ url, headers: { ...headers, cookie: operator } });
+    assert.equal(cached.statusCode, 304);
+    assert.equal(cached.rawPayload.length, 0);
+    assert.equal((await f.app.inject({ url, headers })).statusCode, 401);
+  }
   for (const url of urls) for (const [headers, status] of [[{},401], [installation,403], [{authorization:`Bearer ${firstDelivery.receive_token}`},401], [{authorization:`Bearer ${firstDelivery.download_token}`},401]] as const) {
     assert.equal((await f.app.inject({ url, headers })).statusCode, status);
   }

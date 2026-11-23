@@ -30,14 +30,22 @@
   import brandMark from '../capture/story/assets/reelme-mark.webp';
   import './admin.css';
 
-  let archive = $state(false);
+  const query = new URLSearchParams(location.search);
+  let archive = $state(location.pathname === '/operator' && (query.has('archive') || !!history.state?.archive));
+  function setArchive(active: boolean, key = '') {
+    archive = active;
+    const url = new URL(location.href);
+    if (active) url.searchParams.set('archive', key);
+    else url.searchParams.delete('archive');
+    history.replaceState({ ...history.state, archive: null }, '', url);
+  }
   let archiveVersion = $state(0);
   let parameters = $state(false);
   let photobooth = $state(false);
   const requestsRoute = location.pathname === '/requests';
   const statusRoute = location.pathname === '/statuses';
   const dedicatedScreen = location.pathname === '/results';
-  const videoId = dedicatedScreen ? new URLSearchParams(location.search).get('video') : null;
+  const videoId = dedicatedScreen ? query.get('video') : null;
   let ready = $state(false);
   let role = $state<'admin' | 'operator' | null>(null);
   const adminRoute = location.pathname === '/admin';
@@ -107,7 +115,7 @@
     busy = true;
     try {
       await api('/auth/logout', { method: 'POST' });
-      role = null; archive = false; parameters = false; photobooth = false; slots = []; selectedId = null; draftId = crypto.randomUUID(); slotSelection++; saveAttempted = false; photoCaches.clear(); draft = blankSlot(); baseline = JSON.stringify(draft); notice = ''; error = ''; videoMedia = undefined;
+      role = null; setArchive(false); parameters = false; photobooth = false; slots = []; selectedId = null; draftId = crypto.randomUUID(); slotSelection++; saveAttempted = false; photoCaches.clear(); draft = blankSlot(); baseline = JSON.stringify(draft); notice = ''; error = ''; videoMedia = undefined;
     } catch (value) { fail(value); }
     finally { busy = false; }
   }
@@ -186,14 +194,14 @@
 
 {#if ready && role && !adminDenied && !statusRoute && !requestsRoute}
   <nav style="flex-wrap:wrap" class="surface-nav" aria-label="Разделы">
-    <button class="quiet" aria-current={!archive && !parameters && !photobooth ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = false; parameters = false; photobooth = false; }}>{adminWorkspace ? 'Сюжеты' : 'Сегодня'}</button>
+    <button class="quiet" aria-current={!archive && !parameters && !photobooth ? 'page' : undefined} disabled={formDisabled} onclick={() => { setArchive(false); parameters = false; photobooth = false; }}>{adminWorkspace ? 'Сюжеты' : 'Сегодня'}</button>
     {#if adminWorkspace}<button class="quiet" aria-current={parameters ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { parameters = true; photobooth = false; archive = false; } }}>Параметры</button>{/if}
     {#if adminWorkspace}<button class="quiet" aria-current={photobooth ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (canLeave()) { photobooth = true; archive = false; parameters = false; } }}>Фотобудка</button>{/if}
-    {#if adminWorkspace}<a class="button" href="/operator">Сегодня / Архив</a>{:else}<button class="quiet" aria-current={archive ? 'page' : undefined} disabled={formDisabled} onclick={() => { archive = true; parameters = false; photobooth = false; }}>Архив</button>{/if}
+    {#if adminWorkspace}<a class="button" href="/operator">Сегодня / Архив</a>{:else}<button class="quiet" aria-current={archive ? 'page' : undefined} disabled={formDisabled} onclick={() => { if (!archive) setArchive(true); parameters = false; photobooth = false; }}>Архив</button>{/if}
     <a class="button" href="/statuses" target="_blank" rel="noopener">Статусы видео</a>
     <a class="button" href="/requests" target="_blank" rel="noopener">Запросы к fal</a>
     <a class="button" href="/results" target="_blank" rel="noopener">Открыть экран</a>
-    {#if !adminWorkspace}<FinishEvent onfinished={() => { archiveVersion++; archive = true; }} onunauthorized={() => role = null} />{/if}
+    {#if !adminWorkspace}<FinishEvent onfinished={() => { archiveVersion++; setArchive(true); }} onunauthorized={() => role = null} />{/if}
   </nav>
 {/if}
 {/if}
@@ -207,7 +215,7 @@
 {:else if statusRoute}
   <Statuses onunauthorized={() => role = null} />
 {:else if publicScreen && videoId}
-  <ResultVideo id={videoId} onunauthorized={() => role = null} />
+  <ResultVideo id={videoId} archiveEvent={query.get('event')} onunauthorized={() => role = null} />
 {:else if publicScreen}
   <Display onunauthorized={() => role = null} />
 {:else if adminDenied}
@@ -224,7 +232,7 @@
     <CaptureGuides onunauthorized={() => role = null} onBusy={uploadBusy} />
   </main>
 {:else if archive}
-  {#key archiveVersion}<Archive {role} onunauthorized={() => role = null} />{/key}
+  {#key archiveVersion}<Archive {role} onevent={key => setArchive(true, key)} onunauthorized={() => role = null} />{/key}
 {:else if !adminWorkspace}
   <Display onunauthorized={() => role = null} />
 {:else}

@@ -39,6 +39,6 @@ export function registerSlotResults(app: FastifyInstance, db: DB, dataDir: strin
     const missing = () => new HttpError(404, 'NOT_FOUND', 'Готовое видео этого сюжета недоступно');
     if (!row) throw missing();
     try { if (!(await stat(join(dataDir, 'media', row.video_path))).isFile()) throw missing(); } catch { throw missing(); }
-    return sendMedia(dataDir, { id: row.id, path: row.video_path, kind: 'video', mime: 'video/mp4', size: row.video_size, width: row.width, height: row.height }, request, reply);
+    return sendMedia(dataDir, { id: row.id, path: row.video_path, kind: 'video', mime: 'video/mp4', size: row.video_size, width: row.width, height: row.height }, request, reply, 'inline', 'Cookie');
   });
 }

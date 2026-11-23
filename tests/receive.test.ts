@@ -65,8 +65,12 @@ test('restart publishes saved media without FFmpeg and preserves scoped guest li
   assert.equal(playback.headers['content-disposition'], 'inline');
   assert.equal(playback.headers['accept-ranges'], 'bytes');
   assert.equal(playback.headers['content-range'], `bytes 0-63/${bytes.length}`);
-  assert.equal(playback.headers['cache-control'], 'private, no-store');
+  assert.equal(playback.headers['cache-control'], 'private, no-cache');
   assert.deepEqual(playback.rawPayload, bytes.subarray(0, 64));
+  const validatePlayback = { 'if-none-match': String(playback.headers.etag) };
+  const cached = await f.app.inject({ url: view.videoUrl, headers: validatePlayback });
+  assert.equal(cached.statusCode, 304);
+  assert.equal(cached.rawPayload.length, 0);
   const tail = await f.app.inject({ url: view.downloadUrl, headers: { range: 'bytes=-32' } });
   assert.equal(tail.statusCode, 206); assert.match(String(tail.headers['content-disposition']), /attachment/);
   assert.deepEqual(tail.rawPayload, bytes.subarray(-32));
@@ -81,7 +85,7 @@ test('restart publishes saved media without FFmpeg and preserves scoped guest li
   await f.app.inject({ method: 'HEAD', url: view.downloadUrl });
   const transfers = db.prepare("SELECT event, json_extract(detail,'$.method') method FROM session_history WHERE session_id=? AND step='delivery.download' ORDER BY id").all(first.id);
   assert.deepEqual(transfers, [
-    {event:'range_served',method:'player'}, {event:'range_served',method:'attachment'},
+    {event:'range_served',method:'player'}, {event:'headers_served',method:'player'}, {event:'range_served',method:'attachment'},
     {event:'transfer_error',method:'player'}, {event:'response_finished',method:'attachment'},
     {event:'response_finished',method:'share_preload'}, {event:'headers_served',method:'head'},
   ]);
@@ -99,7 +103,7 @@ test('restart publishes saved media without FFmpeg and preserves scoped guest li
   assert.deepEqual((await f.app.inject(download)).rawPayload, bytes);
   assert.deepEqual(db.prepare('SELECT * FROM session_delivery WHERE session_id=?').get(first.id), a);
   db.prepare('UPDATE events SET deleting=1').run();
-  for (const url of [api, view.videoUrl, view.downloadUrl]) assert.equal((await f.app.inject(url)).statusCode, 404);
+  for (const url of [api, view.videoUrl, view.downloadUrl]) assert.equal((await f.app.inject({ url, headers: validatePlayback })).statusCode, 404);
   db.prepare('UPDATE events SET deleting=0').run();
   const artifact = process.env.REELME_RECEIVE_ARTIFACTS;
   if (artifact) { await mkdir(artifact, { recursive: true }); await writeFile(join(artifact, 'api-observations.json'), JSON.stringify({ localOnly: true, ready: true, sessions: 2, videoSha256: createHash('sha256').update(bytes).digest('hex'), restartPreservesTokensAndBytes: true, originalPhotoMatches: true, wrongScopeRejected: true, noAccountPrivileges: true }, null, 2) + '\n'); }
